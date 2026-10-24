@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2c322f">
+  <title>Rally — iOS app preview</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="preview-bar">
+    <div class="preview-brand"><span class="small-mark">✳</span> Rally <span class="bar-divider"></span><span class="mono">iOS CONCEPT</span></div>
+    <span class="preview-disclaimer">Interactive preview <span class="dot-separator">·</span> Sample data</span>
+    <button class="reset-preview" data-action="reset">Reset preview <span aria-hidden="true">↺</span></button>
+  </header>
+  <main class="workbench">
+    <aside class="design-notes" aria-label="Preview navigation">
+      <h1>Rally</h1>
+      <p class="design-intro">iOS lobby app</p>
+      <nav class="screen-navigation" aria-label="App navigation">
+        <button data-screen="home" aria-current="page"><span>01</span><span>Join</span><span class="nav-arrow">↗</span></button>
+        <button data-screen="create"><span>02</span><span>Create a room</span><span class="nav-arrow">↗</span></button>
+      </nav>
+      <p class="prototype-note">Design preview · Sample data</p>
+    </aside>
+    <section class="preview-column" aria-label="App preview">
+      <div class="viewport-controls">
+        <span class="mono" id="viewport-label">414 PT · IPHONE LAYOUT</span>
+        <div class="width-buttons" role="group" aria-label="Preview width">
+          <button data-width="320" aria-label="320 point width">S</button>
+          <button data-width="375" aria-label="375 point width">M</button>
+          <button data-width="414" aria-label="414 point width" aria-pressed="true">L</button>
+          <button data-width="768" aria-label="768 point width">iPad</button>
+        </div>
+      </div>
+      <div class="app-surface" id="app-surface">
+        <div class="mobile-navigation" role="group" aria-label="App navigation">
+          <button data-screen="home" aria-current="page">Join</button>
+          <button data-screen="create">Create</button>
+        </div>
+        <div id="app"></div>
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      </div>
+      <div class="prototype-controls" id="prototype-controls" hidden>
+        <span class="mono">SIMULATE</span>
+        <button data-action="add-player">Player joins +</button>
+        <button data-action="ready-all">Everyone ready ✓</button>
+      </div>
+    </section>
+  </main>
+  <dialog id="confirm-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-content">
+      <span class="dialog-icon" aria-hidden="true">↗</span>
+      <h2 id="dialog-title">End this room?</h2>
+      <p id="dialog-description">Everyone will return to the welcome screen.</p>
+      <button class="btn btn-ink" data-action="confirm-leave" id="confirm-leave">End room</button>
+      <button class="text-button" data-action="cancel-leave">Cancel</button>
+    </div>
+  </dialog>
+  <script src="app.js"></script>
+</body>
+</html>

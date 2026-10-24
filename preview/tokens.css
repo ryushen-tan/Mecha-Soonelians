@@ -1,0 +1,41 @@
+/* Hallmark · playful / Hum · native task flow adapted as an interactive preview
+ * P4 H5 E4 S5 R4 V4 · no simulated browser or phone chrome
+ */
+:root {
+  --paper: #f9f7f0;
+  --surface: #fffef8;
+  --canvas: #2c322f;
+  --canvas-ink: #f0f2ea;
+  --canvas-muted: #b7beb3;
+  --canvas-line: #495149;
+  --canvas-hover: #3c443f;
+  --canvas-selected: #ffffff0f;
+  --ink: #202b26;
+  --muted: #656e63;
+  --line: #d8dccf;
+  --lime: #d4ed60;
+  --lime-hover: #def579;
+  --lime-edge: #a3ba3e;
+  --cyan: #a8d7eb;
+  --coral: #f69778;
+  --lavender: #c9baf0;
+  --mint: #b2d9b0;
+  --peach: #f7c99a;
+  --success: #355c30;
+  --error: #a33129;
+  --line-soft: #e8e9de;
+  --soft-ink: #202b260a;
+  --cast: #202b2612;
+  --scrim: #202b2666;
+  --clear: transparent;
+  --glass: #fffef87a;
+  --glass-highlight: #ffffffeb;
+  --glass-edge: #ffffffa6;
+  --glass-selected: #ffffffb3;
+  --glass-shadow: #202b2617;
+  --font: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --radius: 24px;
+  --ease: cubic-bezier(.2,.7,.3,1);
+  --preview-width: 414px;
+}
