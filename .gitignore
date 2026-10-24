@@ -14,3 +14,6 @@ scans/
 
 # Secrets
 .env
+
+# Source 3D models (large); the prepared versions live in the app bundle.
+Models/

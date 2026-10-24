@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Make your chameleon: a front-camera 360° turnaround mapped onto the blocky mannequin.
+/// Make your chameleon: a front-camera 360° turnaround mapped onto the smooth chameleon body.
 /// Made once, then placed, posed and painted every round.
 struct ChameleonStudioView: View {
     private enum Step { case intro, capturing, building }
@@ -50,8 +50,10 @@ struct ChameleonStudioView: View {
                 .font(RallyStyle.font(15, .medium))
                 Toggle("Keep my face off (Meccha style)", isOn: $faceless)
                     .font(RallyStyle.font(14, .semibold)).tint(RallyStyle.ink)
-                Text("Your colors get mapped onto a blocky 1 m mannequin. It looks like your outfit, not a photo of you.")
+                Text("Your colors get mapped onto a 1 m chameleon body. It looks like your outfit, not a photo of you.")
                     .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+                Text("Chameleon body: “MECCHA CHAMELEON Player rig” by BlueMan, CC BY 4.0.")
+                    .font(RallyStyle.font(11)).foregroundStyle(RallyStyle.muted)
                 Button {
                     step = .capturing
                     capture.start()

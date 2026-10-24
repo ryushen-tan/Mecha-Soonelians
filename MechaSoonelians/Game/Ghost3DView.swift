@@ -323,10 +323,16 @@ private struct GhostSculptWebView: UIViewRepresentable {
             if !started {
                 if let views = sculptor.pendingViews {
                     started = true
-                    let arguments: [String: Any] = ["views": views.map(\.viewerArguments), "options": ["faceless": sculptor.faceless]]
+                    guard let base = Bundle.main.url(forResource: "chameleon-base", withExtension: "glb", subdirectory: "CharacterViewer")
+                        .flatMap({ try? Data(contentsOf: $0) }) else {
+                        sculptor.error = "The chameleon body is missing from the app. Rebuild it."
+                        return
+                    }
+                    let arguments: [String: Any] = ["views": views.map(\.viewerArguments), "options": ["faceless": sculptor.faceless],
+                                                    "base": base.base64EncodedString()]
                     Task {
                         do {
-                            _ = try await webView.callAsyncJavaScript("await window.characterViewer.buildChameleon(views, options)",
+                            _ = try await webView.callAsyncJavaScript("await window.characterViewer.buildChameleon(views, options, base)",
                                 arguments: arguments, in: nil, contentWorld: .page)
                         } catch { sculptor.error = "Couldn't make your chameleon." }
                     }

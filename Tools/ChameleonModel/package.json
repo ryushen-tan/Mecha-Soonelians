@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare-model": "node prepare.mjs ../../Models/meccha_chameleon_player_rig.glb ../../MechaSoonelians/Capture/CharacterViewer/chameleon-base.glb"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "4.2.1",
+    "@gltf-transform/functions": "^4.2.1",
+    "meshoptimizer": "1.2.0",
+    "xatlasjs": "0.2.0"
+  }
+}

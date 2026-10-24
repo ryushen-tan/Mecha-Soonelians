@@ -2,7 +2,7 @@ import AVFoundation
 import SwiftUI
 import Vision
 
-/// The player's chameleon: their 360° turnaround mapped onto the blocky mannequin, saved as GLB.
+/// The player's chameleon: their 360° turnaround mapped onto the chameleon body (BlueMan's rig, CC BY 4.0), saved as GLB.
 enum ChameleonStore {
     /// Every chameleon stands this tall in the house, whoever made it.
     static let height: Float = 1.0
