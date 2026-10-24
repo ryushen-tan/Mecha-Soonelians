@@ -15,7 +15,10 @@ targets:
     platform: iOS
     sources:
       - path: Rally
-        excludes: [JellyAssets]
+        excludes: [JellyAssets, ProfilePhotos]
+      - path: Rally/ProfilePhotos
+        type: folder
+        buildPhase: resources
       - path: Rally/JellyAssets
         type: folder
         buildPhase: resources

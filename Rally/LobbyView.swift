@@ -140,7 +140,7 @@ struct LobbyView: View {
 
     private func playerRow(_ player: Player) -> some View {
         HStack(spacing: 10) {
-            Circle().fill(JellyStyle.colors[min(5, max(0, player.avatar))]).frame(width: 26, height: 26).accessibilityHidden(true)
+            PlayerAvatar(name: player.name, color: player.avatar, size: 40).accessibilityHidden(true)
             Text(player.name).font(JellyStyle.body(16)).lineLimit(1)
             if player.id == store.me?.id { Text("you").font(JellyStyle.body(11)).foregroundStyle(JellyStyle.muted) }
             Spacer(minLength: 4)
