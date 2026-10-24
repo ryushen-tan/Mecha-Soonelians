@@ -32,9 +32,6 @@ struct BodySurface {
     private var normals: [SIMD3<Float>] = []
     private var order: [Int32] = []
     private var nodes: [Node] = []
-    /// Texels just outside the painted surface and the surface texel each copies, so seams
-    /// don't show the white gaps between pieces of the texture.
-    private(set) var gutter: [SIMD2<Int32>] = []
 
     struct Mesh {
         var positions: [SIMD3<Float>] = []
@@ -90,7 +87,6 @@ struct BodySurface {
         }
         order = (0..<Int32(triangles.count)).map { $0 }
         guard !triangles.isEmpty else { return }
-        gutter = Self.gutter(positions: uvs, triangles: triangles, size: textureSize)
         let centroids = triangles.map { (positions[Int($0.x)] + positions[Int($0.y)] + positions[Int($0.z)]) / 3 }
         build(0, triangles.count, centroids)
     }
@@ -124,9 +120,11 @@ struct BodySurface {
         return index
     }
 
-    /// Marks the texels the triangles cover, then spreads outward a few texels so each nearby
-    /// uncovered texel knows the covered one it should copy.
-    private static func gutter(positions uvs: [SIMD2<Float>], triangles: [SIMD3<Int32>], size: Int) -> [SIMD2<Int32>] {
+    /// Texels just outside the painted surface paired with the surface texel each copies, so seams
+    /// don't show the white gaps between pieces of the texture. Marks the texels the triangles
+    /// cover, then spreads outward a few texels.
+    static func gutter(of mesh: Mesh, size: Int) -> [SIMD2<Int32>] {
+        let uvs = mesh.uvs, triangles = mesh.triangles
         var source = [Int32](repeating: -1, count: size * size)
         let scale = Float(size)
         for t in triangles {
@@ -219,7 +217,7 @@ final class PaintCanvas {
     static let size = 1024
     private(set) var pixels: [UInt8]
     private var history: [[UInt8]] = []
-    /// Set once the body is known; see `BodySurface.gutter`.
+    /// See `BodySurface.gutter`.
     var gutter: [SIMD2<Int32>] = []
 
     init() {
@@ -290,7 +288,8 @@ final class PaintCanvas {
 }
 
 /// Spray-painting the hider's chameleon where it stands in AR: aim the + at the wall to pick a
-/// color, then hold to spray where the + points. Closer sprays finer, farther sprays wider.
+/// color, then hold to spray where the + points. Closer sprays finer, farther sprays wider. The
+/// chameleon can also change pose and be walked around with a joystick before hiding.
 @MainActor
 final class SprayPainter: ObservableObject {
     @Published private(set) var isReady = false
@@ -298,6 +297,7 @@ final class SprayPainter: ObservableObject {
     @Published private(set) var color = UIColor(white: 0.5, alpha: 1)
     @Published private(set) var hasPickedColor = false
     @Published private(set) var canUndo = false
+    @Published private(set) var pose = 0
     /// 0 is a fine line, 1 a wide cloud.
     @Published var spread: Float = 0.35
     @Published var error: String?
@@ -311,53 +311,83 @@ final class SprayPainter: ObservableObject {
             }
         }
     }
+    /// The joystick: x to the player's right, y away from the player, each -1...1.
+    var joystick = SIMD2<Float>.zero
+    /// -1 turns left, 1 turns right, while held.
+    var turning: Float = 0
 
-    let placement: GhostPlacement
-    let modelURL: URL
-    let canvas: PaintCanvas
+    private(set) var placement: GhostPlacement
+    let canvas = PaintCanvas()
     private let ar: ARGameController
+    private let body: ChameleonBody
     private var preview: Entity?
-    private var body: Entity?
+    private var model: Entity?
     private var surface: BodySurface?
     private var texture: TextureResource?
     private var updates: Cancellable?
     private var dirty = false
+    private var lastTick: TimeInterval?
     private var lastUpload: TimeInterval = 0
     private var lastBuzz: TimeInterval = 0
     /// How far away the body was while spraying, so the edge of the spray still lands when the + slips off it.
     private var lastDistance: Float?
+    /// Where in its hop the chameleon is while it's being walked, and how high it is.
+    private var hopPhase: Float = 0
+    private var hop: Float = 0
     private let haptics = UIImpactFeedbackGenerator(style: .soft)
 
-    init(ar: ARGameController, placement: GhostPlacement, modelURL: URL, canvas: PaintCanvas) {
+    init?(ar: ARGameController, placement: GhostPlacement) {
+        guard let body = ChameleonBody.shared else { return nil }
         self.ar = ar
         self.placement = placement
-        self.modelURL = modelURL
-        self.canvas = canvas
+        self.body = body
     }
+
+    var poseName: String { body.poses[pose].name }
+    var poseIcon: String { body.poses[pose].icon }
+    var poseID: String { body.poses[pose].id }
 
     func load() {
         Task {
             do {
-                let model = try await Entity(contentsOf: modelURL)
-                let mesh = BodySurface.mesh(of: model)
-                guard !mesh.triangles.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
-                let surface = await Task.detached { BodySurface(mesh, textureSize: PaintCanvas.size) }.value
-                self.surface = surface
-                canvas.gutter = surface.gutter
+                let mesh = body.mesh(pose)
+                let gutter = await Task.detached { BodySurface.gutter(of: mesh, size: PaintCanvas.size) }.value
+                canvas.gutter = gutter
                 guard let image = canvas.image() else { throw CocoaError(.fileReadCorruptFile) }
-                let texture = try await TextureResource(image: image, options: .init(semantic: .color))
-                ARGameController.paint(model, with: texture)
-                self.texture = texture
-                body = model
-                preview = ar.addPreview(model, placement: placement)
+                texture = try await TextureResource(image: image, options: .init(semantic: .color))
+                try await show(pose: pose)
                 updates = ar.arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self] _ in
                     MainActor.assumeIsolated { self?.tick() }
                 }
                 isReady = true
             } catch {
-                self.error = "Couldn't show your chameleon here. Go back and try again."
+                self.error = "Couldn't show your chameleon here. Cancel and try again."
             }
         }
+    }
+
+    /// Switches to the next pose. The paint stays where it was on the body.
+    func nextPose() {
+        guard isReady else { return }
+        let next = (pose + 1) % body.poses.count
+        pose = next
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task {
+            try? await show(pose: next)
+        }
+    }
+
+    private func show(pose: Int) async throws {
+        guard let texture else { return }
+        let mesh = body.mesh(pose)
+        let entity = try body.entity(pose, paint: texture)
+        let surface = await Task.detached { BodySurface(mesh, textureSize: PaintCanvas.size) }.value
+        // Another tap may have moved on to a later pose meanwhile.
+        guard pose == self.pose else { return }
+        preview?.removeFromParent()
+        self.surface = surface
+        model = entity
+        preview = ar.addPreview(entity, placement: placement)
     }
 
     func remove() {
@@ -387,16 +417,19 @@ final class SprayPainter: ObservableObject {
     func paintJPEG() -> Data? { canvas.jpeg() }
 
     private func tick() {
-        guard let body, let surface else { return }
+        let now = CACurrentMediaTime()
+        let elapsed = Float(min(now - (lastTick ?? now), 0.1))
+        lastTick = now
+        walk(elapsed)
+        guard let model, let surface else { return }
         let view = ar.arView
         guard let ray = view.ray(through: CGPoint(x: view.bounds.midX, y: view.bounds.midY)) else { return }
-        let toModel = body.transformMatrix(relativeTo: nil).inverse
+        let toModel = model.transformMatrix(relativeTo: nil).inverse
         let origin = simd_make_float3(toModel * SIMD4(ray.origin, 1))
         let forward = simd_normalize(simd_make_float3(toModel * SIMD4(ray.direction, 0)))
         let center = surface.hit(origin: origin, direction: forward)
         if (center != nil) != aimingAtBody { aimingAtBody = center != nil }
 
-        let now = CACurrentMediaTime()
         if isSpraying, let distance = center?.distance ?? lastDistance {
             lastDistance = distance
             if spray(on: surface, from: origin, along: forward, distance: distance), now - lastBuzz > 0.08 {
@@ -410,6 +443,34 @@ final class SprayPainter: ObservableObject {
         }
     }
 
+    /// Moves and turns the chameleon from the joystick and turn buttons, hopping as it goes.
+    private func walk(_ elapsed: Float) {
+        guard let preview else { return }
+        let moving = simd_length(joystick) > 0.05
+        if moving || turning != 0, let camera = ar.currentFrame?.camera.transform {
+            // Joystick directions follow where the phone is facing, flat along the floor.
+            var ahead = -simd_make_float3(camera.columns.2), right = simd_make_float3(camera.columns.0)
+            ahead.y = 0
+            right.y = 0
+            let speed: Float = 0.6
+            var offset = SIMD3<Float>(repeating: 0)
+            if moving, simd_length(ahead) > 0.01, simd_length(right) > 0.01 {
+                offset = (simd_normalize(right) * joystick.x + simd_normalize(ahead) * joystick.y) * speed * elapsed
+            }
+            placement = placement.moved(by: offset, turn: -turning * 2 * elapsed)
+        }
+        if moving {
+            hopPhase += elapsed * 12
+            hop = abs(sin(hopPhase)) * placement.height * 0.12
+        } else {
+            hopPhase = 0
+            hop *= 0.7
+        }
+        var transform = placement.floorTransform
+        transform.columns.3.y += hop
+        preview.transform = Transform(matrix: transform)
+    }
+
     /// Scatters drops through a cone around the + like a spray can. Returns whether any landed.
     private func spray(on surface: BodySurface, from origin: SIMD3<Float>, along forward: SIMD3<Float>, distance: Float) -> Bool {
         let drops = 48
@@ -419,10 +480,9 @@ final class SprayPainter: ObservableObject {
         let spacing = distance * reach * (Float.pi / Float(drops)).squareRoot()
         let side = simd_normalize(simd_cross(forward, abs(forward.y) < 0.9 ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)))
         let up = simd_cross(side, forward)
-        var rgb = SIMD3<Float>(repeating: 0)
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0
         color.getRed(&red, green: &green, blue: &blue, alpha: nil)
-        rgb = SIMD3(Float(red), Float(green), Float(blue)) * 255
+        let rgb = SIMD3(Float(red), Float(green), Float(blue)) * 255
 
         var landed = false
         for _ in 0..<drops {

@@ -34,6 +34,7 @@
 		917D84DC5578C69DFEB32DE6 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15CF7625006B02A6F8C92C4 /* Design.swift */; };
 		934880E1C4BA41990B693DD7 /* ARGameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9392E082D145DE0B1F5484FA /* ARGameController.swift */; };
 		9BA4ACCBABE31BA6A17CB77B /* CharacterWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A94CD8A25738D99BA3FF7 /* CharacterWebView.swift */; };
+		9F17434C7B7A4A35FE7212BB /* ChameleonBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA96F47D2EC5DDCEDDA8739C /* ChameleonBody.swift */; };
 		A4C53F0F7411917B9C70F84E /* PaintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F51E65ADE5E00819B806A976 /* PaintView.swift */; };
 		B51DFBDCA76A6E4538E39521 /* GameRoomGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DF44A506EAC5F271D13C10D /* GameRoomGeometry.swift */; };
 		B5504EE75E860DF11D7BCC96 /* CharacterEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFC6E985A94B8064A083416 /* CharacterEditing.swift */; };
@@ -93,6 +94,7 @@
 		D18296BB4C1D5B457A9563D1 /* HumanEditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanEditorModel.swift; sourceTree = "<group>"; };
 		D5281FE38E7FADB0605FF96B /* PoseCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseCanvas.swift; sourceTree = "<group>"; };
 		D99F9A560431B9C94F58D80E /* Character3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DView.swift; sourceTree = "<group>"; };
+		DA96F47D2EC5DDCEDDA8739C /* ChameleonBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonBody.swift; sourceTree = "<group>"; };
 		DBAC0F8CF5D53ED50877620D /* ATTRIBUTION.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ATTRIBUTION.txt; sourceTree = "<group>"; };
 		E2EE05025550A1C0ADC6A58D /* HouseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseStore.swift; sourceTree = "<group>"; };
 		E659EBB21F9FE43758369A7B /* human-1-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-1-mask.png"; sourceTree = "<group>"; };
@@ -168,6 +170,7 @@
 			isa = PBXGroup;
 			children = (
 				9392E082D145DE0B1F5484FA /* ARGameController.swift */,
+				DA96F47D2EC5DDCEDDA8739C /* ChameleonBody.swift */,
 				CA3757EA99DEEB8D6C2972EE /* ChameleonCapture.swift */,
 				832C5186DE797FF76CF6DA3F /* ChameleonStudioView.swift */,
 				718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */,
@@ -324,6 +327,7 @@
 				6D367233E6EE450CFB8FACE5 /* BodyRig.swift in Sources */,
 				331E1FE4BD86D07DD19B84F3 /* CaptureEditorView.swift in Sources */,
 				E9B08F4081110F9BC2AAE35F /* CaptureImage.swift in Sources */,
+				9F17434C7B7A4A35FE7212BB /* ChameleonBody.swift in Sources */,
 				DA45C1EC1D7889100B32C3DB /* ChameleonCapture.swift in Sources */,
 				E8B933866B1E0C5DF7444820 /* ChameleonStudioView.swift in Sources */,
 				0185AB12EFDA0D8A1732AC6A /* Character3DModel.swift in Sources */,

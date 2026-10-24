@@ -83,12 +83,6 @@ struct JoinGameView: View {
     }
 }
 
-/// A spot picked for the player's chameleon, plus what the camera saw there for picking colors.
-private struct ChameleonSpot {
-    let placement: GhostPlacement
-    let photo: CGImage?
-}
-
 /// One screen for the whole round. The AR view stays alive underneath so the phone keeps
 /// knowing where it is; each phase puts its own panel on top.
 struct GameView: View {
@@ -101,11 +95,8 @@ struct GameView: View {
     @State private var sculptor: GhostSculptor?
     /// Waiting for a tap on the spot to put the player's saved chameleon.
     @State private var placingChameleon = false
-    @State private var chameleonSpot: ChameleonSpot?
-    /// Spray-painting the posed chameleon in AR.
+    /// Posing, moving and spray-painting the chameleon in AR.
     @State private var spray: SprayPainter?
-    /// The chameleon's paint, kept while the player goes back to change the pose.
-    @State private var bodyPaint: PaintCanvas?
     @State private var isCapturing = false
     @State private var countdown: Int?
     @State private var useTimer = true
@@ -133,13 +124,7 @@ struct GameView: View {
             } else if let spray {
                 SprayPaintView(painter: spray, timeLeft: timeLeft, onHide: {
                     hideSprayedChameleon(spray)
-                }, onChangePose: {
-                    spray.remove()
-                    self.spray = nil
-                    sculptor?.viewerLoaded = false
                 }, onCancel: stopChameleon)
-            } else if chameleonSpot != nil, let sculptor {
-                Ghost3DView(sculptor: sculptor, placeTitle: "Next: spray paint it", poseOnly: true, onCancel: stopChameleon)
             } else if let capture, let sculptor {
                 Ghost3DView(sculptor: sculptor, photo: capture.photo, waitingImage: capture.person, onUse2D: {
                     sculptor.cancel()
@@ -541,63 +526,44 @@ struct GameView: View {
         }
     }
 
-    /// The next tap on the house picks the spot; then the chameleon opens for posing, then
-    /// spray painting in AR.
+    /// The next tap on the house picks the spot; then the white chameleon stands there in AR to
+    /// pose, move and spray paint.
     private func startPlacingChameleon() {
         placingChameleon = true
         ar.onTapPlace = { point in
-            guard let placement = ar.chameleonPlacement(at: point), let model = ChameleonStore.whiteBody else {
+            guard let placement = ar.chameleonPlacement(at: point) else {
                 captureError = "Couldn't find a floor or wall there. Point at it from closer and tap again."
                 return
             }
             ar.onTapPlace = nil
             placingChameleon = false
             stopChameleon()
-            let sculptor = GhostSculptor(modelData: model)
-            sculptor.painting = false
-            sculptor.onExported = { usdz in startSpraying(placement, model: usdz) }
-            self.sculptor = sculptor
-            bodyPaint = PaintCanvas()
-            chameleonSpot = ChameleonSpot(placement: placement, photo: nil)
+            guard let painter = SprayPainter(ar: ar, placement: placement) else {
+                captureError = "The chameleon body is missing from the app. Rebuild it."
+                return
+            }
+            painter.load()
+            spray = painter
         }
-    }
-
-    /// Shows the posed chameleon at its spot in AR for spray painting.
-    private func startSpraying(_ placement: GhostPlacement, model: Data) {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("pose-\(UUID().uuidString).usdz")
-        do {
-            try model.write(to: url, options: .atomic)
-        } catch {
-            captureError = "Couldn't save your pose: \(error.localizedDescription)"
-            return
-        }
-        let canvas = bodyPaint ?? PaintCanvas()
-        bodyPaint = canvas
-        let painter = SprayPainter(ar: ar, placement: placement, modelURL: url, canvas: canvas)
-        painter.load()
-        spray = painter
     }
 
     private func hideSprayedChameleon(_ painter: SprayPainter) {
-        guard let paint = painter.paintJPEG(), let model = try? Data(contentsOf: painter.modelURL) else {
+        guard let paint = painter.paintJPEG() else {
             captureError = "Couldn't save your paint job. Try Hide here again."
             return
         }
-        let placement = painter.placement
+        let placement = painter.placement, pose = painter.poseID
         stopChameleon()
-        placeGhost(placement, image: paint, model: model, paintedBody: true)
+        placeGhost(placement, image: paint, pose: pose)
     }
 
     private func stopChameleon() {
         spray?.remove()
         spray = nil
-        sculptor?.cancel()
-        sculptor = nil
-        chameleonSpot = nil
-        bodyPaint = nil
     }
 
-    private func placeGhost(_ placement: GhostPlacement, image: Data, model: Data? = nil, paintedBody: Bool = false) {
+    /// Hides the player here. A `pose` means a spray-painted chameleon, and `image` is its paint.
+    private func placeGhost(_ placement: GhostPlacement, image: Data, model: Data? = nil, pose: String? = nil) {
         let id = UUID()
         var modelURL: URL?
         if let model {
@@ -612,11 +578,10 @@ struct GameView: View {
         }
         let ghost = Ghost(id: id, ownerID: session.me.id, transform: placement.transform.floats,
                           floorTransform: placement.floorTransform.floats, flushBack: placement.flushBack,
-                          hasModel: modelURL != nil, paintedBody: paintedBody, width: placement.width, height: placement.height,
-                          foundBy: nil)
+                          hasModel: modelURL != nil, paintedBody: pose != nil, pose: pose, width: placement.width,
+                          height: placement.height, foundBy: nil)
         session.placeGhost(ghost, image: image, model: modelURL)
         sculptor = nil
         capture = nil
-        chameleonSpot = nil
     }
 }

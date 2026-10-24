@@ -26,6 +26,13 @@ struct GhostPlacement {
         self.width = width
         self.height = height
     }
+
+    /// The same ghost slid along the floor by `offset` and turned by `turn` radians.
+    func moved(by offset: SIMD3<Float>, turn: Float) -> GhostPlacement {
+        let origin = simd_make_float3(floorTransform.columns.3) + SIMD3(offset.x, 0, offset.z)
+        let facing = simd_quatf(angle: turn, axis: [0, 1, 0]).act(simd_make_float3(floorTransform.columns.2))
+        return GhostPlacement(origin: origin, facing: facing, onWall: flushBack, width: width, height: height)
+    }
 }
 
 /// A hider's photo, cut out of its background and placed where they stood in the house.

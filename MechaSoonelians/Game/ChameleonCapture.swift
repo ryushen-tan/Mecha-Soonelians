@@ -5,13 +5,7 @@ import Vision
 /// The player's chameleon: four photos of them mapped onto the chameleon body (BlueMan's rig, CC BY 4.0), saved as GLB.
 enum ChameleonStore {
     /// Every chameleon stands this tall in the house, whoever made it.
-    static let height: Float = 1.0
-
-    /// The plain white body every hider starts from, as in MECCHA CHAMELEON.
-    static var whiteBody: Data? {
-        Bundle.main.url(forResource: "chameleon-base", withExtension: "glb", subdirectory: "CharacterViewer")
-            .flatMap { try? Data(contentsOf: $0) }
-    }
+    static let height: Float = 0.7
 
     private static var directory: URL { HouseStore.documents.appendingPathComponent("Chameleon", isDirectory: true) }
     static var modelURL: URL { directory.appendingPathComponent("chameleon.glb") }

@@ -1,0 +1,81 @@
+{
+ "vertexCount": 14821,
+ "triangleCount": 19689,
+ "poses": [
+  {
+   "id": "stand",
+   "name": "Stand",
+   "icon": "figure.stand"
+  },
+  {
+   "id": "crouch",
+   "name": "Crouch",
+   "icon": "figure.strengthtraining.functional"
+  },
+  {
+   "id": "sit",
+   "name": "Sit",
+   "icon": "figure.seated.seatbelt"
+  },
+  {
+   "id": "star",
+   "name": "Star",
+   "icon": "figure.arms.open"
+  },
+  {
+   "id": "reach",
+   "name": "Reach",
+   "icon": "figure.wave"
+  },
+  {
+   "id": "curl",
+   "name": "Curl up",
+   "icon": "figure.flexibility"
+  },
+  {
+   "id": "prone",
+   "name": "Lie flat",
+   "icon": "figure.core.training"
+  },
+  {
+   "id": "kneel",
+   "name": "Kneel",
+   "icon": "figure.cooldown"
+  },
+  {
+   "id": "side",
+   "name": "Side lie",
+   "icon": "figure.pilates"
+  },
+  {
+   "id": "lean",
+   "name": "Lean",
+   "icon": "figure.surfing"
+  },
+  {
+   "id": "backbend",
+   "name": "Backbend",
+   "icon": "figure.gymnastics"
+  },
+  {
+   "id": "handsUp",
+   "name": "Hands up",
+   "icon": "figure.arms.open"
+  },
+  {
+   "id": "balance",
+   "name": "One leg",
+   "icon": "figure.yoga"
+  },
+  {
+   "id": "tuck",
+   "name": "Tuck",
+   "icon": "figure.wrestling"
+  },
+  {
+   "id": "tpose",
+   "name": "T-pose",
+   "icon": "figure.stand.line.dotted.figure.stand"
+  }
+ ]
+}

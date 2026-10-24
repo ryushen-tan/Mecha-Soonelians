@@ -444,6 +444,26 @@ window.characterViewer = {
     } catch (error) { post('error', error.message); }
   },
   // The painted, posed character as USDZ, for the hide-and-seek game's RealityKit ghosts.
+  /** Every pose baked to vertex positions (same vertices and uvs in each), for the game's AR chameleon. */
+  bakePoses() {
+    if (!character) throw new Error('Load a model first.');
+    const poses = posePages.flat().filter(pose => pose.id !== 'original');
+    let uv, index;
+    const positions = [];
+    for (const pose of poses) {
+      this.configure({ preset: pose.id }, {}, 0, false, true);
+      const meshes = [];
+      bakedCopy(placement).traverse(node => { if (node.isMesh) meshes.push(node); });
+      if (meshes.length !== 1) throw new Error(`Expected one mesh, found ${meshes.length}.`);
+      const geometry = meshes[0].geometry;
+      // Attributes may be interleaved, so read them vertex by vertex.
+      const read = (attribute, size) => Array.from({ length: attribute.count * size }, (_, i) => attribute.getComponent(Math.floor(i / size), i % size));
+      uv ??= read(geometry.attributes.uv, 2);
+      index ??= Array.from(geometry.index.array);
+      positions.push(read(geometry.attributes.position, 3));
+    }
+    return { poses, uv, index, positions };
+  },
   async exportUSDZ() {
     try {
       if (!character) throw new Error('Load a model first.');

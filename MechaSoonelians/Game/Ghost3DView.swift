@@ -118,8 +118,6 @@ struct Ghost3DView: View {
     /// Shown while a Tripo model is being made.
     var waitingImage: CGImage?
     var placeTitle = "Place 3D ghost"
-    /// Only pick a pose here; painting happens afterwards in AR.
-    var poseOnly = false
     var onUse2D: (() -> Void)?
     var onCancel: (() -> Void)?
 
@@ -199,32 +197,6 @@ struct Ghost3DView: View {
                     }
                 }
             }
-            if poseOnly {
-                Eyebrow(text: "PICK A POSE · DRAG TO TURN")
-            } else {
-                paintTools
-            }
-            if let error = sculptor.error { ErrorNotice(message: error) }
-            Button { sculptor.export() } label: { ActionLabel(text: placeTitle, busy: sculptor.exporting) }
-                .buttonStyle(PushButtonStyle())
-                .disabled(!sculptor.viewerLoaded || sculptor.exporting)
-            if let onUse2D {
-                Button("Use a flat cutout instead", action: onUse2D)
-                    .font(RallyStyle.font(14, .semibold))
-                    .frame(maxWidth: .infinity)
-            }
-            if let onCancel {
-                Button("Cancel", action: onCancel)
-                    .font(RallyStyle.font(14, .semibold))
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(20)
-        .background(RallyStyle.surface)
-    }
-
-    @ViewBuilder
-    private var paintTools: some View {
             Eyebrow(text: sculptor.painting ? "PAINT TO MATCH WHERE YOU'RE HIDING" : "DRAG TO TURN, PINCH TO ZOOM")
             HStack(spacing: 10) {
                 Circle()
@@ -247,6 +219,23 @@ struct Ghost3DView: View {
                 Slider(value: $sculptor.brushSize, in: 0.01...0.12).tint(RallyStyle.ink)
                     .accessibilityLabel("Brush size")
             }
+            if let error = sculptor.error { ErrorNotice(message: error) }
+            Button { sculptor.export() } label: { ActionLabel(text: placeTitle, busy: sculptor.exporting) }
+                .buttonStyle(PushButtonStyle())
+                .disabled(!sculptor.viewerLoaded || sculptor.exporting)
+            if let onUse2D {
+                Button("Use a flat cutout instead", action: onUse2D)
+                    .font(RallyStyle.font(14, .semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            if let onCancel {
+                Button("Cancel", action: onCancel)
+                    .font(RallyStyle.font(14, .semibold))
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(20)
+        .background(RallyStyle.surface)
     }
 
     @ViewBuilder

@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// The spray-paint controls over the AR view: a + in the middle, and one big button that picks
-/// up the color under the + from the real room, or sprays while held when the + is on the body.
+/// The hiding controls over the AR view: a + in the middle, and one big button that picks up the
+/// color under the + from the real room, or sprays while held when the + is on the body. A pose
+/// button cycles poses, and a joystick and turn buttons walk the chameleon around.
 struct SprayPaintView: View {
     @ObservedObject var painter: SprayPainter
     let timeLeft: String
     var onHide: () -> Void
-    var onChangePose: () -> Void
     var onCancel: () -> Void
 
     /// Whether the current press is spraying (it started on the body) rather than picking.
@@ -20,6 +20,7 @@ struct SprayPaintView: View {
             VStack(spacing: 0) {
                 topBar
                 Spacer()
+                moveControls
                 bottomPanel
             }
         }
@@ -44,7 +45,17 @@ struct SprayPaintView: View {
             roundButton("arrow.uturn.backward", label: "Undo") { painter.undo() }
                 .disabled(!painter.canUndo)
                 .opacity(painter.canUndo ? 1 : 0.4)
-            roundButton("figure.wave", label: "Change pose", action: onChangePose)
+            Button { painter.nextPose() } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: painter.poseIcon).font(.system(size: 20, weight: .semibold))
+                    Text(painter.poseName).font(RallyStyle.font(10, .semibold)).lineLimit(1)
+                }
+                .frame(width: 64, height: 50)
+                .background(RallyStyle.lime, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Pose: \(painter.poseName)")
+            .accessibilityHint("Switches to the next pose.")
         }
         .padding(14)
         .background(RallyStyle.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: 18))
@@ -104,6 +115,22 @@ struct SprayPaintView: View {
         .padding(.bottom, 8)
     }
 
+    /// The joystick walks the chameleon across the floor the way the phone faces; the arrows turn it.
+    private var moveControls: some View {
+        HStack(alignment: .bottom) {
+            Joystick { painter.joystick = $0 }
+            Spacer()
+            HStack(spacing: 10) {
+                holdButton("arrow.counterclockwise", label: "Turn left") { painter.turning = $0 ? -1 : 0 }
+                holdButton("arrow.clockwise", label: "Turn right") { painter.turning = $0 ? 1 : 0 }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
+        .opacity(painter.isReady ? 1 : 0.5)
+        .disabled(!painter.isReady)
+    }
+
     /// One button for both jobs, so the player never has to look away from the +.
     private var actionButton: some View {
         HStack(spacing: 10) {
@@ -149,6 +176,29 @@ struct SprayPaintView: View {
         }
     }
 
+    /// A button that does something for as long as it's held.
+    private func holdButton(_ systemImage: String, label: String, onHold: @escaping (Bool) -> Void) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 20, weight: .bold))
+            .frame(width: 56, height: 56)
+            .background(RallyStyle.surface.opacity(0.92), in: Circle())
+            .overlay(Circle().stroke(RallyStyle.ink, lineWidth: 2))
+            .contentShape(Circle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in onHold(true) }
+                .onEnded { _ in onHold(false) })
+            .accessibilityElement()
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction {
+                onHold(true)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    onHold(false)
+                }
+            }
+    }
+
     private func roundButton(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
@@ -158,5 +208,54 @@ struct SprayPaintView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+    }
+}
+
+/// A thumb stick: reports where the knob is, each axis -1...1 with up positive, and springs back
+/// to the middle on release.
+private struct Joystick: View {
+    var onChange: (SIMD2<Float>) -> Void
+    @State private var knob = CGSize.zero
+    private let radius: CGFloat = 52
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(RallyStyle.surface.opacity(0.75))
+                .overlay(Circle().stroke(RallyStyle.ink, lineWidth: 2))
+                .frame(width: radius * 2, height: radius * 2)
+            Image(systemName: "figure.walk")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(RallyStyle.muted)
+                .offset(y: -radius + 14)
+                .accessibilityHidden(true)
+            Circle()
+                .fill(RallyStyle.lime)
+                .overlay(Circle().stroke(RallyStyle.ink, lineWidth: 2))
+                .frame(width: 46, height: 46)
+                .offset(knob)
+        }
+        .contentShape(Circle())
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { drag in
+                let x = drag.location.x - radius, y = drag.location.y - radius
+                let length = max(1, (x * x + y * y).squareRoot())
+                let scale = min(1, radius / length)
+                knob = CGSize(width: x * scale, height: y * scale)
+                onChange(SIMD2(Float(knob.width / radius), Float(-knob.height / radius)))
+            }
+            .onEnded { _ in
+                knob = .zero
+                onChange(.zero)
+            })
+        .accessibilityElement()
+        .accessibilityLabel("Move your chameleon")
+        .accessibilityAdjustableAction { direction in
+            onChange(SIMD2(0, direction == .increment ? 1 : -1))
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(250))
+                onChange(.zero)
+            }
+        }
     }
 }

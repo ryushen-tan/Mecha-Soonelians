@@ -19,10 +19,7 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     /// Ghosts showing their 3D model rather than the flat cutout.
     private var modelGhosts: Set<UUID> = []
     private var loadingModels: Set<UUID> = []
-    /// 3D ghosts wearing their hider's spray paint.
-    private var paintedGhosts: Set<UUID> = []
     private var shownGhosts: Set<UUID> = []
-    private var ghostImages: [UUID: Data] = [:]
     private var floorY: Float?
     private var isRunning = false
     /// The scanned walls, for putting hiders' backs against them.
@@ -118,20 +115,21 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     func show(_ ghosts: [Ghost], images: [UUID: Data], models: [UUID: URL]) {
         let ids = Set(ghosts.map(\.id))
         shownGhosts = ids
-        ghostImages = images
         for (id, entity) in ghostEntities where !ids.contains(id) {
             entity.removeFromParent()
             ghostEntities[id] = nil
             foundGhosts.remove(id)
             modelGhosts.remove(id)
-            paintedGhosts.remove(id)
         }
         for ghost in ghosts {
             if ghost.hasModel, !modelGhosts.contains(ghost.id), !loadingModels.contains(ghost.id), let url = models[ghost.id] {
                 loadModel(for: ghost, from: url)
             }
-            // A sprayed chameleon's image is its paint, so it only ever goes on the model.
-            if ghost.paintedBody { applyPaint(to: ghost.id) }
+            // A sprayed chameleon's image is its paint, so it only ever goes on the body.
+            if ghostEntities[ghost.id] == nil, ghost.paintedBody,
+               let image = images[ghost.id], let entity = makeChameleon(ghost, paint: image) {
+                place(entity, for: ghost.id)
+            }
             if ghostEntities[ghost.id] == nil, !ghost.paintedBody,
                let image = images[ghost.id],
                let entity = makeGhostEntity(ghost, image: image) {
@@ -164,17 +162,18 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
             modelGhosts.insert(ghost.id)
             place(container, for: ghost.id)
             if foundGhosts.contains(ghost.id) { markFound(container, height: ghost.height) }
-            if ghost.paintedBody { applyPaint(to: ghost.id) }
         }
     }
 
-    /// Puts a sprayed chameleon's paint on once both its model and its paint have arrived.
-    private func applyPaint(to id: UUID) {
-        guard modelGhosts.contains(id), !paintedGhosts.contains(id), let image = ghostImages[id],
-              let entity = ghostEntities[id], let cgImage = UIImage(data: image)?.cgImage,
-              let texture = try? TextureResource(image: cgImage, options: .init(semantic: .color)) else { return }
-        Self.paint(entity, with: texture)
-        paintedGhosts.insert(id)
+    /// A hider's chameleon in its pose, wearing their spray paint.
+    private func makeChameleon(_ ghost: Ghost, paint: Data) -> Entity? {
+        guard let floor = simd_float4x4(floats: ghost.floorTransform), let body = ChameleonBody.shared,
+              let pose = body.index(of: ghost.pose), let cgImage = UIImage(data: paint)?.cgImage,
+              let texture = try? TextureResource(image: cgImage, options: .init(semantic: .color)),
+              let model = try? body.entity(pose, paint: texture) else { return nil }
+        let container = Self.stand(model, floor: floor, height: ghost.height, flushBack: ghost.flushBack)
+        container.name = ghost.id.uuidString
+        return container
     }
 
     /// Shows a chameleon at its spot before it's hidden, while it's being painted.
@@ -203,18 +202,6 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
                 .offsetBy(translation: SIMD3(0, size.y / 2, flushBack ? size.z / 2 + 0.015 : 0)),
         ]))
         return container
-    }
-
-    /// Shows `texture` on every surface under `entity` exactly as painted, without the room's lighting
-    /// (the colors were picked from the camera, which already has it).
-    static func paint(_ entity: Entity, with texture: TextureResource) {
-        if var model = entity.components[ModelComponent.self] {
-            var material = UnlitMaterial()
-            material.color = .init(tint: .white, texture: .init(texture))
-            model.materials = model.materials.map { _ in material }
-            entity.components.set(model)
-        }
-        entity.children.forEach { paint($0, with: texture) }
     }
 
     private func makeGhostEntity(_ ghost: Ghost, image: Data) -> Entity? {
