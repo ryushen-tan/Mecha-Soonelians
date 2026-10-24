@@ -37,19 +37,20 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
     enum Stage: Equatable {
         case framing
         case countdown(Int)
-        /// Which of the four photos is next (0 front … 3 other side).
-        case photo(Int)
+        /// Which of the four photos (0 front … 3 other side), and the countdown to it (0 = snapping).
+        case photo(Int, Int)
         case processing
         case done
         case failed(String)
     }
 
     /// The four photos: how far round, what to say, and whether the face must (or must not) show.
+    /// Each turn is a quarter turn to the player's right.
     private static let sides: [(yaw: Double, say: String, face: Bool?)] = [
-        (0, "Face me and hold still.", true),
-        (90, "Turn to your right, and hold still.", nil),
-        (180, "Turn right again, back to me. Hold still.", false),
-        (270, "One more turn to the right. Hold still.", nil),
+        (0, "First photo. Face the phone, and stand still.", true),
+        (90, "Now, turn to your right, so your side faces the phone. Stand still.", nil),
+        (180, "Turn right again, so your back faces the phone. Stand still.", false),
+        (270, "Last one. Turn right again, so your other side faces the phone. Stand still.", nil),
     ]
     static var photoCount: Int { sides.count }
 
@@ -178,16 +179,20 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
         framingTask?.cancel()
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: .duckOthers)
         setCameraLocked(true)
-        say("Got you. Keep your arms out a little for four photos.")
-        for second in stride(from: 3, through: 1, by: -1) {
-            stage = .countdown(second)
-            try? await Task.sleep(for: .seconds(1))
-        }
+        stage = .countdown(0)
+        await say("Got you! I'll take four photos. Keep your arms out a little, like the outline.")
         var photos: [(yaw: Double, image: CGImage)] = []
         for (index, side) in Self.sides.enumerated() {
-            stage = .photo(index)
-            say(side.say)
-            try? await Task.sleep(for: .seconds(index == 0 ? 2 : 3))
+            stage = .photo(index, 3)
+            await say(side.say)
+            // Time to turn, then a spoken three, two, one.
+            try? await Task.sleep(for: .seconds(1))
+            for second in stride(from: 3, through: 1, by: -1) {
+                stage = .photo(index, second)
+                await say("\(second)")
+                try? await Task.sleep(for: .milliseconds(400))
+            }
+            stage = .photo(index, 0)
             // Wait (up to 3 more seconds) until the face shows or hides as it should from this side.
             var image = latestImage()
             if let wantFace = side.face {
@@ -202,18 +207,21 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
             AudioServicesPlaySystemSound(1108)
             if let image { photos.append((side.yaw, image)) }
         }
-        say("Done!")
+        await say("Done! Making your chameleon.")
         stage = .processing
         stop()
         views = await Task.detached { Self.process(photos) }.value
         stage = views.count >= 3 ? .done : .failed("Couldn't see you in enough photos. Keep your whole body in view and try again.")
     }
 
-    private func say(_ text: String) {
-        speech.stopSpeaking(at: .immediate)
+    /// Speaks and waits until it's finished, so the next step never talks over it.
+    @MainActor
+    private func say(_ text: String) async {
         let utterance = AVSpeechUtterance(string: text)
-        utterance.rate = 0.52
+        utterance.rate = 0.45
         speech.speak(utterance)
+        try? await Task.sleep(for: .milliseconds(200))
+        while speech.isSpeaking { try? await Task.sleep(for: .milliseconds(100)) }
     }
 
     /// Whether a face is turned mostly toward the camera.

@@ -66,34 +66,70 @@ struct ChameleonStudioView: View {
         .background(RallyStyle.paper.ignoresSafeArea())
     }
 
+    /// The four photos: label, outline symbol (flipped for the other side), and what to do.
+    private static let steps: [(label: String, symbol: String, flipped: Bool, title: String, detail: String)] = [
+        ("FRONT", "figure.arms.open", false, "Face the phone", "Arms out a little. Stand still."),
+        ("SIDE", "figure.walk", false, "Turn to your right", "Your side faces the phone. Stand still."),
+        ("BACK", "figure.arms.open", false, "Turn right again", "Your back faces the phone. Stand still."),
+        ("SIDE", "figure.walk", true, "Turn right once more", "Your other side faces the phone. Stand still."),
+    ]
+
+    private var currentStep: Int? {
+        switch capture.stage {
+        case .photo(let index, _): index
+        case .countdown, .framing: 0
+        default: nil
+        }
+    }
+
     private var capturing: some View {
         ZStack {
             TurnaroundPreview(session: capture.session).ignoresSafeArea()
-            // The pose to hold for the photos: arms out a little, like the chameleon body's A-pose.
-            Image(systemName: "figure.arms.open")
-                .resizable().scaledToFit()
-                .frame(maxHeight: 420)
-                .foregroundStyle(.white.opacity(0.35))
+            // The outline to match: changes for each photo.
+            if let step = currentStep {
+                let info = Self.steps[step]
+                VStack(spacing: 6) {
+                    Image(systemName: info.symbol)
+                        .resizable().scaledToFit()
+                        .scaleEffect(x: info.flipped ? -1 : 1, y: 1)
+                        .frame(maxHeight: 400)
+                    Text(info.label).font(RallyStyle.font(28, .heavy)).tracking(4)
+                }
+                .foregroundStyle(.white.opacity(0.45))
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
+                .animation(.easeInOut(duration: 0.3), value: step)
+            }
+            if case .photo(_, let second) = capture.stage {
+                Text(second > 0 ? "\(second)" : "📸")
+                    .font(RallyStyle.font(120, .heavy))
+                    .foregroundStyle(RallyStyle.lime)
+                    .shadow(color: .black.opacity(0.5), radius: 8)
+            }
             VStack {
+                progress
                 Spacer()
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     switch capture.stage {
                     case .framing:
                         Text(framingHint)
-                            .font(RallyStyle.font(17, .bold))
+                            .font(RallyStyle.font(18, .bold))
+                            .multilineTextAlignment(.center)
                         Button { Task { await capture.run() } } label: { ActionLabel(text: "Start now") }
                             .buttonStyle(PushButtonStyle())
                             .disabled(!capture.fullBodyInView)
-                    case .countdown(let second):
-                        Text("\(second)").font(RallyStyle.font(64, .heavy))
-                    case .photo(let index):
-                        Text(["Face the phone", "Turn to your right", "Back to the phone", "One more turn"][index])
-                            .font(RallyStyle.font(20, .bold))
-                        Text("Photo \(index + 1) of \(ChameleonCapture.photoCount)").font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
+                    case .countdown:
+                        Text("Get ready…").font(RallyStyle.font(22, .bold))
+                        Text("Listen for the steps. Keep your arms out a little.")
+                            .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                    case .photo(let index, _):
+                        HStack(spacing: 10) {
+                            if index > 0 { Image(systemName: "arrow.turn.up.right").font(.system(size: 22, weight: .bold)) }
+                            Text(Self.steps[index].title).font(RallyStyle.font(24, .heavy))
+                        }
+                        Text(Self.steps[index].detail).font(RallyStyle.font(15)).foregroundStyle(RallyStyle.muted)
                     case .processing:
-                        HStack { ProgressView(); Text("Cutting you out…").font(RallyStyle.font(16, .semibold)) }
+                        HStack { ProgressView(); Text("Making your chameleon…").font(RallyStyle.font(16, .semibold)) }
                     case .done:
                         Text("Got it!").font(RallyStyle.font(20, .bold))
                     case .failed(let message):
@@ -107,6 +143,24 @@ struct ChameleonStudioView: View {
                 .padding(16)
             }
         }
+    }
+
+    /// FRONT · SIDE · BACK · SIDE, with the current one highlighted and finished ones ticked.
+    private var progress: some View {
+        HStack(spacing: 6) {
+            ForEach(Self.steps.indices, id: \.self) { index in
+                let done: Bool = {
+                    if case .photo(let current, _) = capture.stage { return index < current }
+                    return capture.stage == .processing || capture.stage == .done
+                }()
+                let current: Bool = { if case .photo(let now, _) = capture.stage { return now == index }; return false }()
+                Text(done ? "✓ " + Self.steps[index].label : Self.steps[index].label)
+                    .font(RallyStyle.font(12, .bold)).tracking(1)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(current ? RallyStyle.lime : done ? RallyStyle.mint : RallyStyle.surface.opacity(0.85), in: Capsule())
+            }
+        }
+        .padding(.top, 8)
     }
 
     private var framingHint: String {
