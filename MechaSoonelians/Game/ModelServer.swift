@@ -13,8 +13,15 @@ struct ModelServer: Equatable {
     private static let tokenAccount = "ghostModelServerToken"
 
     /// The host's saved server. The address lives in UserDefaults and the token in the Keychain.
+    /// Launching with `--model-server <address> --model-token <token>` (from Xcode or devicectl)
+    /// saves those first, so the token never has to be typed or committed.
     static var saved: ModelServer {
-        ModelServer(address: UserDefaults.standard.string(forKey: addressKey) ?? "", token: loadToken() ?? "")
+        let arguments = ProcessInfo.processInfo.arguments
+        if let i = arguments.firstIndex(of: "--model-server"), i + 1 < arguments.count {
+            let token = arguments.firstIndex(of: "--model-token").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
+            ModelServer(address: arguments[i + 1], token: token ?? "").save()
+        }
+        return ModelServer(address: UserDefaults.standard.string(forKey: addressKey) ?? "", token: loadToken() ?? "")
     }
 
     func save() {
