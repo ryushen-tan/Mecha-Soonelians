@@ -19,7 +19,10 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     /// Ghosts showing their 3D model rather than the flat cutout.
     private var modelGhosts: Set<UUID> = []
     private var loadingModels: Set<UUID> = []
+    /// 3D ghosts wearing their hider's spray paint.
+    private var paintedGhosts: Set<UUID> = []
     private var shownGhosts: Set<UUID> = []
+    private var ghostImages: [UUID: Data] = [:]
     private var floorY: Float?
     private var isRunning = false
     /// The scanned walls, for putting hiders' backs against them.
@@ -115,17 +118,21 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     func show(_ ghosts: [Ghost], images: [UUID: Data], models: [UUID: URL]) {
         let ids = Set(ghosts.map(\.id))
         shownGhosts = ids
+        ghostImages = images
         for (id, entity) in ghostEntities where !ids.contains(id) {
             entity.removeFromParent()
             ghostEntities[id] = nil
             foundGhosts.remove(id)
             modelGhosts.remove(id)
+            paintedGhosts.remove(id)
         }
         for ghost in ghosts {
             if ghost.hasModel, !modelGhosts.contains(ghost.id), !loadingModels.contains(ghost.id), let url = models[ghost.id] {
                 loadModel(for: ghost, from: url)
             }
-            if ghostEntities[ghost.id] == nil,
+            // A sprayed chameleon's image is its paint, so it only ever goes on the model.
+            if ghost.paintedBody { applyPaint(to: ghost.id) }
+            if ghostEntities[ghost.id] == nil, !ghost.paintedBody,
                let image = images[ghost.id],
                let entity = makeGhostEntity(ghost, image: image) {
                 place(entity, for: ghost.id)
@@ -143,38 +150,71 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         ghostEntities[id] = entity
     }
 
-    /// Swaps the flat cutout for the 3D model, scaled to the hider's measured height and
-    /// standing on the floor, with its back on the wall when it was hidden against one.
+    /// Swaps the flat cutout for the 3D model, standing where the hider put it.
     private func loadModel(for ghost: Ghost, from url: URL) {
         guard let floor = simd_float4x4(floats: ghost.floorTransform) else { return }
         loadingModels.insert(ghost.id)
         Task { @MainActor in
             defer { loadingModels.remove(ghost.id) }
             guard let model = try? await Entity(contentsOf: url) else { return }
-            let bounds = model.visualBounds(relativeTo: nil)
-            // The 3D editor normalizes every character to 1.75 m standing, so a crouch stays a crouch.
-            let scale = ghost.height / 1.75
-            model.scale = SIMD3(repeating: scale)
-            // Feet on the floor, centered left-right; back on the wall (just in front of the wall's
-            // invisible blocker) or centered on the spot.
-            let back = ghost.flushBack ? -bounds.min.z * scale + 0.015 : -bounds.center.z * scale
-            model.position = SIMD3(-bounds.center.x * scale, -bounds.min.y * scale, back)
-
-            let size = bounds.extents * scale
-            let container = Entity()
+            let container = Self.stand(model, floor: floor, height: ghost.height, flushBack: ghost.flushBack)
             container.name = ghost.id.uuidString
-            container.transform = Transform(matrix: floor)
-            container.addChild(model)
-            container.components.set(CollisionComponent(shapes: [
-                ShapeResource.generateBox(size: size)
-                    .offsetBy(translation: SIMD3(0, size.y / 2, ghost.flushBack ? size.z / 2 + 0.015 : 0)),
-            ]))
             // The ghost may have left the scene (retaken photo, new round) while this loaded.
             guard shownGhosts.contains(ghost.id) else { return }
             modelGhosts.insert(ghost.id)
             place(container, for: ghost.id)
             if foundGhosts.contains(ghost.id) { markFound(container, height: ghost.height) }
+            if ghost.paintedBody { applyPaint(to: ghost.id) }
         }
+    }
+
+    /// Puts a sprayed chameleon's paint on once both its model and its paint have arrived.
+    private func applyPaint(to id: UUID) {
+        guard modelGhosts.contains(id), !paintedGhosts.contains(id), let image = ghostImages[id],
+              let entity = ghostEntities[id], let cgImage = UIImage(data: image)?.cgImage,
+              let texture = try? TextureResource(image: cgImage, options: .init(semantic: .color)) else { return }
+        Self.paint(entity, with: texture)
+        paintedGhosts.insert(id)
+    }
+
+    /// Shows a chameleon at its spot before it's hidden, while it's being painted.
+    func addPreview(_ model: Entity, placement: GhostPlacement) -> Entity {
+        let container = Self.stand(model, floor: placement.floorTransform, height: placement.height, flushBack: placement.flushBack)
+        houseAnchor.addChild(container)
+        return container
+    }
+
+    /// The model scaled to `height`, with its feet on the floor, centered left-right; its back on
+    /// the wall (just in front of the wall's invisible blocker) or centered on the spot.
+    private static func stand(_ model: Entity, floor: simd_float4x4, height: Float, flushBack: Bool) -> Entity {
+        let bounds = model.visualBounds(relativeTo: nil)
+        // The 3D editor normalizes every character to 1.75 m standing, so a crouch stays a crouch.
+        let scale = height / 1.75
+        model.scale = SIMD3(repeating: scale)
+        let back = flushBack ? -bounds.min.z * scale + 0.015 : -bounds.center.z * scale
+        model.position = SIMD3(-bounds.center.x * scale, -bounds.min.y * scale, back)
+
+        let size = bounds.extents * scale
+        let container = Entity()
+        container.transform = Transform(matrix: floor)
+        container.addChild(model)
+        container.components.set(CollisionComponent(shapes: [
+            ShapeResource.generateBox(size: size)
+                .offsetBy(translation: SIMD3(0, size.y / 2, flushBack ? size.z / 2 + 0.015 : 0)),
+        ]))
+        return container
+    }
+
+    /// Shows `texture` on every surface under `entity` exactly as painted, without the room's lighting
+    /// (the colors were picked from the camera, which already has it).
+    static func paint(_ entity: Entity, with texture: TextureResource) {
+        if var model = entity.components[ModelComponent.self] {
+            var material = UnlitMaterial()
+            material.color = .init(tint: .white, texture: .init(texture))
+            model.materials = model.materials.map { _ in material }
+            entity.components.set(model)
+        }
+        entity.children.forEach { paint($0, with: texture) }
     }
 
     private func makeGhostEntity(_ ghost: Ghost, image: Data) -> Entity? {
