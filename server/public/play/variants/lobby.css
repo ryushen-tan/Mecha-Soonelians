@@ -1,0 +1,36 @@
+/* Shared lobby overlay. Variants restyle it through the --lb-* tokens. */
+.lb-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  background: var(--lb-scrim, rgba(8, 12, 30, 0.55)); backdrop-filter: blur(var(--lb-blur, 16px)) saturate(1.15); -webkit-backdrop-filter: blur(var(--lb-blur, 16px)) saturate(1.15);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px; }
+.lb-overlay[hidden] { display: none; }
+.lb-card { width: min(440px, 100%); background: var(--lb-card, #121a3a); color: var(--lb-fg, #eef1ff); border: var(--lb-border, 1px solid rgba(140,170,255,.32)); border-radius: var(--lb-radius, 22px);
+  padding: 22px; box-shadow: var(--lb-shadow, 0 30px 80px rgba(0,0,0,.5)); display: flex; flex-direction: column; gap: 14px; font-family: var(--lb-font-body, system-ui, sans-serif); }
+.lb-card h2 { font: 700 26px/1.1 var(--lb-font-display, inherit); margin: 0; text-wrap: balance; letter-spacing: var(--lb-tracking, 0); }
+.lb-card p { margin: 0; color: var(--lb-muted, #96a0cc); font-size: 14px; line-height: 1.45; }
+.lb-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lb-choice button { padding: 18px 12px; border-radius: calc(var(--lb-radius, 22px) * .75); font-size: 17px; }
+.lb-choice button span { display: block; font: 500 12px var(--lb-font-body, inherit); margin-top: 4px; opacity: .8; }
+.lb-card button { font: 700 14px var(--lb-font-display, inherit); color: var(--lb-accent-fg, #0b1020); background: var(--lb-accent, #c6ff4a); border: 0; border-radius: 999px; padding: 10px 16px; cursor: pointer; }
+.lb-card button.lb-ghost { background: transparent; color: var(--lb-fg, #eef1ff); border: var(--lb-border, 1px solid rgba(140,170,255,.32)); }
+.lb-card button.lb-alt { background: var(--lb-alt, #4a63ff); color: var(--lb-alt-fg, #fff); }
+.lb-card button:disabled { opacity: .45; cursor: not-allowed; }
+.lb-card button:focus-visible, .lb-card input:focus-visible { outline: 2px solid var(--lb-focus, #fff); outline-offset: 2px; }
+.lb-card label { font-size: 12px; color: var(--lb-muted, #96a0cc); letter-spacing: .06em; text-transform: uppercase; }
+.lb-card input { width: 100%; box-sizing: border-box; font: 700 18px var(--lb-font-body, inherit); color: var(--lb-fg, #eef1ff); background: var(--lb-field, #0d1430); border: var(--lb-border, 1px solid rgba(140,170,255,.32)); border-radius: calc(var(--lb-radius, 22px) * .55); padding: 12px 14px; }
+.lb-card input.lb-code { font: 700 30px var(--lb-font-display, inherit); letter-spacing: .28em; text-align: center; font-variant-numeric: tabular-nums; }
+.lb-avatars { display: flex; gap: 10px; }
+.lb-avatars button { width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 3px solid transparent; }
+.lb-avatars button.on { border-color: var(--lb-fg, #fff); }
+.lb-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.lb-codebig { font: 700 clamp(44px, 12vw, 64px)/1 var(--lb-font-display, inherit); letter-spacing: .18em; text-align: center; color: var(--lb-fg, #fff); padding: 10px 0 4px; font-variant-numeric: tabular-nums; }
+.lb-players { display: flex; flex-direction: column; gap: 8px; max-height: 38vh; overflow: auto; }
+.lb-player { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--lb-field, #0d1430); border-radius: calc(var(--lb-radius, 22px) * .55); font-weight: 700; }
+.lb-player .dot { width: 26px; height: 26px; border-radius: 50%; flex: none; }
+.lb-player .host { margin-left: auto; font: 700 11px var(--lb-font-display, inherit); color: var(--lb-accent-fg, #0b1020); background: var(--lb-accent, #c6ff4a); padding: 3px 8px; border-radius: 999px; }
+.lb-player .wait { margin-left: auto; font-size: 12px; color: var(--lb-muted, #96a0cc); }
+.lb-err { color: var(--lb-bad, #ff7d8a); font-size: 13px; min-height: 1.2em; }
+.lb-waiting { display: flex; align-items: center; gap: 10px; color: var(--lb-ok, #7df0b3); font-weight: 700; }
+.lb-spinner { width: 16px; height: 16px; border: 3px solid color-mix(in srgb, var(--lb-ok, #7df0b3) 30%, transparent); border-top-color: var(--lb-ok, #7df0b3); border-radius: 50%; animation: lb-spin 1s linear infinite; }
+@keyframes lb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .lb-spinner { animation: none; } }
+.lb-srv { font-size: 11px; color: var(--lb-muted, #96a0cc); text-align: center; }

@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Mecha Soonelians</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;800&family=Nunito:wght@600;800&display=swap">
+<link rel="stylesheet" href="variants/lobby.css">
+<style>
+  /* Layout: a light wall; black and white figurines in game poses plus the letters S O O N pour from the top and pile up like beans
+     (2D physics, x–y only). When the pile fills the screen a PLAY button appears; it opens the code card. */
+  :root {
+    --bg: #e4e7ef; --ink: #141414; --paper: #fbfbfb; --blue: #4a63ff; --muted: #6b7080;
+    --font-display: "Outfit", "PingFang SC", system-ui, sans-serif; --font-body: "Nunito", -apple-system, "PingFang SC", system-ui, sans-serif;
+    --lb-card: var(--paper); --lb-fg: var(--ink); --lb-muted: var(--muted); --lb-accent: var(--blue); --lb-accent-fg: #fff; --lb-alt: var(--ink); --lb-alt-fg: #fff;
+    --lb-field: #f1f2f6; --lb-border: 2px solid var(--ink); --lb-radius: 22px; --lb-shadow: 0 24px 60px rgba(20,20,20,.25); --lb-scrim: rgba(228,231,239,.55); --lb-blur: 10px; --lb-focus: var(--blue);
+    --lb-font-display: var(--font-display); --lb-font-body: var(--font-body); --lb-ok: #1f8f5f; --lb-bad: #c0392b;
+  }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); overflow: hidden; }
+  #stage { position: fixed; inset: 0; z-index: 0; touch-action: none; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  #veil { position: fixed; inset: 0; z-index: 1; pointer-events: none; background: rgba(228,231,239,.3); opacity: 0; transition: opacity .7s ease; }   /* with the live blur: ~30 % dim, the cards stay sharp above it */
+  #veil.show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { #veil { transition: none; } }
+  .hud { position: fixed; left: 0; right: 0; z-index: 2; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; pointer-events: none;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); bottom: 0; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+  .hud > * { pointer-events: auto; }
+  .hud button { font: 800 12px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); background: rgba(251,251,251,.85); border: 2px solid var(--ink); border-radius: 999px; padding: 8px 12px; cursor: pointer; }
+  .hud button:focus-visible, #play:focus-visible, #card button:focus-visible, #card input:focus-visible, #card a:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+  #count { font: 800 12px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); z-index: 2; }
+  #sound { position: fixed; top: calc(10px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); z-index: 2; font: 800 12px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); background: rgba(251,251,251,.85); border: 2px solid var(--ink); border-radius: 999px; padding: 8px 12px; cursor: pointer; }
+  #sound:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+  #title { position: fixed; left: 0; top: 0; z-index: 2; pointer-events: none; display: none; transform: translate(-50%, -50%); background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: .55em; box-shadow: 0 .18em 0 rgba(20,20,20,.18); text-align: center; font-family: var(--font-display); line-height: 1; padding: .24em .55em .3em; white-space: nowrap; }
+  #title small { display: block; font-weight: 700; letter-spacing: .34em; font-size: .4em; margin: 0 0 .22em .34em; }
+  #title b { display: block; font-weight: 900; letter-spacing: .01em; }
+  #title.show { display: block; }
+  /* PLAY: a card like the word card, a real button, dropped onto the pile */
+  #play { position: fixed; left: 0; top: 0; z-index: 3; display: none; transform: translate(-50%, -50%); background: var(--blue); color: #fff; border: 3px solid var(--ink); border-radius: .55em; box-shadow: 0 .18em 0 rgba(20,20,20,.35);
+          font: 900 1em/1 var(--font-display); letter-spacing: .12em; padding: .4em .7em .44em .62em; cursor: pointer; white-space: nowrap; touch-action: manipulation; }
+  #play.show { display: block; }
+  #play:hover { background: #3b53f0; }
+  #play:active { transform: translate(-50%, calc(-50% + .1em)); box-shadow: 0 .08em 0 rgba(20,20,20,.35); }
+  #play .tri { font-size: .8em; margin-right: .3em; vertical-align: .04em; }
+  /* the code card */
+  #cardWrap { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(228,231,239,.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+              padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px; }
+  #cardWrap[hidden] { display: none; }
+  #card { width: min(420px, 100%); background: var(--paper); border: 2px solid var(--ink); border-radius: 26px; padding: 26px 24px 20px; box-shadow: 0 24px 60px rgba(20,20,20,.25); display: flex; flex-direction: column; gap: 14px; box-sizing: border-box;
+          animation: pop .35s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes pop { from { transform: translateY(18px) scale(.96); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { #card { animation: none; } }
+  #card h2 { font: 800 clamp(28px, 7vw, 36px)/1.05 var(--font-display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  #card h2 b { color: var(--blue); font-weight: 800; }
+  #card label { font: 800 12px var(--font-body); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  #card input { font: 800 clamp(34px, 9vw, 46px)/1 var(--font-display); letter-spacing: .24em; text-align: center; color: var(--ink); background: #f1f2f6; border: 2px solid var(--ink); border-radius: 16px; padding: 14px 0 14px .24em; width: 100%; box-sizing: border-box; font-variant-numeric: tabular-nums; }
+  #card input::placeholder { color: #c3c7d3; }
+  #card button { font: 800 18px var(--font-display); letter-spacing: .04em; color: #fff; background: var(--blue); border: 0; border-radius: 16px; padding: 15px; cursor: pointer; box-shadow: 0 6px 0 #2f44c7; }
+  #card button:active { transform: translateY(4px); box-shadow: 0 2px 0 #2f44c7; }
+  #card .err { color: #c0392b; font-weight: 800; font-size: 13px; min-height: 1.2em; }
+  #card .foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  #card a { font: 800 13px var(--font-body); color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  #card a:hover { color: var(--ink); }
+  #lobby { z-index: 50; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="veil" aria-hidden="true"></div>
+<div id="count">0 / 0</div>
+<button id="sound" type="button" aria-pressed="false">♪ 声音开</button>
+<div id="title" aria-hidden="true"><small>MECCHA</small><b>SOONELIANS</b></div>
+
+<button id="play" type="button" aria-label="Play"><span class="tri" aria-hidden="true">▶</span>PLAY</button>
+
+<div class="hud">
+  <div><button id="btnTilt" type="button">开启倾斜</button></div>
+  <div><button id="btnRefill" type="button">重新倒一次</button></div>
+</div>
+
+<div id="cardWrap" hidden>
+  <form id="card" autocomplete="off">
+    <h2>Mecha <b>Soonelians</b></h2>
+    <label for="code">Enter Code</label>
+    <input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" aria-label="Room code">
+    <button type="submit">Join →</button>
+    <div class="err" id="err"></div>
+    <div class="foot"><a id="hostLink" role="button" tabindex="0">host a game</a><a id="closeCard" role="button" tabindex="0">back</a></div>
+  </form>
+</div>
+<div id="lobby" hidden></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { HorizontalBlurShader } from 'three/addons/shaders/HorizontalBlurShader.js';
+import { VerticalBlurShader } from 'three/addons/shaders/VerticalBlurShader.js';
+import { createLobby } from './variants/lobby.js';
+import { createSfx } from './variants/sfx.js';
+
+// ================================================================ scene (orthographic, x–y plane = the screen)
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xe4e7ef);   // opaque, same as the page: the blur then has no dark fringes
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa0b4, 0.95));
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.25); keyLight.position.set(2, 5, 6); scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0xdfe6ff, 0.45); fillLight.position.set(-4, 2, 3); scene.add(fillLight);
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 50); camera.position.set(0, 0, 10);
+const VIEW_H = 7.2;                 // world metres visible vertically; width follows the aspect ratio
+let VIEW_W = 4;
+// live blur once the screen is full: the scene is rendered small, blurred twice each way, and upscaled — cheap, and everything keeps moving
+const BLUR_RES = 0.35;
+const composer = new EffectComposer(renderer); composer.setPixelRatio(1);
+composer.addPass(new RenderPass(scene, camera));
+const blurs = [new ShaderPass(HorizontalBlurShader), new ShaderPass(VerticalBlurShader), new ShaderPass(HorizontalBlurShader), new ShaderPass(VerticalBlurShader)];
+for (const b of blurs) composer.addPass(b);
+composer.addPass(new OutputPass());
+function fitCamera() {
+  const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false);
+  VIEW_W = VIEW_H * w / h;
+  camera.left = -VIEW_W / 2; camera.right = VIEW_W / 2; camera.top = VIEW_H / 2; camera.bottom = -VIEW_H / 2; camera.updateProjectionMatrix();
+  const pr = renderer.getPixelRatio(), bw = Math.max(1, Math.round(w * pr * BLUR_RES)), bh = Math.max(1, Math.round(h * pr * BLUR_RES));
+  composer.setSize(bw, bh);
+  for (const b of blurs) { if (b.uniforms.h) b.uniforms.h.value = 1 / bw; if (b.uniforms.v) b.uniforms.v.value = 1 / bh; }
+}
+fitCamera(); addEventListener('resize', () => onLayout());
+function onLayout() { fitCamera(); for (const c of [titleCard, playCard]) if (c) layoutDom(c); placeDom(); }
+// the pane/container can get its size after load without a resize event: follow the stage element itself
+if (window.ResizeObserver) new ResizeObserver(() => { if (stage.clientWidth !== renderer.domElement.width / renderer.getPixelRatio() || stage.clientHeight !== renderer.domElement.height / renderer.getPixelRatio()) onLayout(); }).observe(stage);
+
+// ================================================================ figurines = sprites cropped from the reference photo (sprites/pose-1..8.png), black or white, each with an outline
+const blue = new THREE.MeshStandardMaterial({ color: 0x4a63ff, roughness: 0.45, metalness: 0.05 });
+const FIG_SIZE = 0.72;              // every figure fits the same 0.72 m square (longer side), so poses look the same size
+const POSE_COUNT = 8;
+const sprites = [];                 // { tex: {black, white}, w, h }
+/** The silhouette in `fill` with a `stroke`-coloured border around it (the alpha mask dilated in 16 directions). */
+function outlined(img, fill, stroke) {
+  const p = Math.max(2, Math.round(Math.max(img.width, img.height) * 0.028));
+  const c = document.createElement('canvas'); c.width = img.width + 2 * p; c.height = img.height + 2 * p; const g = c.getContext('2d');
+  for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; g.drawImage(img, p + Math.cos(a) * p, p + Math.sin(a) * p); }
+  g.globalCompositeOperation = 'source-in'; g.fillStyle = stroke; g.fillRect(0, 0, c.width, c.height); g.globalCompositeOperation = 'source-over';
+  const f = document.createElement('canvas'); f.width = img.width; f.height = img.height; const gf = f.getContext('2d');
+  gf.drawImage(img, 0, 0); gf.globalCompositeOperation = 'source-in'; gf.fillStyle = fill; gf.fillRect(0, 0, f.width, f.height);
+  g.drawImage(f, p, p);
+  return c;
+}
+function spriteFromImage(img) {
+  const black = outlined(img, '#141414', '#f7f7f7'), white = outlined(img, '#f7f7f7', '#141414');
+  const mk = (cv) => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
+  const scale = FIG_SIZE / Math.max(black.width, black.height);
+  return { tex: { black: mk(black), white: mk(white) }, w: black.width * scale, h: black.height * scale };
+}
+const loadSprite = (i, tries = 3) => new Promise((res) => {   // a flaky dev server can reset one request: retry, and never let one missing pose break the pour
+  const go = (n) => { const im = new Image(); im.onload = () => res(spriteFromImage(im)); im.onerror = () => (n > 1 ? setTimeout(() => go(n - 1), 300) : res(null)); im.src = `sprites/pose-${i + 1}.png${n < tries ? `?retry=${n}` : ''}`; };
+  go(tries);
+});
+const spritesReady = Promise.all(Array.from({ length: POSE_COUNT }, (_, i) => loadSprite(i))).then(list => { sprites.push(...list.filter(Boolean)); if (!sprites.length) console.error('no sprites loaded'); });
+function makeFigure(sprite, variant) {
+  const group = new THREE.Group();
+  group.add(new THREE.Mesh(new THREE.PlaneGeometry(sprite.w, sprite.h), new THREE.MeshBasicMaterial({ map: sprite.tex[variant], transparent: true, alphaTest: 0.3, side: THREE.DoubleSide })));
+  return { group, w: sprite.w, h: sprite.h, rScale: 0.48 };
+}
+// ---------------- the logo: one piece (slash + square + L), the logo blue
+const DEG = Math.PI / 180;
+const PX = 0.9 / 540, DEPTH = 0.2;
+function roundedBoxMesh(w, h, d, r) {
+  const sh = new THREE.Shape(); const x = -w / 2, y = -h / 2;
+  sh.moveTo(x + r, y); sh.lineTo(x + w - r, y); sh.quadraticCurveTo(x + w, y, x + w, y + r); sh.lineTo(x + w, y + h - r); sh.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  sh.lineTo(x + r, y + h); sh.quadraticCurveTo(x, y + h, x, y + h - r); sh.lineTo(x, y + r); sh.quadraticCurveTo(x, y, x + r, y);
+  const g = new THREE.ExtrudeGeometry(sh, { depth: d - 0.06, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 3, curveSegments: 6 }); g.translate(0, 0, -(d - 0.06) / 2);
+  return new THREE.Mesh(g, blue);
+}
+function makeLogo() {
+  const group = new THREE.Group(); const C = [270, 270];
+  const add = (w, h, pxX, pxY, rotZ = 0) => { const m = roundedBoxMesh(w, h, DEPTH, Math.min(w, h) * 0.3); m.position.set((pxX - C[0]) * PX, -(pxY - C[1]) * PX, 0); m.rotation.z = rotZ; group.add(m); };
+  add(Math.hypot(300, 320) * PX + 0.3, 95 * PX, 440, 220, -Math.atan2(320, 300)); add(140 * PX, 140 * PX, 260, 315); add(420 * PX, 90 * PX, 260, 550); add(135 * PX, 210 * PX, 402, 490);
+  return { group, w: 1.0, h: 0.95, rScale: 0.48 };
+}
+// ---------------- the letters S O O N in the logo blue
+function makeLetter(ch) {
+  const group = new THREE.Group(); const R = 0.11, H = 0.82;
+  if (ch === 'O') group.add(new THREE.Mesh(new THREE.TorusGeometry(H / 2 - R, R, 12, 32), blue));
+  else if (ch === 'N') for (const [x, ang] of [[-0.26, 0], [0.26, 0], [0, -34]]) { const len = ang ? H * 1.08 : H; const m = new THREE.Mesh(new THREE.CapsuleGeometry(R, len - 2 * R, 6, 12), blue); m.position.set(x, 0, 0); m.rotation.z = ang * DEG; group.add(m); }
+  else {  // S: a tube along an S-shaped curve
+    const pts = [[0.22, 0.36], [0, 0.4], [-0.22, 0.3], [-0.2, 0.08], [0.1, 0.02], [0.22, -0.14], [0.1, -0.36], [-0.14, -0.4], [-0.26, -0.3]].map(([x, y]) => new THREE.Vector3(x, y, 0));
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, R, 10, false), blue));
+  }
+  return { group, w: ch === 'N' ? 0.74 : 0.82, h: 0.82, rScale: 0.5 };
+}
+
+// ================================================================ physics: the botpress.com/events hero, ported to metres
+// Every piece is a circle (r ≈ half its long side), mass ∝ area; gravity, bouncy impulses between pairs with mass-aware
+// positional correction, grip, walls that reflect with the same restitution, a subtle drawn rotation (angle × 0.12), and
+// drag-and-throw with the pointer. Their px constants scale by hero height ≈ 1232 px → 7.2 m. Added for a pile of 60 instead
+// of 13 loose objects: contacts slower than SLOP don't bounce, real friction, floor-first solver passes, and sleeping bodies.
+const G = 9.4, RESTITUTION = 0.6, MAX_SPEED = 10.5, MAX_DT = 1 / 50, FRICTION_AIR = 0.003, SLOP = 0.6, PASSES = 8, FRICTION = 0.2;
+const FILL_FRAC = 0.7, PACKING = 0.82, MAX_PIECES = 220, TICK_MS = () => 86 + Math.random() * 55;   // one piece every 86–141 ms (the old pace, +10 %)
+const LETTERS = ['S', 'O', 'O', 'N'];
+const pieces = [];                  // { group|el, w, h, r, mass, x, y, vx, vy, angle, av, entered, asleep, still, box? }
+const gDir = new THREE.Vector2(0, -1), pileG = new THREE.Vector2(0, -1);
+let spawned = 0, filled = false, blurred = false, spawnTimer = null, cardTimer = null, pouring = false, lastSpawnAt = 0, lastActivityAt = 0, dragging = null;
+const rand = (a, b) => a + Math.random() * (b - a), clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const speedOf = (p) => Math.hypot(p.vx, p.vy);
+// the boundary: each piece's collision circle, kept invisible (SHOW_BOUNDARY = true draws it as a thin ring, like the botpress hero)
+const SHOW_BOUNDARY = false;
+const ringMat = new THREE.MeshBasicMaterial({ color: 0x4a63ff, transparent: true, opacity: 0.45, depthWrite: false });
+function boundaryRing(r) { const m = new THREE.Mesh(new THREE.RingGeometry(r - 0.016, r, 72), ringMat); m.position.z = 0.16; return m; }
+function addPiece(p, x, y) {
+  p.r = p.r || p.rScale * Math.max(p.w, p.h); p.mass = Math.max(0.2, (p.w * p.h) / 0.45);
+  p.x = x; p.y = y; p.vx = rand(-0.5, 0.5); p.vy = rand(0, 0.35); p.angle = p.box ? 0 : rand(-Math.PI, Math.PI); p.av = p.box ? 0 : rand(-1, 1); p.entered = false; p.asleep = false; p.still = 0; p.moved = 0;
+  if (p.group) { if (SHOW_BOUNDARY) p.group.add(boundaryRing(p.r)); scene.add(p.group); } pieces.push(p); return p;
+}
+function spawnOne() {
+  if (spawned === 4) { spawnDom(playCard, rand(-0.7, 0.7)); spawned++; lastSpawnAt = lastActivityAt = performance.now(); return; }   // PLAY drops in very early: right after the logo (3), before S O O N (6, 11, 16, 21)
+  const letterSlots = [6, 11, 16, 21], li = letterSlots.indexOf(spawned);    // logo and S O O N go in early so they sit inside the pile
+  const piece = spawned === 3 ? makeLogo() : li >= 0 ? makeLetter(LETTERS[li]) : makeFigure(sprites[Math.floor(Math.random() * sprites.length)], Math.random() < 0.5 ? 'black' : 'white');
+  const r = piece.rScale * Math.max(piece.w, piece.h);
+  // from just beyond the "ceiling" of the current gravity, anywhere across it
+  const perp = { x: -gDir.y, y: gDir.x }, across = Math.abs(perp.x) * VIEW_W / 2 + Math.abs(perp.y) * VIEW_H / 2 - r, up = Math.abs(gDir.x) * VIEW_W / 2 + Math.abs(gDir.y) * VIEW_H / 2 + r + rand(0.2, 1.6);
+  const u = rand(-across, across);
+  addPiece(piece, perp.x * u - gDir.x * up, perp.y * u - gDir.y * up); spawned++; lastSpawnAt = lastActivityAt = performance.now();
+}
+/** How much of the view the pieces would cover once packed (circle area over view area, at a loose packing). */
+function fillArea() { let a = 0; for (const p of pieces) a += p.box ? 4 * p.box.hw * p.box.hh : Math.PI * p.r * p.r; return a / PACKING / (VIEW_W * VIEW_H); }
+function spawnTick() {
+  if (!pouring) return;
+  spawnOne(); document.getElementById('count').textContent = String(spawned);
+  const full = fillArea() >= FILL_FRAC || spawned >= MAX_PIECES;
+  if (!full) spawnTimer = setTimeout(spawnTick, TICK_MS());
+  else { pouring = false; filled = true; sfx.startBgm(); cardTimer = setTimeout(() => spawnDom(titleCard), 300); }   // done filling: the music starts and the word card lands on the pile
+}
+function clearAll() {
+  clearTimeout(spawnTimer); clearTimeout(cardTimer); pouring = false; filled = false; blurred = false; spawned = 0; dragging = null; veil.classList.remove('show');
+  for (const q of pieces) if (q.group) { scene.remove(q.group); q.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); } pieces.length = 0;
+  for (const c of [titleCard, playCard]) { c.el.classList.remove('show'); c.live = false; }
+  document.getElementById('count').textContent = '';
+}
+function pour() { clearAll(); pouring = true; pileG.copy(gDir); spritesReady.then(() => { spawnTimer = setTimeout(spawnTick, 150); }); }
+/** One body: gravity, clamp, move, spin. */
+function integrate(b, dt) {
+  if (dragging && dragging.p === b) { b.x = dragging.x; b.y = dragging.y; b.vx = b.vy = 0; b.av = 0; wake(b); return; }
+  if (b.asleep) return;
+  b.vx += gDir.x * G * dt; b.vy += gDir.y * G * dt;
+  b.vx *= (1 - FRICTION_AIR); b.vy *= (1 - FRICTION_AIR);
+  b.vx = clamp(b.vx, -MAX_SPEED, MAX_SPEED); b.vy = clamp(b.vy, -MAX_SPEED, MAX_SPEED);
+  b.x += b.vx * dt; b.y += b.vy * dt; b.angle += b.av * dt;
+}
+/** Walls: clamp and reflect (slow hits stop dead); the ceiling only once the body has come inside. */
+function walls(b) {
+  if (b.asleep) return;
+  const hw = b.box ? b.box.hw : b.r, hh = b.box ? b.box.hh : b.r, L = -VIEW_W / 2 + hw, R = VIEW_W / 2 - hw, B = -VIEW_H / 2 + hh, T = VIEW_H / 2 - hh;
+  if (!b.entered) { if (b.x >= L && b.x <= R && b.y >= B && b.y <= T) b.entered = true; }
+  const bounce = (v) => Math.abs(v) > SLOP ? -v * RESTITUTION : 0;
+  if (b.x < L) { b.x = L; b.vx = bounce(b.vx); if (gDir.x < -0.5) b.vy *= 0.985; }
+  if (b.x > R) { b.x = R; b.vx = bounce(b.vx); if (gDir.x > 0.5) b.vy *= 0.985; }
+  if (b.y < B) { b.y = B; b.vy = bounce(b.vy); if (gDir.y < -0.5) b.vx *= 0.985; }   // the floor also scrubs a little sideways speed
+  if (b.entered && b.y > T) { b.y = T; b.vy = bounce(b.vy); if (gDir.y > 0.5) b.vx *= 0.985; }
+}
+/** Two circles, or a circle and a card. */
+function resolvePair(a, b) {
+  if (a.box && b.box) return resolveBoxes(a, b);
+  if (a.box || b.box) return resolveBox(a.box ? b : a, a.box ? a : b);
+  const dx = b.x - a.x, dy = b.y - a.y, dist2 = dx * dx + dy * dy, minDist = a.r + b.r;
+  if (dist2 === 0 || dist2 > minDist * minDist) return;
+  const dist = Math.sqrt(dist2) || 1e-6;
+  collide(a, b, dx / dist, dy / dist, minDist - dist);
+}
+/** A circle against an upright card (axis-aligned box): the closest point on the box gives the normal. */
+function resolveBox(c, k) {
+  const cx = clamp(c.x, k.x - k.box.hw, k.x + k.box.hw), cy = clamp(c.y, k.y - k.box.hh, k.y + k.box.hh);
+  const dx = c.x - cx, dy = c.y - cy, d2 = dx * dx + dy * dy; let nx, ny, overlap;
+  if (d2 > c.r * c.r) return;
+  if (d2 === 0) {   // centre inside the card: push out through the nearest face
+    const ox = k.box.hw - Math.abs(c.x - k.x), oy = k.box.hh - Math.abs(c.y - k.y);
+    if (ox < oy) { nx = Math.sign(c.x - k.x) || 1; ny = 0; overlap = ox + c.r; } else { nx = 0; ny = Math.sign(c.y - k.y) || 1; overlap = oy + c.r; }
+  } else { const d = Math.sqrt(d2); nx = dx / d; ny = dy / d; overlap = c.r - d; }
+  collide(k, c, nx, ny, overlap);   // normal points from the card to the circle
+}
+/** Two upright cards: separate along the axis of least overlap. */
+function resolveBoxes(a, b) {
+  const ox = a.box.hw + b.box.hw - Math.abs(b.x - a.x), oy = a.box.hh + b.box.hh - Math.abs(b.y - a.y);
+  if (ox <= 0 || oy <= 0) return;
+  if (ox < oy) collide(a, b, Math.sign(b.x - a.x) || 1, 0, ox); else collide(a, b, 0, Math.sign(b.y - a.y) || 1, oy);
+}
+const wake = (p) => { p.asleep = false; p.still = 0; };
+/** Contact between a and b along the normal n (from a to b): separate, bounce or stop, grip. A sleeping or dragged body is a wall. */
+function collide(a, b, nx, ny, overlap) {
+  if (dragging && (dragging.p === a || dragging.p === b)) { wake(a); wake(b); }               // the pointer shoves sleepers awake
+  if (a.asleep !== b.asleep) { const mover = a.asleep ? b : a; if ((mover.moved || 0) > 0.3) wake(a.asleep ? a : b); }   // something moving leans on a sleeper
+  const pinA = a.asleep || (dragging && dragging.p === a), pinB = b.asleep || (dragging && dragging.p === b);
+  if (pinA && pinB) return;
+  const invA = pinA ? 0 : 1 / a.mass, invB = pinB ? 0 : 1 / b.mass, invSum = invA + invB;
+  const pushA = overlap * invA / invSum, pushB = overlap * invB / invSum;   // mass-aware separation (a pinned body does not move)
+  a.x -= nx * pushA; a.y -= ny * pushA; b.x += nx * pushB; b.y += ny * pushB;
+  const rvx = b.vx - a.vx, rvy = b.vy - a.vy, vn = rvx * nx + rvy * ny;
+  if (vn > 0) return;
+  if (vn < -SLOP) { wake(a); wake(b); }                                     // a real knock wakes a sleeper (it reacts next frame)
+  const e = vn < -SLOP ? RESTITUTION : 0;                                   // only real hits bounce
+  const j = -(1 + e) * vn / invSum, ix = j * nx, iy = j * ny;
+  a.vx -= ix * invA; a.vy -= iy * invA; b.vx += ix * invB; b.vy += iy * invB;
+  const tvx = rvx - vn * nx, tvy = rvy - vn * ny, fa = invA / invSum, fb = invB / invSum;   // grip: take a share of the sliding velocity
+  a.vx += FRICTION * fa * tvx; a.vy += FRICTION * fa * tvy; b.vx -= FRICTION * fb * tvx; b.vy -= FRICTION * fb * tvy;
+  const spin = 0.02 * (ix * ny - iy * nx);                                  // their angular hint
+  if (!a.box && !pinA) a.av -= spin; if (!b.box && !pinB) b.av += spin;
+}
+function physics(dt) {
+  for (const p of pieces) { p.px = p.x; p.py = p.y; }
+  for (let i = 0; i < pieces.length; i++) integrate(pieces[i], dt);
+  pieces.sort((a, b) => (b.x * gDir.x + b.y * gDir.y) - (a.x * gDir.x + a.y * gDir.y));   // nearest the floor first: the floor's "stop" climbs a whole stack in one pass
+  for (let k = 0; k < PASSES; k++) {
+    for (let i = 0; i < pieces.length; i++) walls(pieces[i]);
+    for (let i = 0; i < pieces.length; i++) for (let j = i + 1; j < pieces.length; j++) resolvePair(pieces[i], pieces[j]);
+  }
+  for (const p of pieces) {   // stillness is judged by how far a body actually moved, so a held-in-place body can sleep and drop its leftover velocity
+    if (p.asleep || (dragging && dragging.p === p)) continue;
+    p.moved = Math.hypot(p.x - p.px, p.y - p.py) / dt;
+    if (p.moved < 0.3 && p.entered) { p.still += dt; if (p.still > 0.5) { p.asleep = true; p.vx = p.vy = 0; p.av = 0; } } else p.still = 0;
+  }
+}
+function syncMeshes() { for (const p of pieces) if (p.group) { p.group.position.set(p.x, p.y, 0); p.group.rotation.z = p.angle * 0.12; } }
+const settled = () => pieces.length > 0 && pieces.every(p => p.asleep || (p.moved || 0) < 0.25);
+
+// ---------------- the two cards: "MECCHA SOONELIANS" and "▶ PLAY" — upright boxes (never rotate) that drop onto the pile and bounce with it.
+// They are DOM elements, so they stay sharp above the blur; PLAY is a real button.
+const pxPerM = () => stage.clientHeight / VIEW_H;
+const domPiece = (el, em) => ({ el, em, box: { hw: 1, hh: 0.4 }, w: 2, h: 0.8, r: 0.4, live: false });
+const titleCard = domPiece(document.getElementById('title'), 0.36), playCard = domPiece(document.getElementById('play'), 0.3);
+function layoutDom(c) {
+  c.el.style.fontSize = (Math.min(c.em, VIEW_W * c.em / 3.3) * pxPerM()) + 'px';
+  const r = c.el.getBoundingClientRect(); if (!r.width) return;
+  c.w = r.width / pxPerM(); c.h = r.height / pxPerM(); c.box = { hw: c.w / 2, hh: c.h / 2 }; c.mass = Math.max(0.2, c.w * c.h / 0.45);
+}
+function spawnDom(c, uFrac = 0) {   // uFrac: where across the screen (−1…1), 0 = dead centre; always from beyond the ceiling
+  if (c.live) pieces.splice(pieces.indexOf(c), 1);
+  c.el.classList.add('show'); layoutDom(c); c.live = true;
+  const perp = { x: -gDir.y, y: gDir.x }, across = Math.abs(perp.x) * VIEW_W / 2 + Math.abs(perp.y) * VIEW_H / 2 - Math.max(c.box.hw, c.box.hh), u = uFrac * across;
+  const up = Math.abs(gDir.x) * VIEW_W / 2 + Math.abs(gDir.y) * VIEW_H / 2 + c.box.hh + 0.8;
+  addPiece(c, perp.x * u - gDir.x * up, perp.y * u - gDir.y * up); c.vx = c.vy = 0; placeDom();
+}
+function placeDom() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  for (const c of [titleCard, playCard]) if (c.live) { c.el.style.left = ((c.x + VIEW_W / 2) / VIEW_W * w) + 'px'; c.el.style.top = ((VIEW_H / 2 - c.y) / VIEW_H * h) + 'px'; }
+}
+
+// ================================================================ settled after filling → live blur (the cards stay sharp, everything still moves)
+const veil = document.getElementById('veil');
+function setBlur(on) { blurred = on; veil.classList.toggle('show', on); }
+/** Gravity turned or something was thrown: wake the whole pile. */
+function thawPile() { pileG.copy(gDir); lastActivityAt = performance.now(); for (const p of pieces) wake(p); }
+const sfx = createSfx({ bgmSrc: 'audio/bgm.mp3', bgmVolume: 0.5 });
+const soundBtn = document.getElementById('sound');
+function paintSound() { soundBtn.textContent = sfx.muted ? '♪ 声音关' : '♪ 声音开'; soundBtn.setAttribute('aria-pressed', String(!sfx.muted)); }
+soundBtn.addEventListener('click', () => { sfx.toggleMute(); paintSound(); });
+paintSound();
+function checkFilled() {
+  if (!filled || blurred) return;
+  const since = performance.now() - lastActivityAt;
+  if ((since > 800 && settled()) || since > 9000) setBlur(true);   // the pile has come to rest: the cards become the focus
+}
+setInterval(checkFilled, 250);
+
+// ================================================================ gravity direction: phone tilt, or drag the background; drag a piece to throw it
+const gTarget = new THREE.Vector3(0, -1, 0), gNow = new THREE.Vector3(0, -1, 0);
+let motionSign = 0, tiltSource = 'none';
+function onMotion(e) {
+  const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
+  const v = new THREE.Vector3(-a.x, -a.y, -a.z);
+  if (motionSign === 0) { if (v.length() > 7) motionSign = (Math.abs(a.y) > Math.abs(a.z) ? -Math.sign(a.y) : -Math.sign(a.z)) || 1; else return; }
+  v.multiplyScalar(motionSign); if (v.length() < 2) return; gTarget.copy(v.normalize());
+  if (tiltSource !== 'motion') { tiltSource = 'motion'; document.getElementById('btnTilt').textContent = '倾斜已开启'; }
+}
+document.getElementById('btnTilt').addEventListener('click', async () => {
+  try {
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') { if ((await DeviceMotionEvent.requestPermission()) !== 'granted') return; }
+    addEventListener('devicemotion', onMotion);
+  } catch {}
+});
+let bgDrag = null; const tilt = { roll: 0 };
+const toWorld = (ev) => { const r = renderer.domElement.getBoundingClientRect(); return { x: (ev.clientX - r.left) / r.width * VIEW_W - VIEW_W / 2, y: VIEW_H / 2 - (ev.clientY - r.top) / r.height * VIEW_H }; };
+function pieceAt(x, y) { for (let i = pieces.length - 1; i >= 0; i--) { const p = pieces[i]; if (p === playCard) continue; if (p.box ? (Math.abs(x - p.x) <= p.box.hw && Math.abs(y - p.y) <= p.box.hh) : ((x - p.x) ** 2 + (y - p.y) ** 2 <= p.r * p.r)) return p; } return null; }
+stage.addEventListener('pointerdown', (ev) => {
+  stage.setPointerCapture(ev.pointerId); const w = toWorld(ev); const p = pieceAt(w.x, w.y);
+  if (p) { dragging = { p, x: w.x, y: w.y, px: w.x, py: w.y, vx: 0, vy: 0 }; wake(p); lastActivityAt = performance.now(); }
+  else bgDrag = { x: ev.clientX, roll: tilt.roll };
+});
+stage.addEventListener('pointermove', (ev) => {
+  if (ev.pointerType === 'mouse' && !(ev.buttons & 1)) { release(); return; }   // a mouse that is no longer pressed must not keep steering
+  if (dragging) { const w = toWorld(ev); dragging.vx = w.x - dragging.x; dragging.vy = w.y - dragging.y; dragging.px = dragging.x; dragging.py = dragging.y; dragging.x = w.x; dragging.y = w.y; }
+  else if (bgDrag && tiltSource !== 'motion') { tilt.roll = bgDrag.roll + (ev.clientX - bgDrag.x) * 0.006; gTarget.set(0, -1, 0).applyAxisAngle(new THREE.Vector3(0, 0, 1), tilt.roll); }
+});
+function release() { if (dragging) { dragging.p.vx = dragging.vx * 60; dragging.p.vy = dragging.vy * 60; dragging = null; lastActivityAt = performance.now(); } bgDrag = null; }   // let go: thrown with the pointer's speed
+stage.addEventListener('pointerup', release); stage.addEventListener('pointercancel', release); stage.addEventListener('lostpointercapture', release); addEventListener('blur', release);
+document.getElementById('btnRefill').addEventListener('click', () => { tilt.roll = 0; if (tiltSource !== 'motion') gTarget.set(0, -1, 0); gNow.copy(gTarget); gDir.set(gNow.x, gNow.y).normalize(); pour(); });
+
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dtReal = Math.min(0.25, (now - last) / 1000); last = now;
+  gNow.lerp(gTarget, 0.15).normalize();
+  if (Math.hypot(gNow.x, gNow.y) > 0.15) gDir.set(gNow.x, gNow.y).normalize();
+  if (pieces.length && gDir.distanceTo(pileG) > 0.25) thawPile();    // gravity turned: the pile lives again
+  const steps = Math.min(4, Math.ceil(dtReal / MAX_DT)), dt = dtReal / steps;   // their dt clamp, with sub-steps so a throttled tab catches up
+  for (let s = 0; s < steps; s++) physics(dt);
+  syncMeshes(); placeDom();
+  if (blurred) composer.render(); else renderer.render(scene, camera);
+}
+requestAnimationFrame(frame);
+pour();
+window.__dbg = { renderer, scene, camera, pieces, sfx, cards: () => ({ title: titleCard, play: playCard }), g: () => ({ gDir: [gDir.x, gDir.y] }), view: () => ({ VIEW_W, VIEW_H }), state: () => ({ spawned, filled, blurred, pouring, settled: settled(), fill: fillArea(), asleep: pieces.filter(p => p.asleep).length, dragging: !!dragging }) };
+
+// ================================================================ PLAY → code card → lobby
+const cardWrap = document.getElementById('cardWrap'), playBtn = document.getElementById('play'), err = document.getElementById('err');
+const lobby = createLobby({ overlay: document.getElementById('lobby'), onOpen: () => { cardWrap.hidden = true; }, onClose: () => { cardWrap.hidden = false; } });
+playBtn.addEventListener('click', () => { cardWrap.hidden = false; setTimeout(() => document.getElementById('code').focus(), 80); });
+document.getElementById('closeCard').addEventListener('click', () => { cardWrap.hidden = true; });
+document.getElementById('card').addEventListener('submit', (e) => { e.preventDefault(); const v = document.getElementById('code').value.trim(); if (!/^\d{6}$/.test(v)) { err.textContent = '房间码是 6 位数字'; return; } err.textContent = ''; lobby.open('name', { mode: 'join', code: v }); });
+document.getElementById('hostLink').addEventListener('click', () => lobby.open('name', { mode: 'host' }));
+if (lobby.session) lobby.open();
+</script>
+</body>
+</html>
