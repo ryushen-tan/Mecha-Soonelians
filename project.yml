@@ -1,0 +1,29 @@
+name: MechaSoonelians
+options:
+  bundleIdPrefix: com.ryushentan
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+targets:
+  MechaSoonelians:
+    type: application
+    platform: iOS
+    sources: [MechaSoonelians]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryushentan.MechaSoonelians
+        TARGETED_DEVICE_FAMILY: "1"
+    info:
+      path: MechaSoonelians/Info.plist
+      properties:
+        CFBundleDisplayName: Mecha Soonelians
+        NSCameraUsageDescription: The camera is used to scan the house.
+        UIRequiredDeviceCapabilities: [arkit]
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
