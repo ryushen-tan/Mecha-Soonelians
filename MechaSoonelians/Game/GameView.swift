@@ -1,94 +1,12 @@
-import MultipeerConnectivity
 import SwiftUI
-
-struct HostGameView: View {
-    @StateObject private var session: GameSession
-
-    init(name: String, avatar: Int) {
-        _session = StateObject(wrappedValue: GameSession(name: name, avatar: avatar, isHost: true))
-    }
-
-    var body: some View {
-        GameView(session: session)
-    }
-}
-
-struct JoinGameView: View {
-    @StateObject private var session: GameSession
-    @Environment(\.dismiss) private var dismiss
-
-    init(name: String, avatar: Int) {
-        _session = StateObject(wrappedValue: GameSession(name: name, avatar: avatar, isHost: false))
-    }
-
-    var body: some View {
-        // A container that stays put, so swapping the list for the game doesn't count as leaving.
-        ZStack {
-            if session.isConnected {
-                GameView(session: session)
-            } else {
-                hostList
-            }
-        }
-        .toolbar(.hidden, for: .navigationBar)
-        .onDisappear { session.leave() }
-    }
-
-    private var hostList: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                HStack {
-                    Button { dismiss() } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
-                        .accessibilityLabel("Back")
-                    Spacer()
-                    Brand()
-                    Spacer()
-                    Color.clear.frame(width: 44, height: 44)
-                }
-                Text("Games nearby").font(RallyStyle.font(32, .bold)).accessibilityAddTraits(.isHeader)
-                if session.hosts.isEmpty {
-                    HStack(spacing: 12) {
-                        ProgressView()
-                        Text("Looking on this Wi-Fi…").font(RallyStyle.font(14, .semibold))
-                    }
-                    .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RallyStyle.line.opacity(0.3), in: RoundedRectangle(cornerRadius: 14))
-                    Text("The host needs Create room open, on the same Wi-Fi as you.")
-                        .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
-                }
-                ForEach(session.hosts, id: \.self) { host in
-                    Button { session.join(host) } label: {
-                        HStack(spacing: 14) {
-                            AvatarView(index: session.hostAvatars[host] ?? 0, size: 44)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(host.displayName)'s game").font(RallyStyle.font(17, .bold))
-                                Text("Tap to join").font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
-                            }
-                            Spacer()
-                            Image(systemName: "arrow.right")
-                        }
-                        .padding(16)
-                        .background(RallyStyle.surface, in: RoundedRectangle(cornerRadius: 18))
-                        .overlay(RoundedRectangle(cornerRadius: 18).stroke(RallyStyle.line, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .rallyHover(cornerRadius: 18)
-                }
-                if let error = session.error { ErrorNotice(message: error) }
-            }
-            .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
-        }
-        .background(RallyStyle.paper.ignoresSafeArea())
-        .foregroundStyle(RallyStyle.ink)
-    }
-}
 
 /// One screen for the whole round. The AR view stays alive underneath so the phone keeps
 /// knowing where it is; each phase puts its own panel on top.
 struct GameView: View {
     @ObservedObject var session: GameSession
+    /// Leaving mid-round: the host closes the round for everyone, anyone else leaves the room.
+    var onExit: () -> Void
     @StateObject private var ar = ARGameController()
-    @Environment(\.dismiss) private var dismiss
 
     @State private var capture: GhostCapture?
     /// Building and painting a 3D ghost; nil means painting the flat cutout.
@@ -102,6 +20,10 @@ struct GameView: View {
     @State private var useTimer = true
     @State private var captureError: String?
     @State private var confirmingLeave = false
+    /// A few seconds of "who's the seeker / go hide" when a phase starts.
+    @State private var splash: Splash?
+
+    private struct Splash: Equatable { let title: String; let detail: String }
 
     private var state: GameState { session.state }
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
@@ -138,6 +60,15 @@ struct GameView: View {
                 phasePanel
             }
 
+            if let splash {
+                paperCover {
+                    AvatarView(index: session.me.avatar, size: 125).rotationEffect(.degrees(-7)).accessibilityHidden(true)
+                    Text(splash.title).font(RallyStyle.font(44, .heavy)).multilineTextAlignment(.center)
+                    Text(splash.detail).font(RallyStyle.font(17)).foregroundStyle(RallyStyle.muted).multilineTextAlignment(.center)
+                }
+                .transition(.opacity)
+                .onTapGesture { self.splash = nil }
+            }
             if let countdown {
                 Text("\(countdown)")
                     .font(RallyStyle.font(140, .heavy))
@@ -153,14 +84,20 @@ struct GameView: View {
             Text(captureError ?? "")
         }
         .alert(session.isHost ? "End this game?" : "Heading out?", isPresented: $confirmingLeave) {
-            Button(session.isHost ? "End game" : "Leave game", role: .destructive) { dismiss() }
+            Button(session.isHost ? "End game" : "Leave game", role: .destructive) { onExit() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(session.isHost ? "Everyone will be disconnected." : "You can join again from Games nearby.")
+            Text(session.isHost ? "Everyone goes back to the lobby." : "You'll leave the room.")
+        }
+        .alert("Something went wrong", isPresented: Binding(get: { session.error != nil }, set: { if !$0 { session.error = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(session.error ?? "")
         }
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
             ar.onTapGhost = { session.tag($0) }
+            session.start()
             startARIfReady()
         }
         .onDisappear {
@@ -175,6 +112,7 @@ struct GameView: View {
         .onChange(of: session.ghostImages) { syncGhosts() }
         .onChange(of: session.ghostModels) { syncGhosts() }
         .onChange(of: state.phase) {
+            announcePhase()
             if state.phase != .hiding {
                 sculptor?.cancel()
                 sculptor = nil
@@ -183,6 +121,28 @@ struct GameView: View {
                 placingChameleon = false
                 ar.onTapPlace = nil
             }
+        }
+    }
+
+    /// Tells everyone what their job is when a phase starts.
+    private func announcePhase() {
+        let seekerName = session.seeker?.name ?? "Someone"
+        switch state.phase {
+        case .hiding:
+            splash = session.myRole == .seeker
+                ? Splash(title: "You're the seeker!", detail: "Eyes closed. Everyone else is hiding, and you'll get the word when it's time to seek.")
+                : Splash(title: "Go hide!", detail: "\(seekerName) is the seeker. Place your ghost before the timer runs out.")
+        case .seeking:
+            splash = session.myRole == .seeker
+                ? Splash(title: "Go seek!", detail: "Tap a hider when you spot them.")
+                : nil
+        default:
+            splash = nil
+        }
+        guard splash != nil else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(4))
+            withAnimation { splash = nil }
         }
     }
 
@@ -260,8 +220,8 @@ struct GameView: View {
             VStack(alignment: .leading, spacing: 24) {
                 Brand()
                 VStack(spacing: 14) {
-                    Eyebrow(text: "HOSTED BY")
-                    Text(state.players.first.map { $0.name } ?? session.me.name)
+                    Eyebrow(text: "THE SEEKER IS")
+                    Text(session.seeker?.name ?? "…")
                         .font(RallyStyle.font(40, .heavy)).tracking(-1)
                         .minimumScaleFactor(0.6).lineLimit(1)
                     Rectangle().fill(RallyStyle.limeEdge.opacity(0.7)).frame(height: 1)
@@ -284,7 +244,7 @@ struct GameView: View {
                 if session.isHost {
                     hostControls
                 } else {
-                    Label("Waiting for the host", systemImage: "clock")
+                    Label("Hiding starts when everyone has found the house", systemImage: "clock")
                         .font(RallyStyle.font(14, .semibold)).frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16).background(RallyStyle.line.opacity(0.3), in: RoundedRectangle(cornerRadius: 14))
                 }
@@ -307,16 +267,11 @@ struct GameView: View {
             Label(player.isReady ? "Found the house" : "Finding the house",
                   systemImage: isHostPlayer ? "crown" : player.isReady ? "checkmark" : "clock")
                 .font(RallyStyle.font(11)).foregroundStyle(player.isReady ? RallyStyle.success : RallyStyle.muted)
-            Button { session.toggleRole(of: player.id) } label: {
-                Text(player.role == .seeker ? "🔍 Seeker" : "🫥 Hider")
-                    .font(RallyStyle.font(12, .bold))
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(player.role == .seeker ? RallyStyle.coral.opacity(0.35) : RallyStyle.cyan.opacity(0.5),
-                                in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(!session.isHost)
-            .accessibilityLabel(session.isHost ? "\(player.name) is a \(player.role.rawValue). Tap to switch." : player.role.rawValue)
+            Text(player.role == .seeker ? "🔍 Seeker" : "🫥 Hider")
+                .font(RallyStyle.font(12, .bold))
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(player.role == .seeker ? RallyStyle.coral.opacity(0.35) : RallyStyle.cyan.opacity(0.5), in: Capsule())
+                .accessibilityLabel("\(player.name) is the \(player.role.rawValue)")
         }
         .padding(12).frame(maxWidth: .infinity, minHeight: 132)
         .background(RallyStyle.surface, in: RoundedRectangle(cornerRadius: 18))
@@ -324,24 +279,12 @@ struct GameView: View {
     }
 
     private var hostControls: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 14) {
             Rectangle().fill(RallyStyle.line).frame(height: 1)
-            Stepper("Hide time · \(state.hideSeconds / 60) min", value: Binding(
-                get: { state.hideSeconds / 60 }, set: { session.setDurations(hide: $0 * 60, seek: state.seekSeconds) }
-            ), in: 1...10)
-            .font(RallyStyle.font(14, .semibold))
-            Stepper("Seek time · \(state.seekSeconds / 60) min", value: Binding(
-                get: { state.seekSeconds / 60 }, set: { session.setDurations(hide: state.hideSeconds, seek: $0 * 60) }
-            ), in: 1...15)
-            .font(RallyStyle.font(14, .semibold))
-            Text("Hiders' ghosts become 3D models on the hosted 3D server. Each takes a few minutes and uses Tripo credits, so give hiders 5+ minutes.")
+            Text("Hiding starts by itself once everyone has found the house. Hiders get \(state.hideSeconds / 60) min to hide; the seeker gets \(state.seekSeconds / 60) min to find them.")
                 .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
-            Button { session.startRound() } label: { ActionLabel(text: "Start round") }
+            Button { session.startRound() } label: { ActionLabel(text: "Start hiding now") }
                 .buttonStyle(PushButtonStyle())
-            Text(state.players.contains { $0.role == .seeker }
-                 ? "Tap a player's role to switch it."
-                 : "Nobody is a seeker yet, so everyone will seek after hiding.")
-                .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
         }
     }
 
@@ -377,7 +320,7 @@ struct GameView: View {
                 .disabled(!ar.isRelocalized)
             }
             if session.isHost {
-                Button("Start seeking now") { session.endPhase() }
+                Button("Start seeking now") { session.skipPhase() }
                     .font(RallyStyle.font(14, .semibold))
             }
         }
@@ -391,7 +334,7 @@ struct GameView: View {
             Text(ar.isRelocalized ? "Tap a hider when you spot them." : ar.trackingMessage)
                 .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
             if session.isHost {
-                Button("End round") { session.endPhase() }
+                Button("End round") { session.skipPhase() }
                     .font(RallyStyle.font(14, .semibold))
             }
         }
@@ -417,9 +360,9 @@ struct GameView: View {
                 Text("Nobody placed a ghost this round.").font(RallyStyle.font(15, .semibold))
             }
             if session.isHost {
-                Button { session.startRound() } label: { ActionLabel(text: "Play again") }
+                Button { session.playAgain() } label: { ActionLabel(text: "Play again") }
                     .buttonStyle(PushButtonStyle())
-                Button { session.endPhase() } label: { ActionLabel(text: "Back to lobby") }
+                Button { onExit() } label: { ActionLabel(text: "Back to lobby") }
                     .buttonStyle(PushButtonStyle(dark: true))
             } else {
                 Label("Waiting for the host", systemImage: "clock").font(RallyStyle.font(14, .semibold))
@@ -554,7 +497,7 @@ struct GameView: View {
         let ghost = Ghost(id: id, ownerID: session.me.id, transform: placement.transform.floats,
                           floorTransform: placement.floorTransform.floats, flushBack: placement.flushBack,
                           hasModel: modelURL != nil, paintedBody: pose != nil, pose: pose, width: placement.width,
-                          height: placement.height, foundBy: nil)
+                          height: placement.height, foundBy: nil, modelFormat: modelURL?.pathExtension)
         session.placeGhost(ghost, image: image, model: modelURL)
         sculptor = nil
         capture = nil

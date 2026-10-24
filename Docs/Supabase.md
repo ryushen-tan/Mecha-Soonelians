@@ -37,6 +37,16 @@ npx supabase@latest db query --linked --project-ref saeypsjtyeahpqkmjkwo --file 
   - The bucket is private and has no `storage.objects` policies.
   - The API uses two credentials: a least-privilege Postgres role, and the secret key for Storage only. Both are server-side.
 
+## Online AR round
+
+Pressing **Start game** in the lobby runs the AR hide-and-seek round through this same backend (`server/lib/ar.mjs`, table `rally.ar_games`, private bucket `rally-ar`).
+
+- **Flow.** The host's phone uploads its scanned house (`structure.json` and `worldmap.arexperience`) straight to Storage on signed upload links, then the server picks **one random seeker**. Phases: *finding the house* (every phone relocalizes) → *hiding* (hiders place a ghost; the seeker is told to wait) → *seeking* → *results*. Hiding starts by itself when every player has found the house, or when the host taps **Start hiding now**. All timers run on the server clock.
+- **Who sees what** is decided server-side: a hider sees their own ghost; the seeker sees everyone's only while seeking; everyone sees all at the end. Signed download links are only issued for ghosts the caller may see.
+- **Big files** never pass through Vercel (its 4.5 MB body limit): the phones upload and download on short-lived signed links. Files live under `<room id>/` and are deleted when the room closes or the next round clears the ghosts.
+- **Needs `SUPABASE_SERVICE_ROLE_KEY`.** Storage only creates signed links and existence checks for a JWT caller, not for an `sb_secret_` key (verified against the real service). Set the legacy `service_role` JWT as `SUPABASE_SERVICE_ROLE_KEY` on Vercel. Only the AR bucket uses it; everything else keeps using `SUPABASE_SECRET_KEY`.
+- **API** (all under `/rooms/:code/ar`, membership token required): `GET` the round; `POST` with `action` = `start` (host), `begin` (host), `skip` (host), `ready`, `place`, `tag`; `POST|GET /house`; `POST /ghosts` and `GET /ghosts/:id` for upload/download links.
+
 ## Supabase setup
 
 1. **Create the project.** Create a project at <https://supabase.com/dashboard>. Choose the region closest to your players. Every request makes several round trips to the database, so the Vercel functions must run in the matching region (step 4 of Vercel setup). For example, East US (North Virginia) pairs with Vercel `iad1`. Save the database password.

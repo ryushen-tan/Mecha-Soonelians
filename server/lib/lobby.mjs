@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { acceptDisguise, snapshotGame, visibleOwners, startGame, shoot, taunt, recordView, emergencyEject } from './game.mjs';
 import { createMemoryRoomStore } from './room-store.mjs';
+import { arPaths, HOUSE_FILES, startAR, beginRound, skipPhase, setReady, placeGhost, tagGhost, snapshotAR, canSeeGhost, clearAR, validateGhost, advanceAR } from './ar.mjs';
 
 const LIMIT = 4096;
 const UPLOAD = 20 * 1024 * 1024;
@@ -103,9 +104,77 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
     } catch { fail(400, 'Send a valid JSON object.'); }
   }
 
+  // The online AR round. Runs under the room lock; anything that needs Storage is returned as a
+  // function that runs after the lock is released: [status, data, undefined, after].
+  function arAct(room, req, body, member, kind, id, verified) {
+    const time = now();
+    const roomID = room.id;
+    if (!kind) {
+      if (req.method === 'GET') return [200, { ar: snapshotAR(room, member, time) }];
+      if (req.method !== 'POST') fail(405, 'Unsupported round action.');
+      switch (body.action) {
+        case 'start':
+          if (!member.host) fail(403, 'Only the host can start a round.');
+          if (!verified) fail(409, 'Scan your house first, then try again.');
+          startAR(room, body, time);
+          break;
+        case 'begin': beginRound(room, member, time); break;
+        case 'skip': skipPhase(room, member, time); break;
+        case 'ready': setReady(room, member, body.ready); break;
+        case 'place':
+          if (!verified) fail(409, 'Upload the ghost files first.');
+          placeGhost(room, member, body.ghost, time);
+          break;
+        case 'tag': tagGhost(room, member, body.ghostID, time); break;
+        default: fail(400, 'Choose a supported round action.');
+      }
+      return [200, { ar: snapshotAR(room, member, time) }];
+    }
+    if (kind === 'house') {
+      if (req.method === 'POST') {
+        if (!member.host) fail(403, 'Only the host can upload the house.');
+        return [200, null, undefined, async () => ({
+          structure: await store.signUpload(arPaths.house(roomID, HOUSE_FILES.structure)),
+          worldmap: await store.signUpload(arPaths.house(roomID, HOUSE_FILES.worldmap))
+        })];
+      }
+      if (req.method !== 'GET') fail(405, 'Unsupported house action.');
+      if (!room.ar) fail(404, 'No round is running in this room.');
+      return [200, null, undefined, async () => ({
+        structure: await store.signDownload(arPaths.house(roomID, HOUSE_FILES.structure)),
+        worldmap: await store.signDownload(arPaths.house(roomID, HOUSE_FILES.worldmap))
+      })];
+    }
+    if (kind === 'ghosts') {
+      if (req.method === 'POST') {
+        advanceAR(room, time);
+        if (!room.ar || room.ar.phase !== 'hiding') fail(409, 'Ghosts can only be placed while hiding.');
+        if (room.ar.roles[member.id] === 'seeker') fail(403, 'The seeker does not hide.');
+        validateGhost({ ...body.ghost, id: body.ghost?.id, ownerID: member.id }, member);
+        const ghost = body.ghost;
+        return [200, null, undefined, async () => ({
+          image: await store.signUpload(arPaths.ghostImage(roomID, member.id, ghost.id.toLowerCase())),
+          model: ghost.hasModel
+            ? await store.signUpload(arPaths.ghostModel(roomID, member.id, ghost.id.toLowerCase(), ghost.modelFormat)) : null
+        })];
+      }
+      if (req.method !== 'GET' || !id) fail(405, 'Unsupported ghost action.');
+      advanceAR(room, time);
+      const ghost = canSeeGhost(room, member, id);
+      if (!ghost) fail(403, 'That ghost is hidden right now.');
+      return [200, null, undefined, async () => ({
+        image: await store.signDownload(arPaths.ghostImage(roomID, ghost.ownerID, ghost.id)),
+        model: ghost.hasModel
+          ? await store.signDownload(arPaths.ghostModel(roomID, ghost.ownerID, ghost.id, ghost.modelFormat)) : null,
+        modelFormat: ghost.modelFormat
+      })];
+    }
+    fail(404, 'This endpoint does not exist.');
+  }
+
   // Everything except creating a room and publishing a disguise. Runs under the room lock.
   // Returns [status, json] or, for a disguise download, [200, null, blob].
-  function act(room, req, body, action, disguiseID, targetID, token) {
+  function act(room, req, body, action, disguiseID, targetID, token, arKind, arID, verified) {
     enter(room);
     if (req.method === 'POST' && action === 'join') {
       if (room.status !== 'waiting') fail(409, 'This session has already started.');
@@ -129,6 +198,7 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
       else fail(400, 'Choose a supported game action.');
       return [200, { game: snapshotGame(room, member, now()), result: result ?? null }];
     }
+    if (action === 'ar' || action?.startsWith('ar/')) return arAct(room, req, body, member, arKind, arID, verified);
     if (action?.startsWith('disguise')) {
       if (req.method !== 'GET' || !disguiseID) fail(405, 'Unsupported disguise action.');
       if (!visibleOwners(room, member, now()).includes(disguiseID)) fail(403, 'That disguise is hidden in this phase or game mode.');
@@ -168,12 +238,33 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
       } else if (body.status === 'waiting') {
         room.status = 'waiting';
         room.game = null;
+        clearAR(room);
         room.locked = false;
         room.members.forEach(m => { m.ready = m.host; });
       } else fail(400, 'Choose a valid room action.');
       return [200, { room: snapshot(room) }];
     }
     fail(405, 'This action is not supported.');
+  }
+
+  // Looks up who is asking, then checks the files they say they uploaded are really in Storage.
+  async function verifyUploads(code, token, body) {
+    const owner = await store.withRoom(code, room => {
+      const member = authenticate(enter(room), token);
+      return { roomID: room.id, memberID: member.id, host: member.host };
+    });
+    if (body.action === 'start') {
+      if (!owner.host) return false;
+      return store.exist(Object.values(HOUSE_FILES).map(name => arPaths.house(owner.roomID, name)));
+    }
+    const ghost = body.ghost;
+    if (!ghost || typeof ghost.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(ghost.id)) return false;
+    const id = ghost.id.toLowerCase();
+    const paths = [arPaths.ghostImage(owner.roomID, owner.memberID, id)];
+    if (ghost.hasModel === true && ['usdz', 'body'].includes(ghost.modelFormat)) {
+      paths.push(arPaths.ghostModel(owner.roomID, owner.memberID, id, ghost.modelFormat));
+    }
+    return store.exist(paths);
   }
 
   // A disguise is checked against the room, stored, then published under a second lock,
@@ -225,29 +316,35 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
       const path = pathname ?? new URL(req.url, 'http://localhost').pathname;
       if (req.method === 'GET' && path === '/health') return send(200, { status: 'ok', service: 'rally' });
       const token = req.headers.authorization?.replace(/^Bearer /, '');
-      const gameCode = path.match(/^\/rooms\/(\d{6})\/game$/)?.[1];
+      const gameCode = path.match(/^\/rooms\/(\d{6})\/(?:game|ar)$/)?.[1];
       // Game actions are budgeted per player token; membership is checked under the room lock.
       const rateKey = gameCode && token ? `game:${gameCode}:${hashToken(token)}` : req.socket.remoteAddress;
       if (req.method !== 'GET') limit(rateKey);
       const disguiseUpload = req.method === 'POST' && /^\/rooms\/\d{6}\/disguise$/.test(path);
-      const body = ['POST', 'PATCH'].includes(req.method) && !disguiseUpload ? await readBody(req, path.endsWith('/game') ? 256 * 1024 : LIMIT) : {};
+      const body = ['POST', 'PATCH'].includes(req.method) && !disguiseUpload ? await readBody(req, path.endsWith('/game') ? 256 * 1024 : path.endsWith('/ar') || path.endsWith('/ar/ghosts') ? 64 * 1024 : LIMIT) : {};
       if (req.method === 'POST' && path === '/rooms') {
         profile(body);
         return send(201, await store.createRoom(room => addMember(room, body, true),
           { time: now(), maxRooms, memberTTL, idleTTL, prune }));
       }
-      const match = path.match(/^\/rooms\/(\d{6})(?:\/(join|me|leave|game|disguise(?:\/([a-zA-Z0-9-]+))?|members\/([a-zA-Z0-9-]+)))?$/);
+      const match = path.match(/^\/rooms\/(\d{6})(?:\/(join|me|leave|game|ar(?:\/(house|ghosts)(?:\/([0-9a-fA-F-]{36}))?)?|disguise(?:\/([a-zA-Z0-9-]+))?|members\/([a-zA-Z0-9-]+)))?$/);
       if (!match) fail(404, 'This endpoint does not exist.');
-      const [, code, action, disguiseID, targetID] = match;
+      const [, code, action, arKind, arID, disguiseID, targetID] = match;
       if (disguiseUpload) return send(200, await publish(req, code, token));
-      let status, data, blob;
+      // Starting a round and placing a ghost need to know their files reached Storage.
+      let verified = false;
+      if (action === 'ar' && req.method === 'POST' && ['start', 'place'].includes(body.action)) {
+        verified = await verifyUploads(code, token, body);
+      }
+      let status, data, blob, after;
       try {
-        [status, data, blob] = await store.withRoom(code, room => act(room, req, body, action, disguiseID, targetID, token));
+        [status, data, blob, after] = await store.withRoom(code, room => act(room, req, body, action, disguiseID, targetID, token, arKind, arID, verified));
       } catch (error) {
         // Unknown tokens on game actions still count against the address.
         if (error.status === 401 && req.method !== 'GET' && rateKey !== req.socket.remoteAddress) limit(req.socket.remoteAddress);
         throw error;
       }
+      if (after) data = await after();
       if (blob === undefined) return send(status, data);
       const model = await store.readDisguise(blob);
       res.setHeader('Content-Type', 'model/gltf-binary');

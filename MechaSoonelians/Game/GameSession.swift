@@ -1,20 +1,19 @@
-import MultipeerConnectivity
 import SwiftUI
 
-/// Multiplayer over the local network. The host phone owns the house map and the game state:
-/// players send it actions, and it broadcasts the state back every time something changes.
-/// The host runs the same actions locally instead of sending them.
-final class GameSession: NSObject, ObservableObject {
-    static let serviceType = "mecha-soon"
-
+/// One online AR round. The server owns the game: it picks the seeker, runs the timers, decides
+/// who may see which ghost, and records tags. This class polls it once a second and mirrors the
+/// answer into `state`, and it moves the big files (the scanned house, each ghost's picture and
+/// 3D model) straight to and from Storage on short-lived signed URLs.
+@MainActor
+final class GameSession: ObservableObject {
     @Published private(set) var state = GameState()
     @Published private(set) var ghostImages: [UUID: Data] = [:]
     @Published private(set) var ghostModels: [UUID: URL] = [:]
-    @Published private(set) var hosts: [MCPeerID] = []
-    @Published private(set) var hostAvatars: [MCPeerID: Int] = [:]
-    @Published private(set) var isConnected: Bool
     @Published private(set) var hasMap: Bool
     @Published private(set) var mapProgress = 0.0
+    @Published private(set) var reconnecting = false
+    /// The room is gone (the host closed it, or this player was removed).
+    @Published private(set) var roomGone = false
     @Published var error: String?
 
     let me: Player
@@ -22,17 +21,11 @@ final class GameSession: NSObject, ObservableObject {
     let mapURL: URL
     let structureURL: URL
 
-    private let peerID: MCPeerID
-    private let session: MCSession
-    private var advertiser: MCNearbyServiceAdvertiser?
-    private var browser: MCNearbyServiceBrowser?
-    private var hostPeer: MCPeerID?
-    private var playerForPeer: [MCPeerID: UUID] = [:]
-    /// Host: which player each ghost model came from. The model may arrive before its ghost, so the
-    /// first sender claims the ID and nobody else can replace it.
-    private var modelOwner: [UUID: UUID] = [:]
-    private var timer: Timer?
-    private var progressObservations: [NSKeyValueObservation] = []
+    private let connection: GameConnection
+    private var poller: Task<Void, Never>?
+    private var loadingGhosts: Set<UUID> = []
+    private var loadingHouse = false
+    private var optimisticGhost: Ghost?
 
     /// Where a joining phone keeps the host's house, separate from its own scan.
     private static var joinedDir: URL { HouseStore.documents.appendingPathComponent("Joined", isDirectory: true) }
@@ -40,238 +33,172 @@ final class GameSession: NSObject, ObservableObject {
         FileManager.default.temporaryDirectory.appendingPathComponent("GhostModels", isDirectory: true)
     }
 
-    init(name: String, avatar: Int, isHost: Bool) {
-        me = Player(id: UUID(), name: name, avatar: avatar, role: .hider, isReady: false)
-        self.isHost = isHost
-        isConnected = isHost
-        hasMap = isHost
+    init(connection: GameConnection, name: String, avatar: Int) {
+        self.connection = connection
+        isHost = connection.isHost
+        me = Player(id: UUID(uuidString: connection.memberID) ?? UUID(), name: name, avatar: avatar, role: .hider, isReady: false)
         mapURL = isHost ? HouseStore.worldMapURL : Self.joinedDir.appendingPathComponent("worldmap.arexperience")
         structureURL = isHost ? HouseStore.structureURL : Self.joinedDir.appendingPathComponent("structure.json")
-        peerID = MCPeerID(displayName: name)
-        session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
-        super.init()
-        session.delegate = self
+        hasMap = isHost && HouseStore.hasHouse
         try? FileManager.default.removeItem(at: Self.ghostModelsDir)
         try? FileManager.default.createDirectory(at: Self.ghostModelsDir, withIntermediateDirectories: true)
-
-        if isHost {
-            state.players = [me]
-            let advertiser = MCNearbyServiceAdvertiser(peer: peerID, discoveryInfo: ["avatar": String(avatar)],
-                                                       serviceType: Self.serviceType)
-            advertiser.delegate = self
-            advertiser.startAdvertisingPeer()
-            self.advertiser = advertiser
-            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
-        } else {
+        if !isHost {
             try? FileManager.default.removeItem(at: Self.joinedDir)
             try? FileManager.default.createDirectory(at: Self.joinedDir, withIntermediateDirectories: true)
-            let browser = MCNearbyServiceBrowser(peer: peerID, serviceType: Self.serviceType)
-            browser.delegate = self
-            browser.startBrowsingForPeers()
-            self.browser = browser
         }
     }
 
-    func leave() {
-        timer?.invalidate()
-        advertiser?.stopAdvertisingPeer()
-        browser?.stopBrowsingForPeers()
-        session.disconnect()
-    }
-
-    func join(_ host: MCPeerID) {
-        hostPeer = host
-        browser?.invitePeer(host, to: session, withContext: nil, timeout: 20)
-    }
+    deinit { poller?.cancel() }
 
     var myRole: Role { state.player(me.id)?.role ?? .hider }
     var amSeeking: Bool { state.isSeeking(me.id) }
     var myGhost: Ghost? { state.ghosts.first { $0.ownerID == me.id } }
+    var seeker: Player? { state.player(state.seekerID) }
 
-    // MARK: Player actions
+    // MARK: Polling
 
-    func setReady(_ ready: Bool) { send(.ready(me.id, ready)) }
-    func tag(_ ghostID: UUID) { send(.tag(ghostID: ghostID, by: me.id)) }
-
-    /// The model file goes first so it's usually there by the time the ghost is.
-    func placeGhost(_ ghost: Ghost, image: Data, model: URL? = nil) {
-        if let model {
-            if isHost {
-                modelOwner[ghost.id] = me.id
-                if let stored = storeGhostModel(ghost.id, from: model, move: false) {
-                    sendGhostModel(ghost.id, at: stored, to: session.connectedPeers)
-                }
-            } else if let hostPeer {
-                session.sendResource(at: model, withName: Self.resourceName(for: ghost.id, extensionName: model.pathExtension), toPeer: hostPeer, withCompletionHandler: nil)
+    func start() {
+        guard poller == nil else { return }
+        poller = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.refresh()
+                try? await Task.sleep(for: .seconds(1))
             }
         }
-        send(.placeGhost(ghost, image))
     }
 
-    // MARK: Host actions
-
-    func toggleRole(of playerID: UUID) {
-        guard isHost, state.phase == .lobby, let i = state.players.firstIndex(where: { $0.id == playerID }) else { return }
-        state.players[i].role = state.players[i].role == .hider ? .seeker : .hider
-        broadcastState()
+    func leave() {
+        poller?.cancel()
+        poller = nil
     }
 
-    func setDurations(hide: Int, seek: Int) {
-        guard isHost else { return }
-        state.hideSeconds = hide
-        state.seekSeconds = seek
-        broadcastState()
-    }
-
-    func startRound() {
-        guard isHost, state.phase == .lobby || state.phase == .results else { return }
-        state.ghosts = []
-        ghostImages = [:]
-        ghostModels = [:]
-        modelOwner = [:]
-        state.phase = .hiding
-        state.secondsLeft = state.hideSeconds
-        broadcastState()
-    }
-
-    func endPhase() {
-        guard isHost else { return }
-        switch state.phase {
-        case .hiding:
-            state.phase = .seeking
-            state.secondsLeft = state.seekSeconds
-        case .seeking:
-            state.phase = .results
-        case .results:
-            state.phase = .lobby
-        case .lobby:
-            return
-        }
-        broadcastState()
-    }
-
-    private func tick() {
-        guard state.phase == .hiding || state.phase == .seeking else { return }
-        state.secondsLeft -= 1
-        if state.secondsLeft <= 0 {
-            endPhase()
-        } else {
-            broadcastState()
-        }
-    }
-
-    // MARK: Messages
-
-    private func send(_ message: Message) {
-        if isHost {
-            handleAsHost(message, from: nil)
-        } else if let hostPeer, let data = try? JSONEncoder().encode(message) {
-            try? session.send(data, toPeers: [hostPeer], with: .reliable)
-        }
-    }
-
-    private func broadcast(_ message: Message, to peers: [MCPeerID]? = nil) {
-        let peers = peers ?? session.connectedPeers
-        guard !peers.isEmpty, let data = try? JSONEncoder().encode(message) else { return }
-        try? session.send(data, toPeers: peers, with: .reliable)
-    }
-
-    private func broadcastState() {
-        broadcast(.state(state))
-    }
-
-    private func handleAsHost(_ message: Message, from peer: MCPeerID?) {
-        switch message {
-        case .hello(var player):
-            if let peer { playerForPeer[peer] = player.id }
-            player.isReady = false
-            state.players.removeAll { $0.id == player.id }
-            state.players.append(player)
-            broadcastState()
-            if let peer { sendHouse(to: peer) }
-
-        case let .ready(id, ready):
-            guard let i = state.players.firstIndex(where: { $0.id == id }) else { return }
-            state.players[i].isReady = ready
-            broadcastState()
-
-        case let .placeGhost(ghost, image):
-            // A player can only place their own ghost, under an ID whose model (if any) they sent.
-            let sender = peer.flatMap { playerForPeer[$0] } ?? me.id
-            guard state.phase == .hiding, ghost.ownerID == sender,
-                  modelOwner[ghost.id].map({ $0 == sender }) ?? true,
-                  !state.ghosts.contains(where: { $0.id == ghost.id && $0.ownerID != sender }) else { return }
-            state.ghosts.removeAll { $0.ownerID == ghost.ownerID }
-            state.ghosts.append(ghost)
-            ghostImages[ghost.id] = image
-            broadcast(.ghostImage(ghost.id, image))
-            broadcastState()
-
-        case let .tag(ghostID, by):
-            guard state.phase == .seeking,
-                  let i = state.ghosts.firstIndex(where: { $0.id == ghostID }),
-                  state.ghosts[i].foundBy == nil else { return }
-            state.ghosts[i].foundBy = by
-            if state.ghosts.allSatisfy({ $0.foundBy != nil }) {
-                state.phase = .results
+    private func refresh() async {
+        do {
+            let reply: RoundReply = try await call("ar")
+            reconnecting = false
+            guard var next = reply.ar else { return }
+            if let optimisticGhost, !next.ghosts.contains(where: { $0.id == optimisticGhost.id }), next.phase == .hiding {
+                next.ghosts.append(optimisticGhost) // Placed here, not yet in the server's answer.
+            } else if optimisticGhost != nil, next.ghosts.contains(where: { $0.id == optimisticGhost?.id }) {
+                optimisticGhost = nil
             }
-            broadcastState()
-
-        case .state, .ghostImage, .modelServer:
-            break
-        }
-    }
-
-    private func handleAsPlayer(_ message: Message) {
-        switch message {
-        case .state(let newState):
-            if newState.phase == .hiding && state.phase != .hiding {
+            if state.phase != .hiding && next.phase == .hiding {
                 ghostImages = [:]
                 ghostModels = [:]
             }
-            state = newState
-        case let .ghostImage(id, image):
-            ghostImages[id] = image
-        case .modelServer:
-            break // Every phone uses the hosted 3D server; a host can't redirect players.
-        case .hello, .ready, .placeGhost, .tag:
-            break
+            if next != state { state = next }
+            await loadHouseIfNeeded()
+            loadMissingGhosts()
+        } catch let failure as LobbyError where [401, 404].contains(failure.status) {
+            roomGone = true
+        } catch {
+            reconnecting = true
         }
     }
 
-    /// New players get the house map and walls, the 3D server, plus any ghosts already placed.
-    private func sendHouse(to peer: MCPeerID) {
-        session.sendResource(at: HouseStore.structureURL, withName: "structure.json", toPeer: peer, withCompletionHandler: nil)
-        session.sendResource(at: HouseStore.worldMapURL, withName: "worldmap.arexperience", toPeer: peer, withCompletionHandler: nil)
-        // Players on older builds read the 3D server from the host; send them the hosted one.
-        broadcast(.modelServer(address: HostedCharacterService.address, token: HostedCharacterService.token), to: [peer])
-        for (id, image) in ghostImages {
-            broadcast(.ghostImage(id, image), to: [peer])
-        }
-        for (id, url) in ghostModels {
-            sendGhostModel(id, at: url, to: [peer])
-        }
+    // MARK: Player actions
+
+    func setReady(_ ready: Bool) { act(["action": "ready", "ready": ready]) }
+    func tag(_ ghostID: UUID) { act(["action": "tag", "ghostID": ghostID.uuidString.lowercased()]) }
+    /// Host: start hiding without waiting for everyone to find the house.
+    func startRound() { act(["action": "begin"]) }
+    /// Host: hiding -> seeking, or seeking -> results, ahead of the clock.
+    func skipPhase() { act(["action": "skip"]) }
+    /// Host: another round, with a newly picked seeker.
+    func playAgain() {
+        act(["action": "start", "hideSeconds": state.hideSeconds, "seekSeconds": state.seekSeconds])
     }
 
-    // MARK: Ghost models
-
-    private static func resourceName(for ghostID: UUID, extensionName: String) -> String { "ghost-\(ghostID.uuidString).\(extensionName)" }
-
-    private static func ghostID(fromResourceName name: String) -> UUID? {
-        guard name.hasPrefix("ghost-"), ["usdz", "body"].contains((name as NSString).pathExtension) else { return nil }
-        return UUID(uuidString: String((name as NSString).deletingPathExtension.dropFirst(6)))
-    }
-
-    private func sendGhostModel(_ id: UUID, at url: URL, to peers: [MCPeerID]) {
-        for peer in peers {
-            session.sendResource(at: url, withName: Self.resourceName(for: id, extensionName: url.pathExtension), toPeer: peer, withCompletionHandler: nil)
+    private func act(_ body: [String: Any]) {
+        Task {
+            do {
+                let reply: RoundReply = try await call("ar", method: "POST", body: body)
+                if let next = reply.ar { state = next }
+            } catch { self.error = Self.describe(error) }
         }
     }
 
-    /// Keeps a model under a name built from its ghost's ID, never the sender's file name.
+    /// Hides the player here. The picture and any 3D model upload first; the server only accepts the
+    /// ghost once both are in Storage.
+    func placeGhost(_ ghost: Ghost, image: Data, model: URL? = nil) {
+        var ghost = ghost
+        ghost.modelFormat = model.map { $0.pathExtension }
+        var localModel: URL?
+        if let model, let kept = keepGhostModel(ghost.id, from: model) { localModel = kept }
+        ghostImages[ghost.id] = image
+        if let localModel { ghostModels[ghost.id] = localModel }
+        optimisticGhost = ghost
+        state.ghosts.removeAll { $0.ownerID == me.id }
+        state.ghosts.append(ghost)
+        let placed = ghost
+        Task {
+            do {
+                let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(placed))
+                let urls: GhostUploadURLs = try await call("ar/ghosts", method: "POST", body: ["ghost": object])
+                try await upload(image, to: urls.image.url)
+                if let localModel, let target = urls.model?.url {
+                    try await upload(try Data(contentsOf: localModel), to: target)
+                }
+                let reply: RoundReply = try await call("ar", method: "POST", body: ["action": "place", "ghost": object])
+                if let next = reply.ar { state = next }
+            } catch {
+                self.error = "Couldn't hide your ghost: \(Self.describe(error))"
+                if optimisticGhost?.id == placed.id { optimisticGhost = nil }
+                state.ghosts.removeAll { $0.id == placed.id }
+            }
+        }
+    }
+
+    // MARK: The house
+
+    private func loadHouseIfNeeded() async {
+        guard !hasMap, !loadingHouse, !isHost else { return }
+        loadingHouse = true
+        defer { loadingHouse = false }
+        do {
+            let urls: HouseURLs = try await call("ar/house")
+            let downloader = FileDownloader { [weak self] fraction in
+                Task { @MainActor in self?.mapProgress = fraction }
+            }
+            try await downloader.download(urls.structure.url, to: structureURL)
+            try await downloader.download(urls.worldmap.url, to: mapURL)
+            hasMap = FileManager.default.fileExists(atPath: mapURL.path) && FileManager.default.fileExists(atPath: structureURL.path)
+        } catch {
+            self.error = "Couldn't get the house map: \(Self.describe(error))"
+        }
+    }
+
+    // MARK: Ghosts
+
+    private func loadMissingGhosts() {
+        for ghost in state.ghosts where ghostImages[ghost.id] == nil && !loadingGhosts.contains(ghost.id) {
+            loadingGhosts.insert(ghost.id)
+            Task {
+                defer { loadingGhosts.remove(ghost.id) }
+                do {
+                    let assets: GhostDownloadURLs = try await call("ar/ghosts/\(ghost.id.uuidString.lowercased())")
+                    let (imageFile, _) = try await URLSession.shared.download(from: assets.image.url)
+                    let image = try Data(contentsOf: imageFile)
+                    try? FileManager.default.removeItem(at: imageFile)
+                    if let model = assets.model?.url, let format = assets.modelFormat {
+                        let (file, _) = try await URLSession.shared.download(from: model)
+                        let name = Self.ghostModelsDir.appendingPathComponent("incoming-\(ghost.id.uuidString).\(format)")
+                        try? FileManager.default.removeItem(at: name)
+                        try FileManager.default.moveItem(at: file, to: name)
+                        _ = keepGhostModel(ghost.id, from: name, move: true)
+                    }
+                    ghostImages[ghost.id] = image
+                } catch {
+                    // It stays missing and is tried again on the next poll.
+                }
+            }
+        }
+    }
+
+    /// Keeps a model under a name built from its ghost's ID, never a sender's file name.
     @discardableResult
-    private func storeGhostModel(_ id: UUID, from url: URL, move: Bool, extensionName: String? = nil) -> URL? {
-        let format = extensionName ?? url.pathExtension
+    private func keepGhostModel(_ id: UUID, from url: URL, move: Bool = false) -> URL? {
+        let format = url.pathExtension
         guard ["usdz", "body"].contains(format),
               let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
               size > 0, size <= 100 * 1024 * 1024 else { return nil }
@@ -282,137 +209,84 @@ final class GameSession: NSObject, ObservableObject {
         let destination = Self.ghostModelsDir.appendingPathComponent("\(id.uuidString).\(format)")
         try? FileManager.default.removeItem(at: destination)
         do {
-            if move {
-                try FileManager.default.moveItem(at: url, to: destination)
-            } else {
-                try FileManager.default.copyItem(at: url, to: destination)
-            }
-        } catch {
-            return nil
-        }
+            if move { try FileManager.default.moveItem(at: url, to: destination) }
+            else { try FileManager.default.copyItem(at: url, to: destination) }
+        } catch { return nil }
         ghostModels[id] = destination
         return destination
     }
 
-    private func receivedFile(named name: String, at url: URL) {
-        // Never build a path from the sender's file name; only these two files are expected.
-        let allowed = ["structure.json": structureURL, "worldmap.arexperience": mapURL]
-        guard let destination = allowed[name] else {
-            try? FileManager.default.removeItem(at: url)
-            return
+    // MARK: Network
+
+    private func call<Response: Decodable>(_ path: String, method: String = "GET", body: [String: Any]? = nil) async throws -> Response {
+        try await LobbyAPI(baseURL: connection.server).request("rooms/\(connection.code)/\(path)",
+            method: method, token: connection.token, body: body)
+    }
+
+    private func upload(_ data: Data, to url: URL) async throws {
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.timeoutInterval = 120
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.setValue("true", forHTTPHeaderField: "x-upsert")
+        let (_, response) = try await URLSession.shared.upload(for: request, from: data)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw LobbyError(status: (response as? HTTPURLResponse)?.statusCode ?? 0, message: "The upload didn't go through. Try again.")
+        }
+    }
+
+    private static func describe(_ error: Error) -> String {
+        (error as? LobbyError)?.message ?? "Check your connection and try again."
+    }
+}
+
+// MARK: Server replies
+
+private struct RoundReply: Decodable { let ar: GameState? }
+private struct SignedURL: Decodable { let url: URL }
+private struct HouseURLs: Decodable { let structure: SignedURL; let worldmap: SignedURL }
+private struct GhostUploadURLs: Decodable { let image: SignedURL; let model: SignedURL? }
+private struct GhostDownloadURLs: Decodable { let image: SignedURL; let model: SignedURL?; let modelFormat: String? }
+
+/// Downloads a file to a fixed place, reporting progress.
+private final class FileDownloader: NSObject, URLSessionDownloadDelegate {
+    private let progress: (Double) -> Void
+    private var continuation: CheckedContinuation<URL, Error>?
+    private var session: URLSession?
+
+    init(progress: @escaping (Double) -> Void) { self.progress = progress }
+
+    func download(_ url: URL, to destination: URL) async throws {
+        let session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
+        self.session = session
+        defer { session.finishTasksAndInvalidate() }
+        let file = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+            self.continuation = continuation
+            session.downloadTask(with: url).resume()
         }
         try? FileManager.default.removeItem(at: destination)
+        try FileManager.default.moveItem(at: file, to: destination)
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        if totalBytesExpectedToWrite > 0 { progress(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)) }
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        // The system deletes the file when this returns, so keep it.
+        let kept = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         do {
-            try FileManager.default.moveItem(at: url, to: destination)
-        } catch {
-            self.error = "Couldn't save the house map: \(error.localizedDescription)"
-            return
-        }
-        hasMap = FileManager.default.fileExists(atPath: mapURL.path)
-            && FileManager.default.fileExists(atPath: structureURL.path)
-    }
-}
-
-extension GameSession: MCSessionDelegate {
-    func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
-        DispatchQueue.main.async { [self] in
-            if isHost {
-                if state == .notConnected, let id = playerForPeer.removeValue(forKey: peerID) {
-                    self.state.players.removeAll { $0.id == id }
-                    broadcastState()
-                }
-            } else if peerID == hostPeer {
-                switch state {
-                case .connected:
-                    isConnected = true
-                    browser?.stopBrowsingForPeers()
-                    send(.hello(me))
-                case .notConnected:
-                    if isConnected { error = "Lost connection to the host." }
-                    isConnected = false
-                default:
-                    break
-                }
+            if let http = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                throw LobbyError(status: http.statusCode, message: "The download didn't go through (\(http.statusCode)).")
             }
-        }
+            try FileManager.default.moveItem(at: location, to: kept)
+            continuation?.resume(returning: kept)
+        } catch { continuation?.resume(throwing: error) }
+        continuation = nil
     }
 
-    func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        guard let message = try? JSONDecoder().decode(Message.self, from: data) else { return }
-        DispatchQueue.main.async { [self] in
-            if isHost {
-                handleAsHost(message, from: peerID)
-            } else {
-                handleAsPlayer(message)
-            }
-        }
-    }
-
-    func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String,
-                 fromPeer peerID: MCPeerID, with progress: Progress) {
-        guard resourceName == "worldmap.arexperience" else { return }
-        let observation = progress.observe(\.fractionCompleted) { [weak self] progress, _ in
-            DispatchQueue.main.async { self?.mapProgress = progress.fractionCompleted }
-        }
-        DispatchQueue.main.async { self.progressObservations.append(observation) }
-    }
-
-    func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String,
-                 fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
-        // The file at localURL is deleted once this returns, so move it right away.
-        let staged = localURL.map { url -> URL in
-            let staged = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-            try? FileManager.default.moveItem(at: url, to: staged)
-            return staged
-        }
-        DispatchQueue.main.async { [self] in
-            defer { if let staged { try? FileManager.default.removeItem(at: staged) } }
-            if let id = Self.ghostID(fromResourceName: resourceName) {
-                // Hiders send 3D ghosts to the host, which passes them on to everyone else.
-                guard error == nil, let staged else { return }
-                if isHost {
-                    // Only the ghost's owner may send its model.
-                    guard let sender = playerForPeer[peerID],
-                          state.ghosts.first(where: { $0.id == id }).map({ $0.ownerID == sender }) ?? true,
-                          modelOwner[id].map({ $0 == sender }) ?? true else { return }
-                    modelOwner[id] = sender
-                } else {
-                    guard peerID == hostPeer else { return }
-                }
-                guard let stored = storeGhostModel(id, from: staged, move: true, extensionName: (resourceName as NSString).pathExtension) else { return }
-                if isHost {
-                    sendGhostModel(id, at: stored, to: session.connectedPeers.filter { $0 != peerID })
-                }
-                return
-            }
-            guard !isHost, peerID == hostPeer else { return }
-            if let error {
-                self.error = "Couldn't get the house map: \(error.localizedDescription)"
-            } else if let staged {
-                receivedFile(named: resourceName, at: staged)
-            }
-        }
-    }
-
-    func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {}
-}
-
-extension GameSession: MCNearbyServiceAdvertiserDelegate {
-    func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID,
-                    withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        invitationHandler(true, session)
-    }
-}
-
-extension GameSession: MCNearbyServiceBrowserDelegate {
-    func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
-        DispatchQueue.main.async {
-            if !self.hosts.contains(peerID) { self.hosts.append(peerID) }
-            self.hostAvatars[peerID] = info?["avatar"].flatMap { Int($0) } ?? 0
-        }
-    }
-
-    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        DispatchQueue.main.async { self.hosts.removeAll { $0 == peerID } }
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error { continuation?.resume(throwing: error); continuation = nil }
     }
 }

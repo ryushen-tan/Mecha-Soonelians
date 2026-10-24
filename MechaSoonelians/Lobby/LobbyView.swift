@@ -72,7 +72,16 @@ struct LobbyView: View {
                     .font(JellyStyle.body(13)).foregroundStyle(JellyStyle.muted)
                     .accessibilityIdentifier("reconnectingNotice")
             }
+            if let status = store.startingStatus {
+                Label(status, systemImage: "icloud.and.arrow.up").font(JellyStyle.body(13)).foregroundStyle(JellyStyle.muted)
+            }
             if let error = store.error { JellyNotice(message: error) }
+            if store.isHost && !room.started {
+                Stepper("Hide time · \(store.hideMinutes) min", value: $store.hideMinutes, in: 1...10)
+                    .font(JellyStyle.body(14))
+                Stepper("Seek time · \(store.seekMinutes) min", value: $store.seekMinutes, in: 1...15)
+                    .font(JellyStyle.body(14))
+            }
             if room.started {
                 Button { showsStudio = true } label: { Label("Open Studio", systemImage: "viewfinder") }
                     .buttonStyle(JellyButtonStyle(fullWidth: true)).accessibilityIdentifier("openStudioButton")

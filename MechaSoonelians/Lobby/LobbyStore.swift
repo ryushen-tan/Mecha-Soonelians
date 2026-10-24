@@ -7,6 +7,11 @@ final class LobbyStore: ObservableObject {
     @Published private(set) var busy = false
     @Published private(set) var reconnecting = false
     @Published var error: String?
+    /// What the host is doing while a round starts ("Uploading your house…").
+    @Published private(set) var startingStatus: String?
+    /// How long hiders get to hide, and the seeker to seek.
+    @Published var hideMinutes = 5
+    @Published var seekMinutes = 5
     @Published var nickname: String { didSet { UserDefaults.standard.set(nickname, forKey: "nickname") } }
     @Published var avatar: Int { didSet { UserDefaults.standard.set(avatar, forKey: "avatar") } }
     @Published var serverAddress: String { didSet { UserDefaults.standard.set(serverAddress, forKey: "server") } }
@@ -90,7 +95,49 @@ final class LobbyStore: ObservableObject {
         await mutate(body: ["locked": !room.locked])
     }
 
-    func start() async { await mutate(body: ["status": "started"]) }
+    /// Uploads the host's scanned house, then the server picks a seeker at random and starts the AR round.
+    func start() async {
+        guard let session = membership, !busy else { return }
+        guard HouseStore.hasHouse else {
+            error = "Scan your house first (Studio → Scan your house) so there's somewhere to hide."
+            return
+        }
+        busy = true
+        error = nil
+        generation += 1
+        defer { busy = false; startingStatus = nil }
+        do {
+            let api = LobbyAPI(baseURL: session.server)
+            let path = "rooms/\(session.code)"
+            startingStatus = "Uploading your house…"
+            let urls: HouseUploadURLs = try await api.request("\(path)/ar/house", method: "POST", token: session.token)
+            try await upload(HouseStore.structureURL, to: urls.structure.url)
+            try await upload(HouseStore.worldMapURL, to: urls.worldmap.url)
+            startingStatus = "Choosing a seeker…"
+            let _: EmptyReply = try await api.request("\(path)/ar", method: "POST", token: session.token,
+                body: ["action": "start", "hideSeconds": hideMinutes * 60, "seekSeconds": seekMinutes * 60])
+            let result: RoomResponse = try await api.request(path, token: session.token)
+            guard membership?.token == session.token else { return }
+            room = result.room
+            reconnecting = false
+        } catch {
+            if let failure = error as? LobbyError, [401, 404].contains(failure.status) { clearSession() }
+            self.error = describe(error)
+        }
+    }
+
+    private func upload(_ file: URL, to url: URL) async throws {
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.timeoutInterval = 300
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.setValue("true", forHTTPHeaderField: "x-upsert")
+        let (_, response) = try await URLSession.shared.upload(for: request, fromFile: file)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw LobbyError(status: (response as? HTTPURLResponse)?.statusCode ?? 0,
+                             message: "Your house didn't finish uploading. Check your connection and try again.")
+        }
+    }
     func reset() async { await mutate(body: ["status": "waiting"]) }
     func remove(_ player: LobbyPlayer) async { await mutate(suffix: "/members/\(player.id)", method: "DELETE") }
 
@@ -142,3 +189,7 @@ final class LobbyStore: ObservableObject {
         return "Can’t reach the lobby server. Check your connection and the address in Server settings, then try again."
     }
 }
+
+private struct SignedUpload: Decodable { let url: URL }
+private struct HouseUploadURLs: Decodable { let structure: SignedUpload; let worldmap: SignedUpload }
+private struct EmptyReply: Decodable {}

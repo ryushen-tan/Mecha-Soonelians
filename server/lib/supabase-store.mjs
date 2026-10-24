@@ -11,6 +11,8 @@ import { createMemoryRoomStore } from './room-store.mjs';
 // API instance therefore applies changes to a room one at a time, like the old single process.
 
 export const DISGUISE_BUCKET = 'rally-disguises';
+export const AR_BUCKET = 'rally-ar';
+const SIGNED_URL_SECONDS = 15 * 60;
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 
 // Infrastructure failures become a retryable 503, never a 404 or 401 that would make the app
@@ -29,7 +31,8 @@ export function createRoomStoreFromEnv(env = process.env) {
     // Refuse rather than fall back to memory: per-instance rooms are what broke multiplayer.
     const problem = new Error(`Room storage is not configured. Set ${missing.join(', ')} (or RALLY_STORE=memory for one local process).`);
     const refuse = async () => { throw unavailable(problem); };
-    return { withRoom: refuse, createRoom: refuse, putDisguise: refuse, readDisguise: refuse, discardDisguise: async () => {} };
+    return { withRoom: refuse, createRoom: refuse, putDisguise: refuse, readDisguise: refuse, discardDisguise: async () => {},
+      exist: refuse, signUpload: refuse, signDownload: refuse };
   }
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(databaseURL).hostname);
   const sql = postgres(databaseURL, {
@@ -37,14 +40,20 @@ export function createRoomStoreFromEnv(env = process.env) {
     max: 5, idle_timeout: 20, connect_timeout: 5, onnotice: () => {},
     ssl: env.RALLY_DATABASE_CA_CERT ? { ca: env.RALLY_DATABASE_CA_CERT } : local ? false : 'require'
   });
-  const storage = createClient(supabaseURL, secretKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
-  }).storage.from(DISGUISE_BUCKET);
-  return createSupabaseRoomStore({ sql, storage });
+  const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
+  const storage = createClient(supabaseURL, secretKey, options).storage;
+  // Signed upload/download links and existence checks (the AR round's big files) are rejected when
+  // the caller is an sb_secret_ key; Storage wants a JWT there. Use the legacy service_role JWT for
+  // the AR bucket when one is set. Without it, AR rounds fall back to the main key and fail.
+  const arStorage = env.SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(supabaseURL, env.SUPABASE_SERVICE_ROLE_KEY, options).storage : storage;
+  return createSupabaseRoomStore({ sql, storage, arStorage });
 }
 
-export function createSupabaseRoomStore({ sql, storage }) {
+export function createSupabaseRoomStore({ sql, storage: storageRoot, arStorage = storageRoot }) {
   const logicErrors = new WeakSet();
+  const bucket = name => (name === AR_BUCKET ? arStorage : storageRoot).from(name);
+  const disguises = bucket(DISGUISE_BUCKET);
 
   async function guard(work) {
     try { return await work(); }
@@ -70,6 +79,7 @@ export function createSupabaseRoomStore({ sql, storage }) {
     id: data.id, code: data.code, locked: data.locked, status: data.status,
     createdAt: new Date(data.createdAt).toISOString(), touchedAt: data.touchedAt,
     game: data.game && { ...data.game, surfaces: data.surfaces },
+    ar: data.ar ?? null,
     members: data.members.map(member => ({ ...member, stored: true })),
     disguises: new Map(data.disguises.map(({ id, offset, ...disguise }) => [id, offset ? { ...disguise, offset } : disguise]))
   });
@@ -81,6 +91,7 @@ export function createSupabaseRoomStore({ sql, storage }) {
     locked: room.locked, status: room.status, touchedAt: room.touchedAt,
     members: new Map(room.members.map(m => [m.id, { ready: m.ready, seenAt: m.seenAt }])),
     game: gameState(room.game), surfaces: room.game?.surfaces,
+    ar: JSON.stringify(room.ar ?? null),
     disguises: new Map([...room.disguises].map(([id, disguise]) => [id, JSON.stringify(disguise)]))
   });
 
@@ -109,6 +120,7 @@ export function createSupabaseRoomStore({ sql, storage }) {
       payload.game = { ...room.game, surfaces: undefined };
       payload.surfaces = room.game.surfaces;
     } else if (game && game !== before.game) payload.game = { ...room.game, surfaces: undefined };
+    if (JSON.stringify(room.ar ?? null) !== before.ar) payload.ar = room.ar ?? null;
     const disguises = [];
     for (const [id, disguise] of room.disguises) {
       const previous = before.disguises.get(id);
@@ -157,20 +169,41 @@ export function createSupabaseRoomStore({ sql, storage }) {
     return { save: `select rally.room_save(${uuid(room.id)}, ${quoted(JSON.stringify(payload))}::jsonb)`, orphaned };
   };
 
-  // Deletes Storage files whose rows are gone (queued by a trigger, including rows removed by
-  // the scheduled cleanup). Failures leave them queued for the next attempt.
+  // Lists every file under a folder-like prefix, however deep.
+  async function filesUnder(name, prefix, depth = 4) {
+    const found = [];
+    const { data, error } = await bucket(name).list(prefix.replace(/\/$/, ''), { limit: 1000 });
+    if (error) throw error;
+    for (const entry of data ?? []) {
+      const path = `${prefix}${entry.name}`;
+      if (entry.id) found.push(path);
+      else if (depth > 0) found.push(...await filesUnder(name, `${path}/`, depth - 1));
+    }
+    return found;
+  }
+
+  // Deletes Storage files whose rows are gone (queued by triggers, including rows removed by the
+  // scheduled cleanup). A path ending in "/" means everything under it. Failures leave the rows
+  // queued for the next attempt.
   async function emptyTrash() {
     try {
       await sql.begin(async tx => {
-        const rows = await tx`select path from rally.storage_trash order by queued_at limit 100 for update skip locked`;
+        const rows = await tx`select bucket, path from rally.storage_trash order by queued_at limit 100 for update skip locked`;
         if (!rows.length) return;
-        const paths = rows.map(row => row.path);
-        const { error } = await storage.remove(paths);
-        if (error) throw error;
-        await tx`delete from rally.storage_trash where path = any(${tx.array(paths)}::text[])`;
+        for (const name of new Set(rows.map(row => row.bucket))) {
+          const wanted = rows.filter(row => row.bucket === name).map(row => row.path);
+          const paths = [];
+          for (const path of wanted) paths.push(...(path.endsWith('/') ? await filesUnder(name, path) : [path]));
+          for (let i = 0; i < paths.length; i += 100) {
+            const { error } = await bucket(name).remove(paths.slice(i, i + 100));
+            if (error) throw error;
+          }
+        }
+        await tx`delete from rally.storage_trash where (bucket, path) in (
+          select * from unnest(${tx.array(rows.map(row => row.bucket))}::text[], ${tx.array(rows.map(row => row.path))}::text[]))`;
       });
     } catch (error) {
-      console.error('Could not delete stale disguise files; they stay queued.', error);
+      console.error('Could not delete stale files; they stay queued.', error);
     }
   }
 
@@ -196,7 +229,7 @@ export function createSupabaseRoomStore({ sql, storage }) {
         const created = column(opened, 'room');
         if (!created) fail(503, 'The server is full. Try again later.');
         const room = { id: created.id, code: created.code, locked: false, status: 'waiting',
-          createdAt: new Date(time).toISOString(), touchedAt: time, game: null, members: [], disguises: new Map() };
+          createdAt: new Date(time).toISOString(), touchedAt: time, game: null, ar: null, members: [], disguises: new Map() };
         const before = capture(room);
         return { value: fn(room), ...saveRoom(room, before) };
       });
@@ -206,13 +239,39 @@ export function createSupabaseRoomStore({ sql, storage }) {
 
     async putDisguise({ roomID, memberID }, data) {
       const path = `${roomID}/${memberID}/${randomUUID()}.glb`;
-      const { error } = await storage.upload(path, data, { contentType: 'model/gltf-binary', upsert: false });
+      const { error } = await disguises.upload(path, data, { contentType: 'model/gltf-binary', upsert: false });
       if (error) throw unavailable(error);
       return path;
     },
 
+    // Whether every path exists in the AR bucket.
+    async exist(paths) {
+      try {
+        for (const path of paths) {
+          const { data, error } = await bucket(AR_BUCKET).exists(path);
+          // A file in a folder that doesn't exist yet comes back as a 400/404, which just means "no".
+          if (error && ![400, 404].includes(Number(error.status ?? error.statusCode))) throw error;
+          if (error || !data) return false;
+        }
+        return true;
+      } catch (error) { throw unavailable(error); }
+    },
+
+    // A URL the phone can PUT one file to, for a short while, with no other credentials.
+    async signUpload(path) {
+      const { data, error } = await bucket(AR_BUCKET).createSignedUploadUrl(path, { upsert: true });
+      if (error) throw unavailable(error);
+      return { url: data.signedUrl, path };
+    },
+
+    async signDownload(path) {
+      const { data, error } = await bucket(AR_BUCKET).createSignedUrl(path, SIGNED_URL_SECONDS);
+      if (error) throw unavailable(error);
+      return { url: data.signedUrl, path };
+    },
+
     async readDisguise(path) {
-      const { data, error } = await storage.download(path);
+      const { data, error } = await disguises.download(path);
       if (error) throw unavailable(error);
       return Buffer.from(await data.arrayBuffer());
     },

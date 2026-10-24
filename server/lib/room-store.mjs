@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
+const unavailable = () => fail(503, 'Online AR rounds need the Supabase store (not RALLY_STORE=memory).');
 
 // Rooms in this process's memory: for tests and a single local server on Wi-Fi.
 // Nothing is shared between processes, so deployments use the Supabase store instead.
@@ -24,7 +25,7 @@ export function createMemoryRoomStore({ maxDisguiseBytes = 256 * 1024 * 1024 } =
       let code;
       do { code = String(randomInt(100000, 1000000)); } while (rooms.has(code));
       const room = { code, locked: false, status: 'waiting', createdAt: new Date(time).toISOString(),
-        touchedAt: time, game: null, members: [], disguises: new Map() };
+        touchedAt: time, game: null, ar: null, members: [], disguises: new Map() };
       const result = fn(room);
       rooms.set(code, room);
       return result;
@@ -36,6 +37,10 @@ export function createMemoryRoomStore({ maxDisguiseBytes = 256 * 1024 * 1024 } =
       return data;
     },
     async readDisguise(blob) { return blob; },
+    // AR rounds move large files through Supabase Storage, which a single local process doesn't have.
+    async exist() { throw unavailable(); },
+    async signUpload() { throw unavailable(); },
+    async signDownload() { throw unavailable(); },
     async discardDisguise() {}
   };
 }

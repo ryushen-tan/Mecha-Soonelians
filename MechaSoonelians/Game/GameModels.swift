@@ -19,8 +19,8 @@ struct Player: Codable, Identifiable, Equatable {
     var isReady: Bool
 }
 
-/// A painted cutout of a hider, pinned in house coordinates. The image is sent separately
-/// (once) so the state the host broadcasts every second stays small.
+/// A painted cutout of a hider, pinned in house coordinates. The image and any 3D model are
+/// separate files in Storage, so the state the server returns every second stays small.
 struct Ghost: Codable, Identifiable, Equatable {
     let id: UUID
     let ownerID: UUID
@@ -38,6 +38,8 @@ struct Ghost: Codable, Identifiable, Equatable {
     var width: Float
     var height: Float
     var foundBy: UUID?
+    /// "usdz" for a painted 3D ghost, "body" for a spray-painted chameleon; nil without a model.
+    var modelFormat: String?
 }
 
 struct GameState: Codable, Equatable {
@@ -47,6 +49,8 @@ struct GameState: Codable, Equatable {
     var secondsLeft = 0
     var hideSeconds = 300
     var seekSeconds = 300
+    /// The one player picked at random to seek this round.
+    var seekerID: UUID?
 
     func player(_ id: UUID?) -> Player? {
         players.first { $0.id == id }
@@ -56,20 +60,6 @@ struct GameState: Codable, Equatable {
     func isSeeking(_ id: UUID) -> Bool {
         player(id)?.role == .seeker || !players.contains { $0.role == .seeker }
     }
-}
-
-enum Message: Codable {
-    // Player → host
-    case hello(Player)
-    case ready(UUID, Bool)
-    case placeGhost(Ghost, Data)
-    case tag(ghostID: UUID, by: UUID)
-    // Host → players
-    case state(GameState)
-    case ghostImage(UUID, Data)
-    /// The 3D server, for players on older builds that still read it. Sent only over the encrypted
-    /// session; current builds ignore it and always use the hosted server.
-    case modelServer(address: String, token: String)
 }
 
 extension simd_float4x4 {
