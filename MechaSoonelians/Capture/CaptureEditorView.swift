@@ -37,6 +37,7 @@ struct CaptureEditorView: View {
                         .font(RallyStyle.font(15, .bold)).frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .background(RallyStyle.cyan, in: RoundedRectangle(cornerRadius: 14))
+                .buttonStyle(.plain).rallyHover(cornerRadius: 14)
                 .disabled(model.selectedHuman == nil || model.isProcessing || isImporting)
                 .accessibilityIdentifier("make3DCharacterButton")
                 ZStack {
@@ -82,6 +83,7 @@ struct CaptureEditorView: View {
                     .overlay(RoundedRectangle(cornerRadius: 14).stroke(RallyStyle.line))
                 }
                 .font(RallyStyle.font(14, .semibold))
+                .buttonStyle(.plain).rallyHover(cornerRadius: 14)
                 .disabled(model.isProcessing || isImporting)
                 Text(tab == "Pose" ? "2D pose prototype: joints move pieces of the cutout. Hidden body surfaces cannot be reconstructed, so large changes may reveal gaps. Depth stays in the original capture pose." : "People are detected and cropped automatically. Use a clear full-body photo with arms slightly away from the body for better rigging.")
                     .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
@@ -167,6 +169,7 @@ struct CaptureEditorView: View {
                 Text("\(person.joints.count) joints").font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
             }
         }
+        .buttonStyle(.plain)
     }
 
     private var imageCanvas: some View {

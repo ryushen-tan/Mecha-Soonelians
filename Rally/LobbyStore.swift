@@ -42,7 +42,7 @@ final class LobbyStore: ObservableObject {
         serverAddress = address
     }
 
-    func enter(code: String? = nil, capacity: Int = 8) async -> Bool {
+    func enter(code: String? = nil) async -> Bool {
         guard !busy, membership == nil else { return false }
         guard validName else { error = "Choose a name between 1 and 20 characters."; return false }
         busy = true
@@ -50,8 +50,7 @@ final class LobbyStore: ObservableObject {
         defer { busy = false }
         do {
             let url = try ServerAddress.parse(serverAddress)
-            var body: [String: Any] = ["name": nickname.trimmingCharacters(in: .whitespacesAndNewlines), "avatar": avatar]
-            if code == nil { body["capacity"] = capacity }
+            let body: [String: Any] = ["name": nickname.trimmingCharacters(in: .whitespacesAndNewlines), "avatar": avatar]
             let path = code.map { "rooms/\($0)/join" } ?? "rooms"
             let result: JoinResponse = try await LobbyAPI(baseURL: url).request(path, method: "POST", body: body)
             let session = Membership(code: result.room.code, memberID: result.memberID, token: result.token, server: url)

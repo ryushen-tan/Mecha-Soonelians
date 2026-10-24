@@ -7,6 +7,7 @@ struct RallyApp: App {
     var body: some Scene {
         WindowGroup {
             RootView().environmentObject(store)
+                .buttonStyle(HoverButtonStyle())
                 .tint(RallyStyle.ink)
                 .preferredColorScheme(.light)
         }

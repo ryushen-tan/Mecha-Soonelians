@@ -4,7 +4,7 @@ import Foundation
 @main struct NativeAPISmoke {
     static func main() async throws {
         let api = LobbyAPI(baseURL: try ServerAddress.parse(CommandLine.arguments.dropFirst().first ?? "http://localhost:3000"))
-        let host: JoinResponse = try await api.request("rooms", method: "POST", body: ["name": "Swift Host", "avatar": 0, "capacity": 4])
+        let host: JoinResponse = try await api.request("rooms", method: "POST", body: ["name": "Swift Host", "avatar": 0])
         let path = "rooms/\(host.room.code)"
         let guest: JoinResponse = try await api.request(path + "/join", method: "POST", body: ["name": "Swift Guest", "avatar": 1])
         let snapshot: RoomResponse = try await api.request(path, token: host.token)

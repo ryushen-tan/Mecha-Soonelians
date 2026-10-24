@@ -15,57 +15,60 @@ struct Character3DView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Eyebrow(text: "A CHARACTER FROM EVERY ANGLE")
-                Text("Meet your 3D self.").font(RallyStyle.font(32, .heavy)).tracking(-1)
-                if model.modelData != nil {
-                    CharacterWebView(model: model)
-                        .frame(height: 350).clipShape(RoundedRectangle(cornerRadius: 22))
-                        .accessibilityLabel("3D character. Drag to orbit and pinch to zoom.")
-                    HStack(alignment: .top) {
-                        Text(model.status).font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
-                        Spacer()
-                        Button {
-                            model.yaw = model.yaw + 90 > 180 ? model.yaw - 270 : model.yaw + 90
-                        } label: {
-                            Label("Turn 90°", systemImage: "rotate.right")
-                                .font(RallyStyle.font(13, .semibold))
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Eyebrow(text: "A CHARACTER FROM EVERY ANGLE")
+                    Text("Meet your 3D self.").font(RallyStyle.font(32, .heavy)).tracking(-1)
+                    if model.modelData != nil {
+                        CharacterWebView(model: model)
+                            .frame(height: min(350, max(220, geometry.size.height * 0.43)))
+                            .clipShape(RoundedRectangle(cornerRadius: 22))
+                            .accessibilityLabel("3D character. Drag to orbit and pinch to zoom.")
+                        HStack(alignment: .top) {
+                            Text(model.status).font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
+                            Spacer()
+                            Button {
+                                model.yaw = model.yaw + 90 > 180 ? model.yaw - 270 : model.yaw + 90
+                            } label: {
+                                Label("Turn 90°", systemImage: "rotate.right")
+                                    .font(RallyStyle.font(13, .semibold))
+                            }
+                            .disabled(!model.viewerLoaded).accessibilityIdentifier("turn3DCharacterButton")
                         }
-                        .disabled(!model.viewerLoaded).accessibilityIdentifier("turn3DCharacterButton")
-                    }
-                    controls
-                } else {
-                    if let preview = input.flatMap(UIImage.init(data:)) ?? model.asset?.preview {
-                        Image(uiImage: preview).resizable().scaledToFit().frame(height: 230).frame(maxWidth: .infinity)
-                            .background(RallyStyle.surface, in: RoundedRectangle(cornerRadius: 22))
-                    }
-                    if model.busy {
-                        HStack { ProgressView(); Text(model.status).font(RallyStyle.font(16, .semibold)) }
-                        Text("You can leave this page. Generation keeps running on your Mac; resume from Studio → 3D characters. Closing this screen does not cancel Tripo or refund credits.")
-                            .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+                        controls
                     } else {
-                        connectionFields
-                        Button {
-                            if model.asset == nil { confirmsUpload = true } else { model.resume(token: accessToken) }
-                        } label: {
-                            ActionLabel(text: model.asset == nil ? "Generate + auto-rig" : "Resume generation")
+                        if let preview = input.flatMap(UIImage.init(data:)) ?? model.asset?.preview {
+                            Image(uiImage: preview).resizable().scaledToFit().frame(height: 230).frame(maxWidth: .infinity)
+                                .background(RallyStyle.surface, in: RoundedRectangle(cornerRadius: 22))
                         }
-                        .buttonStyle(PushButtonStyle()).disabled(input == nil && model.asset == nil)
-                        .accessibilityIdentifier("generateCharacterButton")
+                        if model.busy {
+                            HStack { ProgressView(); Text(model.status).font(RallyStyle.font(16, .semibold)) }
+                            Text("You can leave this page. Generation keeps running on your Mac; resume from Studio → 3D characters. Closing this screen does not cancel Tripo or refund credits.")
+                                .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+                        } else {
+                            connectionFields
+                            Button {
+                                if model.asset == nil { confirmsUpload = true } else { model.resume(token: accessToken) }
+                            } label: {
+                                ActionLabel(text: model.asset == nil ? "Generate + auto-rig" : "Resume generation")
+                            }
+                            .buttonStyle(PushButtonStyle()).disabled(input == nil && model.asset == nil)
+                            .accessibilityIdentifier("generateCharacterButton")
+                        }
+                        Text("Uploads only this selected cutout to Tripo and uses your API credits. A standing full-body image with separated arms works best; seated or hidden limbs may not rig. Unseen surfaces are AI-generated, not measured LiDAR geometry.")
+                            .font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
                     }
-                    Text("Uploads only this selected cutout to Tripo and uses your API credits. A standing full-body image with separated arms works best; seated or hidden limbs may not rig. Unseen surfaces are AI-generated, not measured LiDAR geometry.")
-                        .font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
+                    if let warning = model.warning { Text(warning).font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted) }
+                    if let error = model.error { ErrorNotice(message: error) }
+                    if let asset = model.asset, FileManager.default.fileExists(atPath: asset.directory.appendingPathComponent("character.glb").path) {
+                        ShareLink(item: asset.directory.appendingPathComponent("character.glb")) {
+                            Label("Share saved 3D mesh", systemImage: "square.and.arrow.up")
+                        }.font(RallyStyle.font(14, .semibold))
+                    }
                 }
-                if let warning = model.warning { Text(warning).font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted) }
-                if let error = model.error { ErrorNotice(message: error) }
-                if let asset = model.asset, FileManager.default.fileExists(atPath: asset.directory.appendingPathComponent("character.glb").path) {
-                    ShareLink(item: asset.directory.appendingPathComponent("character.glb")) {
-                        Label("Share saved 3D mesh", systemImage: "square.and.arrow.up")
-                    }.font(RallyStyle.font(14, .semibold))
-                }
+                .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
             }
-            .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
         }
         .background(RallyStyle.paper.ignoresSafeArea())
         .foregroundStyle(RallyStyle.ink).tint(RallyStyle.ink)

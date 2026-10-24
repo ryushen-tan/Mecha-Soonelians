@@ -8,6 +8,7 @@ final class RallyUITests: XCTestCase {
         app.buttons["studioTab"].tap()
         app.buttons["makePlayerButton"].tap()
         XCTAssertTrue(app.staticTexts["Find your people."].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["studioTab"].exists)
         let edit = app.buttons["playerPrimaryAction"]
         let enabled = NSPredicate(format: "enabled == true")
         expectation(for: enabled, evaluatedWith: edit)
@@ -21,6 +22,9 @@ final class RallyUITests: XCTestCase {
         edit.tap()
         XCTAssertTrue(app.alerts["Player editor"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.alerts.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Saved'")).firstMatch.exists)
+        app.alerts.buttons["OK"].tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["studioTab"].waitForExistence(timeout: 5))
     }
 
     @MainActor func testJoinAndCreateNavigationMatchesApprovedPreview() {
@@ -34,7 +38,7 @@ final class RallyUITests: XCTestCase {
         app.buttons["createTab"].tap()
         XCTAssertTrue(app.textFields["nicknameInput"].exists)
         XCTAssertFalse(app.buttons["confirmEntryButton"].isEnabled)
-        XCTAssertFalse(app.staticTexts["Players, including you."].exists)
+        XCTAssertFalse(app.staticTexts["Room size"].exists)
         app.textFields["nicknameInput"].tap()
         app.textFields["nicknameInput"].typeText("Kai")
         XCTAssertTrue(app.buttons["confirmEntryButton"].isEnabled)

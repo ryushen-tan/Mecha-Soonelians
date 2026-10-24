@@ -29,18 +29,17 @@ struct PushButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var dark = false
+    var destructive = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(RallyStyle.font(17, .bold))
             .frame(maxWidth: .infinity, minHeight: 54)
             .foregroundStyle(dark ? RallyStyle.paper : RallyStyle.ink)
-            .background(dark ? RallyStyle.ink : RallyStyle.lime, in: RoundedRectangle(cornerRadius: 16))
-            .shadow(color: dark ? RallyStyle.ink.opacity(0.35) : RallyStyle.limeEdge,
-                    radius: 0, y: configuration.isPressed ? 1 : 4)
-            .offset(y: configuration.isPressed && !reduceMotion ? 3 : 0)
-            .opacity(enabled ? 1 : 0.45)
+            .background(dark ? RallyStyle.ink : destructive ? RallyStyle.coral : RallyStyle.lime, in: RoundedRectangle(cornerRadius: 16))
+            .opacity(enabled ? (configuration.isPressed ? 0.82 : 1) : 0.45)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
+            .rallyHover(cornerRadius: 16, color: dark ? RallyStyle.paper : RallyStyle.ink)
     }
 }
 
@@ -186,4 +185,39 @@ private struct GlassNavigation: ViewModifier {
 
 extension View {
     func rallyGlass() -> some View { modifier(GlassNavigation()) }
+}
+
+private struct ButtonHoverIndicator: ViewModifier {
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovering = false
+    let cornerRadius: CGFloat
+    let color: Color
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(color.opacity(hovering && enabled ? 0.07 : 0))
+                    .allowsHitTesting(false)
+            }
+            .onHover { hovering = $0 }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+struct HoverButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 8).frame(minHeight: 44)
+            .opacity(enabled ? (configuration.isPressed ? 0.82 : 1) : 0.45)
+            .rallyHover()
+    }
+}
+
+extension View {
+    func rallyHover(cornerRadius: CGFloat = 12, color: Color = RallyStyle.ink) -> some View {
+        modifier(ButtonHoverIndicator(cornerRadius: cornerRadius, color: color))
+    }
 }

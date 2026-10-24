@@ -11,6 +11,7 @@
   --canvas-hover: #3c443f;
   --canvas-selected: #ffffff0f;
   --ink: #202b26;
+  --ink-hover: #34463c;
   --muted: #656e63;
   --line: #d8dccf;
   --lime: #d4ed60;
@@ -18,6 +19,8 @@
   --lime-edge: #a3ba3e;
   --cyan: #a8d7eb;
   --coral: #f69778;
+  --coral-edge: #bf694f;
+  --coral-hover: #ffae93;
   --lavender: #c9baf0;
   --mint: #b2d9b0;
   --peach: #f7c99a;

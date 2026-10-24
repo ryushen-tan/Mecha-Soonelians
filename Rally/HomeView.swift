@@ -9,14 +9,17 @@ struct HomeView: View {
     @State private var code = ""
     @State private var joining = false
     @State private var settings = false
+    @State private var studioPath: [StudioRoute] = []
     @FocusState private var codeFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
-            navigation.padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+            if tab != .studio || studioPath.isEmpty {
+                navigation.padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+            }
             if tab == .studio {
-                NavigationStack { StudioView() }
+                NavigationStack(path: $studioPath) { StudioView() }
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
@@ -69,6 +72,7 @@ struct HomeView: View {
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .rallyHover(cornerRadius: 24)
                 .accessibilityAddTraits(tab == item ? .isSelected : [])
                 .accessibilityIdentifier(item.rawValue.lowercased() + "Tab")
                 .disabled(store.busy)
@@ -121,10 +125,10 @@ struct HomeView: View {
 
 private struct IdentityForm: View {
     @EnvironmentObject private var store: LobbyStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let creating: Bool
     let code: String
     let onCancel: () -> Void
-    @State private var capacity = 8
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -139,7 +143,16 @@ private struct IdentityForm: View {
                 Text("Join room \(code.prefix(3)) \(code.suffix(3))")
                     .font(RallyStyle.font(32, .bold)).accessibilityAddTraits(.isHeader)
             }
-            AvatarView(index: store.avatar, size: 100).rotationEffect(.degrees(-5))
+            AvatarView(index: store.avatar, size: 100)
+                .keyframeAnimator(initialValue: -5.0, trigger: store.avatar) { content, angle in
+                    content.rotationEffect(.degrees(reduceMotion ? -5 : angle), anchor: .bottom)
+                } keyframes: { _ in
+                    CubicKeyframe(-16.0, duration: 0.10)
+                    CubicKeyframe(12.0, duration: 0.14)
+                    CubicKeyframe(-10.0, duration: 0.13)
+                    CubicKeyframe(1.0, duration: 0.12)
+                    CubicKeyframe(-5.0, duration: 0.15)
+                }
                 .frame(maxWidth: .infinity).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 10) {
                 Text("Pick your face").font(RallyStyle.font(14, .semibold))
@@ -150,6 +163,7 @@ private struct IdentityForm: View {
                                 .frame(maxWidth: .infinity, minHeight: 48)
                         }
                         .buttonStyle(.plain)
+                        .rallyHover(cornerRadius: 14)
                         .accessibilityLabel(RallyStyle.avatarNames[index] + " avatar")
                         .accessibilityAddTraits(store.avatar == index ? .isSelected : [])
                     }
@@ -164,17 +178,9 @@ private struct IdentityForm: View {
                     .onSubmit { nameFocused = false }
                 Text("1–20 characters").font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
             }
-            if creating {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Room size").font(RallyStyle.font(14, .semibold))
-                    Picker("Room size", selection: $capacity) {
-                        ForEach([4, 8, 12, 20], id: \.self) { Text("\($0)").tag($0) }
-                    }.pickerStyle(.segmented)
-                }
-            }
             Button {
                 nameFocused = false
-                Task { _ = await store.enter(code: creating ? nil : code, capacity: capacity) }
+                Task { _ = await store.enter(code: creating ? nil : code) }
             } label: {
                 ActionLabel(text: creating ? "Create room" : "Join room", busy: store.busy)
             }

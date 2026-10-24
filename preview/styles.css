@@ -330,3 +330,31 @@ dialog::backdrop { background: var(--scrim); }
 .mobile-navigation::before { width: calc((100% - 12px) / 2); }
 .home-screen > .create-room-button { margin-top: 20px; }
 .lobby-screen > .code-ticket { margin-top: 24px; }
+.end-room.btn { --btn-face: var(--coral); --btn-edge: var(--coral-edge); margin-top: 20px; min-height: 54px; font-size: 16px; color: var(--ink); }
+.player-tile .avatar { --size: 36px; }
+.profile-hero .avatar { transform-origin: 50% 100%; }
+.profile-hero .avatar-rock { animation: avatar-rock 640ms ease-in-out; }
+@keyframes avatar-rock {
+  0%, 100% { transform: rotate(-5deg); }
+  16% { transform: rotate(-16deg); }
+  38% { transform: rotate(12deg); }
+  58% { transform: rotate(-10deg); }
+  77% { transform: rotate(1deg); }
+}
+.btn, .btn:not(:disabled):hover, .btn:not(:disabled):active { box-shadow: none; transform: none; }
+.btn { transition: background-color 160ms, opacity 140ms; }
+.btn:not(:disabled):active { opacity: .82; }
+@media (hover:hover) and (pointer:fine) {
+  button:not(:disabled):hover { filter: brightness(.93); }
+  button:not(:disabled):not(.btn):not(.toggle):not([aria-current]):not([aria-pressed="true"]):hover { background: var(--soft-ink); }
+  .btn.btn-ink:not(:disabled):hover { background: var(--ink-hover); }
+}
+@media (hover:hover) {
+  .btn.btn-end-room:not(:disabled):hover { background: var(--coral-hover); }
+}
+
+/* Soft tint hover feedback, with keyboard focus indicators retained. */
+button { transition: background-color 160ms, filter 160ms, opacity 140ms; }
+@media (prefers-reduced-motion:reduce) {
+  button { transition: none; }
+}
