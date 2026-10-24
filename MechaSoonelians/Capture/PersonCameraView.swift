@@ -2,11 +2,52 @@ import AVFoundation
 import SwiftUI
 import Vision
 
+@MainActor
+final class PersonCaptureTimer: ObservableObject {
+    @Published private(set) var secondsRemaining: Int?
+    private var work: Task<Void, Never>?
+    private let waitOneSecond: @Sendable () async throws -> Void
+
+    init(waitOneSecond: @escaping @Sendable () async throws -> Void = { try await Task.sleep(for: .seconds(1)) }) {
+        self.waitOneSecond = waitOneSecond
+    }
+
+    func start(capture: @escaping @MainActor () -> Void) {
+        guard secondsRemaining == nil else { return }
+        secondsRemaining = 5
+        work = Task { [weak self] in
+            guard let self else { return }
+            do {
+                for seconds in stride(from: 4, through: 0, by: -1) {
+                    try await waitOneSecond()
+                    try Task.checkCancellation()
+                    if seconds == 0 {
+                        secondsRemaining = nil
+                        work = nil
+                        capture()
+                    } else {
+                        secondsRemaining = seconds
+                    }
+                }
+            } catch {
+                if !Task.isCancelled { secondsRemaining = nil; work = nil }
+            }
+        }
+    }
+
+    func cancel() {
+        work?.cancel()
+        work = nil
+        secondsRemaining = nil
+    }
+}
+
 final class PersonCameraController: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
     @Published var status = "Starting camera…"
     @Published var peopleCount = 0
     @Published var isCapturing = false
     @Published var depthEnabled = false
+    @Published private(set) var isReady = false
     let session = AVCaptureSession()
     var onCapture: ((Data) -> Void)?
     private let queue = DispatchQueue(label: "mecha.person-camera")
@@ -38,6 +79,7 @@ final class PersonCameraController: NSObject, ObservableObject, AVCapturePhotoCa
     }
 
     func stop() {
+        isReady = false
         queue.async {
             self.wantsRunning = false
             if self.session.isRunning { self.session.stopRunning() }
@@ -46,8 +88,9 @@ final class PersonCameraController: NSObject, ObservableObject, AVCapturePhotoCa
 
     private func configure() {
         guard wantsRunning else { return }
-        guard let device = AVCaptureDevice.default(.builtInLiDARDepthCamera, for: .video, position: .back)
-                ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
+        // Selfie: the front TrueDepth camera still gives depth on Face ID phones.
+        guard let device = AVCaptureDevice.default(.builtInTrueDepthCamera, for: .video, position: .front)
+                ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) else {
             publish("No camera available. Import a photo instead.")
             return
         }
@@ -57,7 +100,7 @@ final class PersonCameraController: NSObject, ObservableObject, AVCapturePhotoCa
             let input = try AVCaptureDeviceInput(device: device)
             guard session.canAddInput(input), session.canAddOutput(photoOutput) else { throw CocoaError(.featureUnsupported) }
             session.addInput(input)
-            if device.deviceType == .builtInLiDARDepthCamera,
+            if device.deviceType == .builtInTrueDepthCamera,
                let format = device.formats.last(where: {
                    !$0.supportedDepthDataFormats.isEmpty && CMVideoFormatDescriptionGetDimensions($0.formatDescription).width <= 1920
                }), let depthFormat = format.supportedDepthDataFormats.last {
@@ -78,15 +121,21 @@ final class PersonCameraController: NSObject, ObservableObject, AVCapturePhotoCa
             if let connection = video.connection(with: .video), connection.isVideoRotationAngleSupported(90) {
                 connection.videoRotationAngle = 90
             }
-            if let connection = photoOutput.connection(with: .video), connection.isVideoRotationAngleSupported(90) {
-                connection.videoRotationAngle = 90
+            if let connection = photoOutput.connection(with: .video) {
+                if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
+                // Save the selfie as it looked in the (mirrored) preview.
+                if connection.isVideoMirroringSupported {
+                    connection.automaticallyAdjustsVideoMirroring = false
+                    connection.isVideoMirrored = true
+                }
             }
             session.commitConfiguration()
             session.startRunning()
             let hasDepth = photoOutput.isDepthDataDeliveryEnabled
             DispatchQueue.main.async {
+                self.isReady = true
                 self.depthEnabled = hasDepth
-                self.status = "Keep the whole body in frame, with arms slightly apart."
+                self.status = "Prop your phone up and step back so your whole body is in frame, arms slightly apart."
             }
         } catch {
             session.commitConfiguration()
@@ -95,6 +144,7 @@ final class PersonCameraController: NSObject, ObservableObject, AVCapturePhotoCa
     }
 
     func capture() {
+        guard isReady, !isCapturing else { return }
         isCapturing = true
         queue.async {
             guard self.session.isRunning else {
@@ -143,31 +193,48 @@ final class PersonCameraController: NSObject, ObservableObject, AVCapturePhotoCa
 struct PersonCameraView: View {
     var onCapture: (Data) -> Void
     @StateObject private var controller = PersonCameraController()
+    @StateObject private var timer = PersonCaptureTimer()
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
             CameraPreview(session: controller.session).ignoresSafeArea()
             VStack(spacing: 16) {
                 HStack {
-                    Button("Close") { dismiss() }
+                    Button("Close") { timer.cancel(); dismiss() }
                     Spacer()
                     Text(controller.depthEnabled ? "Photo + depth" : "Photo only").font(RallyStyle.font(12, .semibold))
                 }
                 .padding().background(RallyStyle.paper, in: Capsule())
                 Spacer()
-                Image(systemName: "figure.stand").font(.system(size: 150, weight: .ultraLight)).foregroundStyle(.white.opacity(0.4))
+                if let seconds = timer.secondsRemaining {
+                    Text("\(seconds)")
+                        .font(RallyStyle.font(140, .heavy)).monospacedDigit()
+                        .foregroundStyle(.white).shadow(color: .black.opacity(0.6), radius: 12)
+                        .accessibilityLabel("Photo in \(seconds) seconds")
+                        .accessibilityIdentifier("selfieCountdown")
+                } else {
+                    Image(systemName: "figure.stand").font(.system(size: 150, weight: .ultraLight)).foregroundStyle(.white.opacity(0.4))
+                }
                 Spacer()
                 VStack(spacing: 16) {
                     Text(controller.status).font(RallyStyle.font(14)).multilineTextAlignment(.center)
                     Text("\(controller.peopleCount) people detected").font(RallyStyle.font(18, .bold))
                         .foregroundStyle(controller.peopleCount > 0 ? RallyStyle.success : RallyStyle.muted)
-                    Button(action: controller.capture) {
-                        Label(controller.isCapturing ? "Capturing…" : "Capture person", systemImage: "camera.fill")
+                    Text("Tap the 5-second timer, then step back with your whole body in frame.")
+                        .font(RallyStyle.font(12)).multilineTextAlignment(.center)
+                    Button {
+                        if timer.secondsRemaining != nil { timer.cancel() }
+                        else { timer.start { controller.capture() } }
+                    } label: {
+                        Label(timer.secondsRemaining != nil ? "Cancel timer" : controller.isCapturing ? "Capturing…" : "Take selfie · 5s",
+                              systemImage: timer.secondsRemaining != nil ? "xmark" : "timer")
                             .frame(maxWidth: .infinity, minHeight: 50)
                     }
                     .buttonStyle(PushButtonStyle())
-                    .disabled(controller.peopleCount == 0 || controller.isCapturing)
+                    .disabled(!controller.isReady || controller.isCapturing)
+                    .accessibilityIdentifier("selfieTimerButton")
                 }
                 .padding(20).background(RallyStyle.paper, in: RoundedRectangle(cornerRadius: 24))
             }
@@ -175,7 +242,8 @@ struct PersonCameraView: View {
         }
         .background(.black).foregroundStyle(RallyStyle.ink).tint(RallyStyle.ink).preferredColorScheme(.light)
         .onAppear { controller.onCapture = onCapture; controller.start() }
-        .onDisappear { controller.stop() }
+        .onDisappear { timer.cancel(); controller.stop() }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { timer.cancel() } }
     }
 }
 

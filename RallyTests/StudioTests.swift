@@ -1,8 +1,48 @@
 import XCTest
 import UIKit
+import Combine
 @testable import Rally
 
 final class StudioTests: XCTestCase {
+    @MainActor func testSelfieTimerCountsDownFiveSecondsAndCapturesOnlyOnce() async throws {
+        let timer = PersonCaptureTimer { try await Task.sleep(for: .milliseconds(10)) }
+        var values: [Int] = []
+        let observation = timer.$secondsRemaining.compactMap { $0 }.sink { values.append($0) }
+        defer { observation.cancel() }
+        let captured = expectation(description: "Photo captured after countdown")
+        var captures = 0
+        timer.start { captures += 1; captured.fulfill() }
+        timer.start { XCTFail("Repeated taps must not create another capture.") }
+        XCTAssertEqual(timer.secondsRemaining, 5)
+        XCTAssertEqual(captures, 0)
+        await fulfillment(of: [captured], timeout: 2)
+        XCTAssertEqual(values, [5, 4, 3, 2, 1])
+        XCTAssertEqual(captures, 1)
+        XCTAssertNil(timer.secondsRemaining)
+    }
+
+    @MainActor func testCancellingOrLeavingSelfieTimerNeverCapturesAndCanRestart() async throws {
+        let timer = PersonCaptureTimer { try await Task.sleep(for: .milliseconds(20)) }
+        timer.start { XCTFail("A cancelled timer must not take a photo.") }
+        timer.cancel()
+        XCTAssertNil(timer.secondsRemaining)
+        let captured = expectation(description: "Restarted timer captures")
+        timer.start { captured.fulfill() }
+        await fulfillment(of: [captured], timeout: 2)
+        XCTAssertNil(timer.secondsRemaining)
+    }
+
+    @MainActor func testSelfieTimerUsesFiveRealSecondsByDefault() async throws {
+        let timer = PersonCaptureTimer()
+        let started = ContinuousClock.now
+        let captured = expectation(description: "Five-second timer captures")
+        timer.start {
+            XCTAssertGreaterThanOrEqual(started.duration(to: .now), .seconds(5))
+            captured.fulfill()
+        }
+        await fulfillment(of: [captured], timeout: 8)
+    }
+
     func testIncompleteCaptureWarnsBeforePaidGeneration() throws {
         let image = try XCTUnwrap(UIGraphicsImageRenderer(size: CGSize(width: 10, height: 10)).image { _ in }.cgImage)
         let cropped = HumanDetection(id: 1, bounds: CGRect(x: 0.2, y: 0.1, width: 0.6, height: 0.9), joints: [], cutout: image, mask: image)

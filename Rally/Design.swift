@@ -56,11 +56,25 @@ struct Brand: View {
         HStack(spacing: 8) {
             Image(systemName: "asterisk").font(.system(size: 27, weight: .black))
                 .rotationEffect(.degrees(10)).foregroundStyle(RallyStyle.ink)
-            Text("rally").font(RallyStyle.font(30, .heavy)).tracking(-1.5)
+            Text(Self.wordmark).font(RallyStyle.font(30, .heavy)).tracking(-1.5)
+            .lineLimit(1).minimumScaleFactor(0.6)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Rally")
+        .accessibilityLabel("Mecha Soonelians")
     }
+
+    /// "Mecha Soonelians" with one colour per letter.
+    private static let wordmark: AttributedString = {
+        let colors: [Color] = [
+            RallyStyle.coral, RallyStyle.limeEdge, Color(red: 0.29, green: 0.39, blue: 1),
+            Color(red: 0.95, green: 0.6, blue: 0.25), Color(red: 0.2, green: 0.62, blue: 0.45), Color(red: 0.62, green: 0.4, blue: 0.9)
+        ]
+        return "Mecha Soonelians".enumerated().reduce(into: AttributedString()) { line, letter in
+            var piece = AttributedString(String(letter.element))
+            piece.foregroundColor = colors[letter.offset % colors.count]
+            line += piece
+        }
+    }()
 }
 
 struct AvatarView: View {

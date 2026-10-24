@@ -274,9 +274,20 @@ final class JellyScene: SKScene {
                     .paragraphStyle: style, .kern: tracking
                 ])
             }
+            // One palette colour per letter, outlined in ink so the light colours stay legible on paper.
+            func rainbow(_ value: String, fontSize: CGFloat, y: CGFloat, offset: Int = 0, tracking: CGFloat = 0) {
+                let font = UIFont(name: "Outfit-Thin_ExtraBold", size: fontSize) ?? .boldSystemFont(ofSize: fontSize)
+                let line = NSMutableAttributedString()
+                for (index, letter) in value.enumerated() {
+                    line.append(NSAttributedString(string: String(letter), attributes: [
+                        .font: font, .foregroundColor: UIColor(JellyStyle.colors[(index + offset) % JellyStyle.colors.count]),
+                        .strokeColor: UIColor(JellyStyle.ink), .strokeWidth: -3, .paragraphStyle: style, .kern: tracking
+                    ]))
+                }
+                line.draw(in: CGRect(x: 5, y: y, width: size.width - 10, height: size.height))
+            }
             if title {
-                text("MECCHA", fontSize: size.width * 0.045, y: size.height * 0.15, tracking: 4)
-                text("SOONELIANS", fontSize: size.width * 0.105, y: size.height * 0.38)
+                rainbow("MECHA SOONELIANS", fontSize: size.width * 0.075, y: size.height * 0.3)
             } else {
                 text("▸ PLAY", fontSize: size.width * 0.18, y: size.height * 0.19, tracking: 2)
             }
