@@ -14,3 +14,6 @@ scans/
 
 # Unrelated local media (car-chase renders); kept on disk, not in git.
 video/
+
+# Source 3D models (large); the prepared versions live in the app bundle.
+Models/

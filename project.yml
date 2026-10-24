@@ -46,3 +46,19 @@ targets:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+  MechaSooneliansTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [MechaSooneliansTests]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: MechaSoonelians
+schemes:
+  MechaSoonelians:
+    build:
+      targets:
+        MechaSoonelians: all
+    test:
+      targets: [MechaSooneliansTests]

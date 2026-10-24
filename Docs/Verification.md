@@ -32,6 +32,16 @@ This section describes the current editor. Earlier iterations (automatic wall at
 
 Viewer tests cover pointer-to-surface dragging, transform math, uniform resizing, selection and cancellation, thin-wall tunneling, sliding along furniture, doorway clearance, transformed RoomPlan geometry and wall-backed paint framing. Real-human native tests drive canvas pointer events: select and drag, cancel, pinch, pick the actual rotation rings, resize, lock and save. They also open an intersecting saved placement and check for a 6 mm support gap with no collisions. The Simulator UI flow taps and drags the person, switches transform tools, uses both Pose wheel pages, paints, pinches, saves and reopens. Evidence such as `surface-constraints.json` and `surface-constrained-human.png` is written alongside the other native render evidence. These checks cover the supplied room geometry, not unscanned physical obstacles.
 
+## Personal character startup
+
+First launch now gates both app targets on a saved personal rigged character. Tests submit only to an injected mock transport, never to paid Tripo. Native checks cover the explicit rigging header, saved input/request ID/receipt, offline reopen, corrupt pose-data rejection, and preparation of all 15 poses from a cached real-human rig (or the bundled humanoid fixture). Baking leaves the editor's placement unchanged. The existing proxy tests cover generation → rig-check → rig and replay idempotency.
+
+`MechaSooneliansTests` covers the AR-side body format: a posed mesh survives the same encode/decode used for peer resources, keeping its vertices, UVs, triangles and bounds; saved personal texture seeds paint instead of the white default; top/bottom texture orientation is preserved. These are local resource round trips, not a claim of a verified multi-iPhone AR session.
+
+The first-launch UI check verifies the upload/credit notice, scan/import actions and proxy connection fields on an empty device. On a device with an existing personal rig, it verifies automatic local preparation and return to the lobby instead of another paid scan. Existing editor UI tests use `-ui-testing` to bypass onboarding; `--test-character-setup` exercises the real gate.
+
+Local verification on 2026-10-24: 24 viewer tests and 25 server tests pass; Rally runs 16 native tests (the existing localhost:3099 multiplayer test skips when that server is absent) and all four UI tests pass; all three personal-body AR resource tests pass. No paid Tripo jobs are submitted. Both Simulator targets build, and the MechaSoonelians iPhone target builds unsigned.
+
 ## Reproduce
 
 1. Install a real generated rigged human in the Simulator via the app's Tripo flow, or reuse an existing saved character. Tests copy its original mesh to temporary assets and remove those temporary assets afterward.
@@ -40,5 +50,6 @@ Viewer tests cover pointer-to-surface dragging, transform math, uniform resizing
 4. `npm run build --prefix server && npm run test:integration --prefix server`
 5. For the native multiplayer test, start an isolated instance: `cd server && npx next start --hostname 127.0.0.1 --port 3099`.
 6. Run the Rally scheme's native unit/UI tests in Xcode. Real-human tests explicitly skip if no generated human is present; the native multiplayer test skips if the isolated server is absent.
+7. Run the MechaSoonelians scheme's `MechaSooneliansTests` for personal-body peer-resource and paint-seeding checks; these use the bundled rig, not a paid generation.
 
 Native render evidence is written under the app's `Documents/Verification/character-gameplay/`. Xcode's test result includes wheel/reopen screenshots. Camera depth, real RoomPlan capture, physical AR alignment/occlusion and a multi-iPhone session still require hardware tests. Simulator builds and virtual-room play do not establish those capabilities.

@@ -32,6 +32,9 @@ struct Ghost: Codable, Identifiable, Equatable {
     var flushBack: Bool
     /// A painted 3D model (USDZ) travels separately; until it arrives, the cutout shows.
     var hasModel: Bool
+    /// A spray-painted chameleon in `pose` (see ChameleonBody); the image is its paint, not a cutout.
+    var paintedBody = false
+    var pose: String?
     var width: Float
     var height: Float
     var foundBy: UUID?

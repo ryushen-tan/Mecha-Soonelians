@@ -24,6 +24,8 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     private var isRunning = false
     /// The scanned walls, for putting hiders' backs against them.
     private(set) var walls: [GhostCapture.Wall] = []
+    /// The scanned walls and furniture, so chameleons don't go inside them.
+    private(set) var obstacles = RoomObstacles()
 
     override init() {
         super.init()
@@ -83,6 +85,37 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         return floors.min() ?? frame.camera.transform.columns.3.y - 1.3
     }
 
+    /// Where a chameleon goes when the player points at this screen point: on a wall it stands on the
+    /// floor with its back to the wall; on the floor or furniture it faces `facing`, else the player.
+    func chameleonPlacement(at point: CGPoint, height: Float = ChameleonStore.height, facing: SIMD3<Float>? = nil) -> GhostPlacement? {
+        guard isRelocalized, let frame = currentFrame,
+              let hit = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .any).first else { return nil }
+        let position = simd_make_float3(hit.worldTransform.columns.3)
+        let camera = simd_make_float3(frame.camera.transform.columns.3)
+        // A raycast result's Y axis is the surface normal.
+        var normal = simd_make_float3(hit.worldTransform.columns.1)
+        let onWall = abs(normal.y) < 0.5
+        var origin = position
+        var facing = facing ?? camera - position
+        if onWall {
+            normal.y = 0
+            facing = simd_dot(normal, camera - position) < 0 ? -normal : normal
+            // Line up with the scanned wall, so the body is just in front of it rather than in it.
+            if let wall = obstacles.nearestWall(to: position, within: 0.25), simd_dot(wall.normal, facing) > 0.7 {
+                origin = wall.point
+                facing = wall.normal
+            }
+            origin.y = floorHeight(for: frame)
+        }
+        facing.y = 0
+        guard simd_length(facing) > 0.01 else { return nil }
+        return GhostPlacement(origin: origin, facing: simd_normalize(facing), onWall: onWall,
+                              width: height / 2, height: height)
+    }
+
+    /// While set, a tap places a chameleon instead of tagging a ghost.
+    var onTapPlace: ((CGPoint) -> Void)?
+
     // MARK: Ghosts
 
     /// Makes the scene show exactly these ghosts: the 3D model once it has arrived, else the flat cutout.
@@ -97,9 +130,21 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         }
         for ghost in ghosts {
             if ghost.hasModel, !modelGhosts.contains(ghost.id), !loadingModels.contains(ghost.id), let url = models[ghost.id] {
-                loadModel(for: ghost, from: url)
+                if url.pathExtension == "body" {
+                    if let paint = images[ghost.id], let data = try? Data(contentsOf: url),
+                       let archive = try? JSONDecoder().decode(CharacterBodyArchive.self, from: data),
+                       let body = ChameleonBody(archive: archive), let entity = makeChameleon(ghost, paint: paint, body: body) {
+                        modelGhosts.insert(ghost.id)
+                        place(entity, for: ghost.id)
+                    }
+                } else { loadModel(for: ghost, from: url) }
             }
-            if ghostEntities[ghost.id] == nil,
+            // A sprayed chameleon's image is its paint, so it only ever goes on the body.
+            if ghostEntities[ghost.id] == nil, ghost.paintedBody, !ghost.hasModel,
+               let image = images[ghost.id], let entity = makeChameleon(ghost, paint: image) {
+                place(entity, for: ghost.id)
+            }
+            if ghostEntities[ghost.id] == nil, !ghost.paintedBody,
                let image = images[ghost.id],
                let entity = makeGhostEntity(ghost, image: image) {
                 place(entity, for: ghost.id)
@@ -117,37 +162,62 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         ghostEntities[id] = entity
     }
 
-    /// Swaps the flat cutout for the 3D model, scaled to the hider's measured height and
-    /// standing on the floor, with its back on the wall when it was hidden against one.
+    /// Swaps the flat cutout for the 3D model, standing where the hider put it.
     private func loadModel(for ghost: Ghost, from url: URL) {
         guard let floor = simd_float4x4(floats: ghost.floorTransform) else { return }
         loadingModels.insert(ghost.id)
         Task { @MainActor in
             defer { loadingModels.remove(ghost.id) }
             guard let model = try? await Entity(contentsOf: url) else { return }
-            let bounds = model.visualBounds(relativeTo: nil)
-            let scale = ghost.height / max(bounds.extents.y, 0.01)
-            model.scale = SIMD3(repeating: scale)
-            // Feet on the floor, centered left-right; back on the wall (just in front of the wall's
-            // invisible blocker) or centered on the spot.
-            let back = ghost.flushBack ? -bounds.min.z * scale + 0.015 : -bounds.center.z * scale
-            model.position = SIMD3(-bounds.center.x * scale, -bounds.min.y * scale, back)
-
-            let size = bounds.extents * scale
-            let container = Entity()
+            let container = Self.stand(model, floor: floor, height: ghost.height, flushBack: ghost.flushBack)
             container.name = ghost.id.uuidString
-            container.transform = Transform(matrix: floor)
-            container.addChild(model)
-            container.components.set(CollisionComponent(shapes: [
-                ShapeResource.generateBox(size: size)
-                    .offsetBy(translation: SIMD3(0, size.y / 2, ghost.flushBack ? size.z / 2 + 0.015 : 0)),
-            ]))
             // The ghost may have left the scene (retaken photo, new round) while this loaded.
             guard shownGhosts.contains(ghost.id) else { return }
             modelGhosts.insert(ghost.id)
             place(container, for: ghost.id)
             if foundGhosts.contains(ghost.id) { markFound(container, height: ghost.height) }
         }
+    }
+
+    /// A hider's chameleon in its pose, wearing their spray paint.
+    private func makeChameleon(_ ghost: Ghost, paint: Data, body: ChameleonBody? = ChameleonBody.shared) -> Entity? {
+        guard let floor = simd_float4x4(floats: ghost.floorTransform), let body,
+              let pose = body.index(of: ghost.pose), let cgImage = UIImage(data: paint)?.cgImage,
+              let texture = try? TextureResource(image: cgImage, options: .init(semantic: .color)),
+              let model = try? body.entity(pose, paint: texture) else { return nil }
+        let container = Self.stand(model, floor: floor, height: ghost.height, flushBack: ghost.flushBack)
+        container.name = ghost.id.uuidString
+        return container
+    }
+
+    /// Shows a chameleon at its spot before it's hidden, while it's being painted.
+    func addPreview(_ model: Entity, placement: GhostPlacement) -> Entity {
+        model.removeFromParent()
+        model.transform = .identity
+        let container = Self.stand(model, floor: placement.floorTransform, height: placement.height, flushBack: placement.flushBack)
+        houseAnchor.addChild(container)
+        return container
+    }
+
+    /// The model scaled to `height`, with its feet on the floor, centered left-right; its back on
+    /// the wall (just in front of the wall's invisible blocker) or centered on the spot.
+    private static func stand(_ model: Entity, floor: simd_float4x4, height: Float, flushBack: Bool) -> Entity {
+        let bounds = model.visualBounds(relativeTo: nil)
+        // The 3D editor normalizes every character to 1.75 m standing, so a crouch stays a crouch.
+        let scale = height / 1.75
+        model.scale = SIMD3(repeating: scale)
+        let back = flushBack ? -bounds.min.z * scale + 0.015 : -bounds.center.z * scale
+        model.position = SIMD3(-bounds.center.x * scale, -bounds.min.y * scale, back)
+
+        let size = bounds.extents * scale
+        let container = Entity()
+        container.transform = Transform(matrix: floor)
+        container.addChild(model)
+        container.components.set(CollisionComponent(shapes: [
+            ShapeResource.generateBox(size: size)
+                .offsetBy(translation: SIMD3(0, size.y / 2, flushBack ? size.z / 2 + 0.015 : 0)),
+        ]))
+        return container
     }
 
     private func makeGhostEntity(_ ghost: Ghost, image: Data) -> Entity? {
@@ -191,6 +261,10 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     }
 
     @objc private func tapped(_ gesture: UITapGestureRecognizer) {
+        if let onTapPlace {
+            onTapPlace(gesture.location(in: arView))
+            return
+        }
         var entity = arView.entity(at: gesture.location(in: arView))
         while let current = entity {
             if let id = UUID(uuidString: current.name), ghostEntities[id] != nil {
@@ -217,6 +291,7 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
             houseAnchor.addChild(box)
         }
         walls = structure.walls.map { GhostCapture.Wall(transform: $0.transform, width: $0.dimensions.x) }
+        obstacles = RoomObstacles(structure)
         floorY = structure.floors.map { $0.transform.columns.3.y }.min()
     }
 

@@ -1,6 +1,26 @@
 import XCTest
 
 final class RallyUITests: XCTestCase {
+    @MainActor func testFirstLaunchCharacterSetupDoesNotSpendCreditsBeforeCapture() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "--test-character-setup", "-personalCharacterID", "missing-test-character"]
+        app.launch()
+        if app.buttons["scanCharacterSetupButton"].waitForExistence(timeout: 8) {
+            XCTAssertTrue(app.buttons["importCharacterSetupButton"].exists)
+            XCTAssertFalse(app.buttons["studioTab"].exists)
+            XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'API credits'")).firstMatch.exists)
+            app.buttons["3D server"].tap()
+            XCTAssertTrue(app.textFields["3D server address"].exists)
+            XCTAssertTrue(app.secureTextFields["3D server access token"].exists)
+            let attachment = XCTAttachment(screenshot: app.screenshot())
+            attachment.name = "One-time scan and auto-rig setup"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        } else {
+            XCTAssertTrue(app.buttons["studioTab"].waitForExistence(timeout: 40), "An existing rigged character should be prepared and reused without asking for a new paid scan.")
+        }
+    }
+
     @MainActor func testGeneratedHumanWheelPaintingAndSave() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]

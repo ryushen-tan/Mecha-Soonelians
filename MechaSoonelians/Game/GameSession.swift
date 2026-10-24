@@ -30,6 +30,9 @@ final class GameSession: NSObject, ObservableObject {
     private var browser: MCNearbyServiceBrowser?
     private var hostPeer: MCPeerID?
     private var playerForPeer: [MCPeerID: UUID] = [:]
+    /// Host: which player each ghost model came from. The model may arrive before its ghost, so the
+    /// first sender claims the ID and nobody else can replace it.
+    private var modelOwner: [UUID: UUID] = [:]
     private var timer: Timer?
     private var progressObservations: [NSKeyValueObservation] = []
 
@@ -97,11 +100,12 @@ final class GameSession: NSObject, ObservableObject {
     func placeGhost(_ ghost: Ghost, image: Data, model: URL? = nil) {
         if let model {
             if isHost {
+                modelOwner[ghost.id] = me.id
                 if let stored = storeGhostModel(ghost.id, from: model, move: false) {
                     sendGhostModel(ghost.id, at: stored, to: session.connectedPeers)
                 }
             } else if let hostPeer {
-                session.sendResource(at: model, withName: Self.resourceName(for: ghost.id), toPeer: hostPeer, withCompletionHandler: nil)
+                session.sendResource(at: model, withName: Self.resourceName(for: ghost.id, extensionName: model.pathExtension), toPeer: hostPeer, withCompletionHandler: nil)
             }
         }
         send(.placeGhost(ghost, image))
@@ -134,6 +138,7 @@ final class GameSession: NSObject, ObservableObject {
         state.ghosts = []
         ghostImages = [:]
         ghostModels = [:]
+        modelOwner = [:]
         state.phase = .hiding
         state.secondsLeft = state.hideSeconds
         broadcastState()
@@ -201,7 +206,11 @@ final class GameSession: NSObject, ObservableObject {
             broadcastState()
 
         case let .placeGhost(ghost, image):
-            guard state.phase == .hiding else { return }
+            // A player can only place their own ghost, under an ID whose model (if any) they sent.
+            let sender = peer.flatMap { playerForPeer[$0] } ?? me.id
+            guard state.phase == .hiding, ghost.ownerID == sender,
+                  modelOwner[ghost.id].map({ $0 == sender }) ?? true,
+                  !state.ghosts.contains(where: { $0.id == ghost.id && $0.ownerID != sender }) else { return }
             state.ghosts.removeAll { $0.ownerID == ghost.ownerID }
             state.ghosts.append(ghost)
             ghostImages[ghost.id] = image
@@ -255,23 +264,31 @@ final class GameSession: NSObject, ObservableObject {
 
     // MARK: Ghost models
 
-    private static func resourceName(for ghostID: UUID) -> String { "ghost-\(ghostID.uuidString).usdz" }
+    private static func resourceName(for ghostID: UUID, extensionName: String) -> String { "ghost-\(ghostID.uuidString).\(extensionName)" }
 
     private static func ghostID(fromResourceName name: String) -> UUID? {
-        guard name.hasPrefix("ghost-"), name.hasSuffix(".usdz") else { return nil }
-        return UUID(uuidString: String(name.dropFirst(6).dropLast(5)))
+        guard name.hasPrefix("ghost-"), ["usdz", "body"].contains((name as NSString).pathExtension) else { return nil }
+        return UUID(uuidString: String((name as NSString).deletingPathExtension.dropFirst(6)))
     }
 
     private func sendGhostModel(_ id: UUID, at url: URL, to peers: [MCPeerID]) {
         for peer in peers {
-            session.sendResource(at: url, withName: Self.resourceName(for: id), toPeer: peer, withCompletionHandler: nil)
+            session.sendResource(at: url, withName: Self.resourceName(for: id, extensionName: url.pathExtension), toPeer: peer, withCompletionHandler: nil)
         }
     }
 
     /// Keeps a model under a name built from its ghost's ID, never the sender's file name.
     @discardableResult
-    private func storeGhostModel(_ id: UUID, from url: URL, move: Bool) -> URL? {
-        let destination = Self.ghostModelsDir.appendingPathComponent("\(id.uuidString).usdz")
+    private func storeGhostModel(_ id: UUID, from url: URL, move: Bool, extensionName: String? = nil) -> URL? {
+        let format = extensionName ?? url.pathExtension
+        guard ["usdz", "body"].contains(format),
+              let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+              size > 0, size <= 100 * 1024 * 1024 else { return nil }
+        if format == "body" {
+            guard let archive = try? JSONDecoder().decode(CharacterBodyArchive.self, from: Data(contentsOf: url)),
+                  archive.info.poses.count == 1, archive.isValid else { return nil }
+        }
+        let destination = Self.ghostModelsDir.appendingPathComponent("\(id.uuidString).\(format)")
         try? FileManager.default.removeItem(at: destination)
         do {
             if move {
@@ -361,8 +378,17 @@ extension GameSession: MCSessionDelegate {
             defer { if let staged { try? FileManager.default.removeItem(at: staged) } }
             if let id = Self.ghostID(fromResourceName: resourceName) {
                 // Hiders send 3D ghosts to the host, which passes them on to everyone else.
-                guard error == nil, let staged, isHost ? playerForPeer[peerID] != nil : peerID == hostPeer,
-                      let stored = storeGhostModel(id, from: staged, move: true) else { return }
+                guard error == nil, let staged else { return }
+                if isHost {
+                    // Only the ghost's owner may send its model.
+                    guard let sender = playerForPeer[peerID],
+                          state.ghosts.first(where: { $0.id == id }).map({ $0.ownerID == sender }) ?? true,
+                          modelOwner[id].map({ $0 == sender }) ?? true else { return }
+                    modelOwner[id] = sender
+                } else {
+                    guard peerID == hostPeer else { return }
+                }
+                guard let stored = storeGhostModel(id, from: staged, move: true, extensionName: (resourceName as NSString).pathExtension) else { return }
                 if isHost {
                     sendGhostModel(id, at: stored, to: session.connectedPeers.filter { $0 != peerID })
                 }

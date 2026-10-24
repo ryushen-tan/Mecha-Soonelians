@@ -6,6 +6,51 @@ import { boneName, HumanoidRig } from './rig.js';
 import { SurfacePainter } from './paint.js';
 import { SurfacePlacement } from './surface-placement.js';
 import { ObjectManipulator, dragPosition, transformPlacement } from './manipulation.js';
+import { bakeCharacterBody } from './character-body.js';
+
+test('personal body baking packs material seams into one atlas without changing the source rig', () => {
+  const character = new THREE.Group(), bones = [];
+  const add = (parent, name, position) => {
+    const bone = new THREE.Bone(); bone.name = 'mixamorig' + name; bone.position.fromArray(position);
+    parent.add(bone); bones.push(bone); return bone;
+  };
+  const hips = add(character, 'Hips', [0, 1, 0]);
+  const spine = add(hips, 'Spine', [0, 0.2, 0]);
+  add(spine, 'LeftArm', [-0.2, 0.2, 0]); add(spine, 'RightArm', [0.2, 0.2, 0]);
+  add(hips, 'LeftUpLeg', [-0.1, 0, 0]); add(hips, 'RightUpLeg', [0.1, 0, 0]);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute([-0.2, 0, 0, 0.2, 0, 0, 0.2, 1.75, 0, -0.2, 1.75, 0], 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+  geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(16), 4));
+  geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], 4));
+  geometry.setIndex([0, 1, 2, 0, 2, 3]); geometry.addGroup(0, 3, 0); geometry.addGroup(3, 3, 1);
+  const mesh = new THREE.SkinnedMesh(geometry, [new THREE.MeshBasicMaterial(), new THREE.MeshBasicMaterial()]);
+  character.add(mesh); character.updateMatrixWorld(true); mesh.bind(new THREE.Skeleton(bones));
+  const rig = new HumanoidRig(character), draws = [];
+  const states = [0, 1].map(index => {
+    const texture = new THREE.Texture(); texture.flipY = false;
+    return { canvas: { index }, texture };
+  });
+  const previousDocument = globalThis.document;
+  globalThis.document = { createElement: () => ({ getContext: () => ({ drawImage: (...args) => draws.push(args) }), toDataURL: () => 'data:image/png;base64,dGVzdA==' }) };
+  try {
+    const before = bones.map(bone => bone.quaternion.toArray());
+    const baked = bakeCharacterBody(character, rig, { byMesh: new Map([[mesh, states]]) });
+    assert.deepEqual(bones.map(bone => bone.quaternion.toArray()), before);
+    assert.equal(baked.info.poses.length, 15);
+    assert.equal(baked.info.vertexCount, 6);
+    assert.equal(baked.info.triangleCount, 2);
+    assert.equal(baked.data.byteLength, 6 * 8 + 2 * 12 + 15 * 6 * 12);
+    assert.equal(draws.length, 2);
+    const uv = new Float32Array(baked.data.buffer, 0, 12);
+    assert.ok(uv[0] < 0.5 && uv[6] > 0.5, 'Shared vertices need independent UVs at material seams.');
+    assert.ok(uv[1] > 0.99, 'The atlas must export upward-pointing RealityKit texture coordinates.');
+  } finally { globalThis.document = previousDocument; }
+});
+
+test('personal body baking rejects an unrigged mesh instead of silently using the white body', () => {
+  assert.throws(() => bakeCharacterBody(new THREE.Group(), { canRetarget: false }, {}), /compatible humanoid rig/);
+});
 
 test('direct dragging maps the pointer to a wall and stays stable at a floor horizon', () => {
   const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 100);

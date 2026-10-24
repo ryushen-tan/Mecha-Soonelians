@@ -62,12 +62,13 @@ struct PoseWheel: View {
     @Binding var page: Int
     @Binding var highlighted: String?
     let current: String
+    var pages = CharacterPoseChoice.pages
     let onSelect: (String) -> Void
 
     var body: some View {
         GeometryReader { geometry in
             let side = min(geometry.size.width, geometry.size.height)
-            let choices = CharacterPoseChoice.pages[page]
+            let choices = pages[min(page, pages.count - 1)]
             ZStack {
                 ForEach(Array(choices.enumerated()), id: \.element.id) { index, choice in
                     let angle = Double(index) * .pi / 4 - .pi / 2
@@ -88,10 +89,10 @@ struct PoseWheel: View {
                     .accessibilityLabel("Pose: \(choice.name)")
                     .accessibilityIdentifier("poseChoice_\(choice.id)")
                 }
-                Button { page = (page + 1) % CharacterPoseChoice.pages.count; highlighted = nil } label: {
+                Button { page = (page + 1) % pages.count; highlighted = nil } label: {
                     VStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.2.circlepath")
-                        Text("\(page + 1) / 2").font(RallyStyle.font(11, .bold))
+                        Text("\(page + 1) / \(pages.count)").font(RallyStyle.font(11, .bold))
                     }
                     .frame(width: side * 0.29, height: side * 0.29)
                     .background(RallyStyle.lime, in: Circle())
@@ -100,9 +101,9 @@ struct PoseWheel: View {
             }
             .frame(width: side, height: side)
             .simultaneousGesture(DragGesture(minimumDistance: 8)
-                .onChanged { value in highlighted = Self.choice(at: value.location, side: side, page: page) }
+                .onChanged { value in highlighted = Self.choice(at: value.location, side: side, page: page, pages: pages) }
                 .onEnded { value in
-                    if let selected = Self.choice(at: value.location, side: side, page: page) { onSelect(selected) }
+                    if let selected = Self.choice(at: value.location, side: side, page: page, pages: pages) { onSelect(selected) }
                     highlighted = nil
                 })
         }
@@ -111,14 +112,16 @@ struct PoseWheel: View {
         .shadow(color: RallyStyle.ink.opacity(0.2), radius: 18, y: 6)
     }
 
-    static func choice(at point: CGPoint, side: CGFloat, page: Int) -> String? {
+    static func choice(at point: CGPoint, side: CGFloat, page: Int, pages: [[CharacterPoseChoice]] = CharacterPoseChoice.pages) -> String? {
         let horizontal = point.x - side / 2
         let vertical = point.y - side / 2
         let distance = hypot(horizontal, vertical)
         guard distance > side * 0.17, distance < side * 0.56 else { return nil }
         let angle = atan2(vertical, horizontal) + .pi / 2 + .pi / 8
         let normalized = (angle + 2 * .pi).truncatingRemainder(dividingBy: 2 * .pi)
-        return CharacterPoseChoice.pages[page][Int(normalized / (.pi / 4)) % 8].id
+        let choices = pages[min(page, pages.count - 1)]
+        let slot = Int(normalized / (.pi / 4)) % 8
+        return slot < choices.count ? choices[slot].id : nil
     }
 }
 

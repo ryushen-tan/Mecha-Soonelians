@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import Security
 
 struct CharacterJob: Codable {
     let id: String
@@ -25,6 +26,17 @@ struct CharacterAsset: Codable, Identifiable {
     static var root: URL { HouseStore.documents.appendingPathComponent("Characters3D", isDirectory: true) }
     var directory: URL { Self.root.appendingPathComponent(id, isDirectory: true) }
     var hasModel: Bool { FileManager.default.fileExists(atPath: directory.appendingPathComponent("source.glb").path) }
+    var hasValidModel: Bool {
+        let url = directory.appendingPathComponent("source.glb")
+        guard let file = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? file.close() }
+        guard let header = try? file.read(upToCount: 12), header.count == 12, header.prefix(4) == Data("glTF".utf8),
+              let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, (20...(100 * 1024 * 1024)).contains(size) else { return false }
+        return header.withUnsafeBytes { bytes in
+            UInt32(littleEndian: bytes.loadUnaligned(fromByteOffset: 4, as: UInt32.self)) == 2 &&
+                UInt32(littleEndian: bytes.loadUnaligned(fromByteOffset: 8, as: UInt32.self)) == size
+        }
+    }
     var preview: UIImage? {
         UIImage(contentsOfFile: directory.appendingPathComponent("preview.png").path)
             ?? UIImage(contentsOfFile: directory.appendingPathComponent("input.png").path)
@@ -49,8 +61,9 @@ struct CharacterAsset: Codable, Identifiable {
 struct CharacterAPI {
     let baseURL: URL
     let accessToken: String
+    let session: URLSession
 
-    init(address: String, accessToken: String) throws {
+    init(address: String, accessToken: String, session: URLSession = .shared) throws {
         guard let components = URLComponents(string: address.trimmingCharacters(in: .whitespacesAndNewlines)),
               let host = components.host, components.user == nil, components.password == nil,
               components.query == nil, components.fragment == nil,
@@ -67,6 +80,7 @@ struct CharacterAPI {
         }
         baseURL = url
         self.accessToken = accessToken
+        self.session = session
     }
 
     func request(_ path: String, png: Data? = nil, id: String? = nil, headers: [String: String] = [:]) async throws -> Data {
@@ -81,7 +95,7 @@ struct CharacterAPI {
             request.setValue("image/png", forHTTPHeaderField: "Content-Type")
             request.setValue(id, forHTTPHeaderField: "X-Request-ID")
         }
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw CharacterFailure("Invalid 3D server response.") }
         guard (200..<300).contains(response.statusCode) else {
             struct Failure: Decodable { let error: String }
@@ -142,9 +156,11 @@ final class Character3DModel: ObservableObject {
     weak var webView: WKWebView?
     var placementRevision = 0
     private var work: Task<Void, Never>?
+    private let session: URLSession
 
-    init(asset: CharacterAsset? = nil) {
+    init(asset: CharacterAsset? = nil, session: URLSession = .shared) {
         self.asset = asset
+        self.session = session
         if let asset {
             angles = asset.angles
             yaw = asset.yaw
@@ -160,7 +176,7 @@ final class Character3DModel: ObservableObject {
         }
     }
 
-    func generate(png: Data, address: String, token: String, attribution: String?) {
+    func generate(png: Data, address: String, token: String, attribution: String?, asProfile: Bool = false) {
         guard !busy, asset == nil else { return }
         do {
             _ = try CharacterAPI(address: address, accessToken: token)
@@ -169,6 +185,7 @@ final class Character3DModel: ObservableObject {
             try png.write(to: asset.directory.appendingPathComponent("input.png"), options: .atomic)
             if let attribution { try Data(attribution.utf8).write(to: asset.directory.appendingPathComponent("ATTRIBUTION.txt")) }
             self.asset = asset
+            if asProfile { CharacterProfile.remember(asset) }
             resume(token: token)
         } catch { self.error = error.localizedDescription }
     }
@@ -180,9 +197,9 @@ final class Character3DModel: ObservableObject {
         work = Task {
             defer { busy = false }
             do {
-                let api = try CharacterAPI(address: asset.server, accessToken: token)
+                let api = try CharacterAPI(address: asset.server, accessToken: token, session: session)
                 let input = try Data(contentsOf: asset.directory.appendingPathComponent("input.png"))
-                let initial = try await api.request("characters", png: input, id: asset.id)
+                let initial = try await api.request("characters", png: input, id: asset.id, headers: ["X-Rig": "1"])
                 var job = try JSONDecoder().decode(CharacterJob.self, from: initial)
                 while true {
                     try Task.checkCancellation()
@@ -315,5 +332,118 @@ final class Character3DModel: ObservableObject {
             status = "Saved 3D mesh and pose. Reopen it from Studio."
             onExport?(model, boxes)
         } catch { self.error = error.localizedDescription }
+    }
+}
+
+struct CharacterBodyArchive: Codable {
+    struct Pose: Codable {
+        let id: String
+        let name: String
+        let icon: String
+    }
+    struct Info: Codable {
+        let vertexCount: Int
+        let triangleCount: Int
+        let poses: [Pose]
+    }
+    let info: Info
+    let data: Data
+
+    var isValid: Bool {
+        let vertices = info.vertexCount, triangles = info.triangleCount
+        guard (1...150000).contains(vertices), (1...100000).contains(triangles),
+              (1...16).contains(info.poses.count), Set(info.poses.map(\.id)).count == info.poses.count,
+              data.count == vertices * 8 + triangles * 12 + info.poses.count * vertices * 12 else { return false }
+        let indexStart = vertices * 8, positionStart = indexStart + triangles * 12
+        return data.withUnsafeBytes { bytes in
+            for offset in stride(from: 0, to: indexStart, by: 4) {
+                if !Float(bitPattern: UInt32(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: UInt32.self))).isFinite { return false }
+            }
+            for offset in stride(from: indexStart, to: positionStart, by: 4) {
+                if UInt32(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: UInt32.self)) >= vertices { return false }
+            }
+            for offset in stride(from: positionStart, to: data.count, by: 4) {
+                let value = Float(bitPattern: UInt32(littleEndian: bytes.loadUnaligned(fromByteOffset: offset, as: UInt32.self)))
+                if !value.isFinite || abs(value) > 100 { return false }
+            }
+            return true
+        }
+    }
+
+    static func load(from directory: URL) -> Self? {
+        guard let info = try? JSONDecoder().decode(Info.self, from: Data(contentsOf: directory.appendingPathComponent("body.json"))),
+              let data = try? Data(contentsOf: directory.appendingPathComponent("body.bin")), data.count <= 40 * 1024 * 1024 else { return nil }
+        let archive = Self(info: info, data: data)
+        return archive.isValid ? archive : nil
+    }
+}
+
+enum CharacterProfile {
+    static let preferenceKey = "personalCharacterID"
+
+    static func candidate(assets: [CharacterAsset] = CharacterAsset.all(), defaults: UserDefaults = .standard) -> CharacterAsset? {
+        if let id = defaults.string(forKey: preferenceKey), let saved = assets.first(where: { $0.id == id }) { return saved }
+        return assets.first { $0.rigged && $0.hasModel && $0.attribution == nil }
+    }
+
+    static var ready: CharacterAsset? {
+        guard let asset = candidate(), asset.rigged, asset.hasValidModel,
+              CharacterBodyArchive.load(from: asset.directory) != nil,
+              UIImage(contentsOfFile: asset.directory.appendingPathComponent("body-texture.png").path) != nil else { return nil }
+        return asset
+    }
+
+    static func remember(_ asset: CharacterAsset, defaults: UserDefaults = .standard) {
+        defaults.set(asset.id, forKey: preferenceKey)
+    }
+
+    static func saveBody(_ result: [String: Any], for asset: CharacterAsset) throws {
+        guard asset.rigged, let object = result["info"], let encoded = result["data"] as? String,
+              let data = Data(base64Encoded: encoded), let texture = result["texture"] as? String,
+              let png = Data(base64Encoded: texture), UIImage(data: png) != nil else {
+            throw CharacterFailure("The rigged character could not be prepared. Try loading it again.")
+        }
+        let info = try JSONDecoder().decode(CharacterBodyArchive.Info.self, from: JSONSerialization.data(withJSONObject: object))
+        guard CharacterBodyArchive(info: info, data: data).isValid else { throw CharacterFailure("The character contains unsupported body geometry.") }
+        try data.write(to: asset.directory.appendingPathComponent("body.bin"), options: .atomic)
+        try JSONEncoder().encode(info).write(to: asset.directory.appendingPathComponent("body.json"), options: .atomic)
+        try png.write(to: asset.directory.appendingPathComponent("body-texture.png"), options: .atomic)
+        remember(asset)
+    }
+}
+
+struct CharacterServiceSettings {
+    var address: String
+    var token: String
+    private static let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: "ghostModelServerToken"]
+
+    static var saved: Self {
+        let arguments = ProcessInfo.processInfo.arguments
+        var request = query
+        request[kSecReturnData as String] = true
+        request[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        SecItemCopyMatching(request as CFDictionary, &result)
+        let token = (result as? Data).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        var address = UserDefaults.standard.string(forKey: "tripoServer") ?? UserDefaults.standard.string(forKey: "ghostModelServer") ?? ""
+        #if targetEnvironment(simulator)
+        if address.isEmpty { address = "http://localhost:3001" }
+        #endif
+        var settings = Self(address: address, token: token)
+        if let index = arguments.firstIndex(of: "--model-server"), arguments.indices.contains(index + 1) { settings.address = arguments[index + 1] }
+        if let index = arguments.firstIndex(of: "--model-token"), arguments.indices.contains(index + 1) { settings.token = arguments[index + 1] }
+        return settings
+    }
+
+    func save() throws {
+        _ = try CharacterAPI(address: address, accessToken: token)
+        UserDefaults.standard.set(address.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "tripoServer")
+        UserDefaults.standard.set(address.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "ghostModelServer")
+        SecItemDelete(Self.query as CFDictionary)
+        guard !token.isEmpty else { return }
+        var item = Self.query
+        item[kSecValueData as String] = Data(token.utf8)
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        guard SecItemAdd(item as CFDictionary, nil) == errSecSuccess else { throw CharacterFailure("Couldn't securely save the server access token.") }
     }
 }

@@ -17,8 +17,8 @@ Requires Xcode 26 or later (for the glass API); supports iOS 18 and later. iOS 2
    ```
 
 2. Open `Rally.xcodeproj`, choose the **Rally** scheme, and select an iPhone Simulator or connected iPhone. For a physical iPhone, select your development team under Signing & Capabilities.
-3. Run the app. Simulator defaults to `http://localhost:3000`. On a physical iPhone, open **Settings → Apps → Rally → Server address** and enter `http://<your-Mac-Wi-Fi-IP>:3000`. Everyone needs the same server. A failed connection also exposes **Connection settings** in Rally.
-4. Choose **Create**, enter a nickname, choose an avatar, and create the room. On another device, choose **Join**, enter that room's code, and complete your profile. **Studio** also works without joining a lobby.
+3. Start the 3D service with `cd server && npm run start:3d` and the root `.env` containing `TRIPO_API_KEY`. On first launch, complete **Scan & create my 3D self** (or choose a full-body photo). Setup automatically cuts out the person, generates and rigs the Tripo model, and saves it. See **First-launch character setup** below for iPhone connection settings.
+4. Once setup finishes, Simulator's lobby defaults to `http://localhost:3000`. On a physical iPhone, open **Settings → Apps → Rally → Server address** and enter `http://<your-Mac-Wi-Fi-IP>:3000`. Everyone needs the same lobby server. Choose **Create** or **Join**, enter a nickname and choose an avatar. **Studio** also works without joining a lobby.
 
 The host can copy/share the code, lock the room, remove players, and start once at least two players are present and everyone is ready. Guests can toggle readiness and leave. Ending a room returns everyone to Join. A started session is a shared status screen; quiz questions and gameplay are outside this lobby app's scope.
 
@@ -35,6 +35,19 @@ Invite links use `rally://join/123456`. They fill the Join screen with the code;
 
 ## Tripo 3D characters
 
+### First-launch character setup
+
+Both app targets now require a personal rigged character before opening the home/lobby screen. The `white-3d` AR placement/spray flow is retained in **MechaSoonelians**, but hiders use their own scanned Tripo body instead of the bundled white mannequin.
+
+- Setup explains the upload and credit use before opening the camera/photo picker. A single complete person is cropped and sent automatically, explicitly requesting humanoid rigging. Multiple people require choosing one. Missing hands/feet or a seated capture blocks automatic submission and asks for a clearer standing photo.
+- Open **3D server** to configure the service. Simulator defaults to `http://localhost:3001`. A physical iPhone needs `http://<Mac-Wi-Fi-IP>:3001`, with `TRIPO_HOST=0.0.0.0` and `TRIPO_PROXY_TOKEN` configured on the Mac. The proxy token is stored in the device Keychain, not the Tripo API key. Launch arguments `--model-server <address> --model-token <proxy-token>` also work.
+- The personal character ID and input are saved **before** submitting. Relaunching resumes the same UUID/job, not a fresh paid generation. A failed rig is kept for inspection but does not count as a playable character; retaking is explicit and warns that it starts a new paid job. No automatic paid retries are made.
+- Existing personal rigged source models are reused offline. Setup prepares a shared texture atlas and 15 baked poses from the actual skinned mesh without changing the saved GLB. Future launches skip setup when the saved rigged model, pose geometry and texture are present. Attributed demo/sample assets are not automatically chosen as your identity.
+- The AR editor starts with that model's texture, keeps paint aligned across pose changes, and transfers the hider's actual posed geometry and paint to peers. A seeker does not substitute their own body or the white mannequin. The original rigged GLB remains available in Studio for joint editing.
+- Saved identity is local to each app/device sandbox, not an account or cloud backup. Camera capture, LiDAR, AR alignment and multi-iPhone transfer still need physical-device testing.
+
+### Additional Studio characters
+
 1. Keep `TRIPO_API_KEY=...` in the root `.env` (the existing `TRIPO_AI_API_KEY` spelling also works). Never put the key in Swift, a plist, a client token field, or Git.
 2. Run `cd server && npm run start:3d`. This starts a separate, localhost-only service on port **3001** and loads the root `.env`. Leave it running while generating. The lobby still uses port 3000.
 3. In **Studio → Make a player**, select a person, then **Make a 3D character**. The input is a padded PNG of that person’s original transparent cutout, not the full room or the distorted 2D pose.
@@ -47,7 +60,7 @@ The original mesh, exported mesh, source cutout, attribution, pose and generatio
 
 The Mac service keeps job metadata and models in ignored `artifacts/tripo/`. It uses at most two active jobs and ten new jobs per rolling day by default. It persists Tripo task IDs to recover polling after restart. It does not automatically retry paid task creation. Requests from browsers are rejected; model URLs come only from Tripo, are restricted to its HTTPS domains, and never receive the API key. The bundled viewer makes no CDN requests and rejects external GLB dependencies.
 
-For a physical iPhone on trusted Wi-Fi, set a separate long random `TRIPO_PROXY_TOKEN` in `.env`, start with `TRIPO_HOST=0.0.0.0`, then enter `http://<Mac Wi-Fi IP>:3001` and that proxy token in the 3D editor. The token is kept in memory only. Use HTTPS for anything beyond isolated local development. This single-user proxy is **not** a production multi-user service; add per-user authentication, quotas and private object storage before deployment.
+For a physical iPhone on trusted Wi-Fi, set a separate long random `TRIPO_PROXY_TOKEN` in `.env`, start with `TRIPO_HOST=0.0.0.0`, then enter `http://<Mac Wi-Fi IP>:3001` and that proxy token in setup. Setup saves the proxy token in the Keychain; additional Studio characters reuse it. Use HTTPS for anything beyond isolated local development. This single-user proxy is **not** a production multi-user service; add per-user authentication, quotas and private object storage before deployment.
 
 A generated back side is an AI approximation, not measured body geometry. The seated Kinect sample can produce fused surfaces that stretch badly; cropped feet can remain missing. The capture flow warns before using credits when it cannot verify hands/feet or detects foreshortened legs. Use a full-body standing A/T-pose with separated limbs. Pose changes preserve bone lengths; sliders constrain rotations and the editor warns about high mesh stretch, but this is not full-body IK, a self-collision solver, or a guarantee of lifelike skinning. Generated scale is not calibrated to RoomPlan or LiDAR. Rounded/blocky forms are explicit alternative disguises, not reconstructed anatomy.
 

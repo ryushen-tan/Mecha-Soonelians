@@ -3,7 +3,141 @@ import SwiftUI
 import WebKit
 @testable import Rally
 
+private final class CharacterSetupMockProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "character-setup-test.invalid" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func stopLoading() {}
+
+    override func startLoading() {
+        do {
+            let url = try XCTUnwrap(request.url)
+            let data: Data
+            if request.httpMethod == "POST" {
+                XCTAssertEqual(request.value(forHTTPHeaderField: "X-Rig"), "1")
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer proxy-test-token")
+                let id = try XCTUnwrap(request.value(forHTTPHeaderField: "X-Request-ID"))
+                data = try JSONSerialization.data(withJSONObject: ["id": id, "status": "ready", "stage": "ready", "progress": 100, "rigged": true, "credits": 0])
+            } else {
+                XCTAssertTrue(url.path.hasSuffix("/model"))
+                let fixture = try XCTUnwrap(Bundle(for: Character3DTests.self).url(forResource: "test-rig", withExtension: "glb"))
+                data = try Data(contentsOf: fixture)
+            }
+            let response = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch { client?.urlProtocol(self, didFailWithError: error) }
+    }
+}
+
 final class Character3DTests: XCTestCase {
+    @MainActor func testPersonalCaptureAutomaticallyRequestsRiggingAndPersistsForRelaunch() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CharacterSetupMockProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let previous = UserDefaults.standard.string(forKey: CharacterProfile.preferenceKey)
+        let model = Character3DModel(session: session)
+        let png = try XCTUnwrap(UIGraphicsImageRenderer(size: CGSize(width: 10, height: 20)).image { _ in }.pngData())
+        model.generate(png: png, address: "https://character-setup-test.invalid", token: "proxy-test-token", attribution: nil, asProfile: true)
+        let asset = try XCTUnwrap(model.asset)
+        defer {
+            UserDefaults.standard.set(previous, forKey: CharacterProfile.preferenceKey)
+            try? FileManager.default.removeItem(at: asset.directory)
+        }
+        XCTAssertEqual(UserDefaults.standard.string(forKey: CharacterProfile.preferenceKey), asset.id)
+        for _ in 0..<100 where model.busy { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertNil(model.error)
+        XCTAssertNotNil(model.modelData)
+        XCTAssertEqual(model.asset?.rigged, true)
+        XCTAssertEqual(try Data(contentsOf: asset.directory.appendingPathComponent("input.png")), png)
+        let receipt = try JSONDecoder().decode(CharacterJob.self, from: Data(contentsOf: asset.directory.appendingPathComponent("generation.json")))
+        XCTAssertTrue(receipt.rigged)
+        let loaded = try XCTUnwrap(CharacterAsset.all().first { $0.id == asset.id })
+        XCTAssertTrue(loaded.rigged)
+        let reopened = Character3DModel(asset: loaded, session: session)
+        XCTAssertNotNil(reopened.modelData)
+        XCTAssertFalse(reopened.busy)
+    }
+
+    func testPersonalCharacterSelectionAndBodyValidation() throws {
+        let suite = "character-profile-tests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let pending = CharacterAsset(id: UUID().uuidString, createdAt: Date(), server: "https://example.invalid")
+        CharacterProfile.remember(pending, defaults: defaults)
+        XCTAssertEqual(CharacterProfile.candidate(assets: [pending], defaults: defaults)?.id, pending.id)
+        XCTAssertNil(CharacterProfile.candidate(assets: [], defaults: defaults))
+        let pose = CharacterBodyArchive.Pose(id: "stand", name: "Stand", icon: "figure.stand")
+        let info = CharacterBodyArchive.Info(vertexCount: 3, triangleCount: 1, poses: [pose])
+        var bytes = Data()
+        for value: Float in [0, 0, 1, 0, 0, 1] { var bits = value.bitPattern.littleEndian; bytes.append(Data(bytes: &bits, count: 4)) }
+        for value: UInt32 in [0, 1, 2] { var bits = value.littleEndian; bytes.append(Data(bytes: &bits, count: 4)) }
+        for value: Float in [0, 0, 0, 1, 0, 0, 0, 1.75, 0] { var bits = value.bitPattern.littleEndian; bytes.append(Data(bytes: &bits, count: 4)) }
+        XCTAssertTrue(CharacterBodyArchive(info: info, data: bytes).isValid)
+        XCTAssertFalse(CharacterBodyArchive(info: info, data: bytes.dropLast()).isValid)
+        var invalidIndex = bytes
+        var index: UInt32 = 3
+        invalidIndex.replaceSubrange(24..<28, with: Data(bytes: &index, count: 4))
+        XCTAssertFalse(CharacterBodyArchive(info: info, data: invalidIndex).isValid)
+        var invalidPosition = bytes
+        var nan = Float.nan.bitPattern
+        invalidPosition.replaceSubrange(36..<40, with: Data(bytes: &nan, count: 4))
+        XCTAssertFalse(CharacterBodyArchive(info: info, data: invalidPosition).isValid)
+        XCTAssertFalse(CharacterBodyArchive(info: .init(vertexCount: Int.max, triangleCount: 1, poses: [pose]), data: bytes).isValid)
+    }
+
+    @MainActor func testPersonalCharacterBakesAllPosesAndReusesSavedModelWithoutNetwork() async throws {
+        let existing = CharacterAsset.all().first { $0.hasModel && $0.rigged }
+        let source = try XCTUnwrap(existing?.directory.appendingPathComponent("source.glb")
+            ?? Bundle.main.url(forResource: "chameleon-base", withExtension: "glb", subdirectory: "CharacterViewer"))
+        let asset = CharacterAsset(id: UUID().uuidString, createdAt: Date(), server: "https://no-network.invalid", rigged: true)
+        let previous = UserDefaults.standard.string(forKey: CharacterProfile.preferenceKey)
+        try asset.save()
+        try FileManager.default.copyItem(at: source, to: asset.directory.appendingPathComponent("source.glb"))
+        defer {
+            UserDefaults.standard.set(previous, forKey: CharacterProfile.preferenceKey)
+            try? FileManager.default.removeItem(at: asset.directory)
+        }
+        let model = Character3DModel(asset: asset)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: CharacterWebView(model: model).frame(width: 420, height: 520))
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        try await waitForViewer(model)
+        let view = try XCTUnwrap(model.webView)
+        let result = try await view.callAsyncJavaScript("""
+            const before = window.characterViewer.diagnostics();
+            const result = window.characterViewer.bakeCharacter();
+            const after = window.characterViewer.diagnostics();
+            return {result, before, after};
+            """, arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+        let before = try XCTUnwrap(result?["before"] as? [String: Any])
+        let after = try XCTUnwrap(result?["after"] as? [String: Any])
+        XCTAssertEqual(before["placementPosition"] as? [Double], after["placementPosition"] as? [Double])
+        XCTAssertEqual(before["placementRotation"] as? [Double], after["placementRotation"] as? [Double])
+        try CharacterProfile.saveBody(try XCTUnwrap(result?["result"] as? [String: Any]), for: asset)
+        let body = try XCTUnwrap(CharacterBodyArchive.load(from: asset.directory))
+        XCTAssertEqual(body.info.poses.count, 15)
+        XCTAssertTrue(body.info.poses.contains { $0.id == "crouch" })
+        XCTAssertTrue(body.info.poses.contains { $0.id == "side" })
+        let start = body.info.vertexCount * 8 + body.info.triangleCount * 12
+        let poseSize = body.info.vertexCount * 12
+        XCTAssertNotEqual(body.data[start..<(start + poseSize)], body.data[(start + poseSize)..<(start + poseSize * 2)])
+        XCTAssertEqual(CharacterProfile.ready?.id, asset.id)
+        let reopened = Character3DModel(asset: try XCTUnwrap(CharacterProfile.ready))
+        XCTAssertEqual(reopened.modelData, model.modelData)
+        XCTAssertFalse(reopened.busy)
+        let sourceURL = asset.directory.appendingPathComponent("source.glb")
+        let sourceData = try Data(contentsOf: sourceURL)
+        try Data("broken model".utf8).write(to: sourceURL)
+        XCTAssertNil(CharacterProfile.ready, "A corrupt model must not skip setup.")
+        try sourceData.write(to: sourceURL)
+        try FileManager.default.removeItem(at: asset.directory.appendingPathComponent("body.bin"))
+        XCTAssertNil(CharacterProfile.ready, "Missing body data must return to setup instead of showing a broken avatar.")
+    }
+
     @MainActor func testDirectMeshDraggingAxisRotationResizeAndSave() async throws {
         guard let existing = CharacterAsset.all().first(where: { $0.hasModel && $0.rigged }) else {
             throw XCTSkip("Direct manipulation uses the existing generated human, without paid jobs.")

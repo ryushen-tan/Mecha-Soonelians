@@ -4,6 +4,51 @@ import RealityKit
 import UIKit
 import Vision
 
+/// Where a ghost goes in the house, however it was made.
+struct GhostPlacement {
+    /// Center of a flat cutout.
+    let transform: simd_float4x4
+    /// Where a 3D ghost stands: on the floor, +Z facing out.
+    let floorTransform: simd_float4x4
+    /// The 3D ghost's back goes against a wall at `floorTransform`.
+    let flushBack: Bool
+    let width: Float
+    let height: Float
+
+    /// A ghost standing at `origin` on the floor and facing `facing`.
+    init(origin: SIMD3<Float>, facing: SIMD3<Float>, onWall: Bool, width: Float, height: Float) {
+        let up = SIMD3<Float>(0, 1, 0)
+        let rotation = simd_quatf(angle: atan2(facing.x, facing.z), axis: up)
+        floorTransform = Transform(rotation: rotation, translation: origin).matrix
+        // A flat ghost on a wall sits just off it so the wall doesn't hide it.
+        transform = Transform(rotation: rotation, translation: origin + up * (height / 2) + (onWall ? facing * 0.02 : .zero)).matrix
+        flushBack = onWall
+        self.width = width
+        self.height = height
+    }
+
+    /// Where the feet are.
+    var origin: SIMD3<Float> { simd_make_float3(floorTransform.columns.3) }
+    /// The way the ghost faces, flat.
+    var facing: SIMD3<Float> { simd_make_float3(floorTransform.columns.2) }
+
+    /// The same ghost slid along the floor by `offset` and turned by `turn` radians.
+    func moved(by offset: SIMD3<Float>, turn: Float) -> GhostPlacement {
+        let facing = simd_quatf(angle: turn, axis: [0, 1, 0]).act(facing)
+        return GhostPlacement(origin: origin + SIMD3(offset.x, 0, offset.z), facing: facing, onWall: flushBack, width: width, height: height)
+    }
+
+    /// The same ghost with its feet at `height` above the house's zero.
+    func raised(to y: Float) -> GhostPlacement {
+        GhostPlacement(origin: SIMD3(origin.x, y, origin.z), facing: facing, onWall: flushBack, width: width, height: height)
+    }
+
+    /// The same ghost at a new size, keeping its proportions.
+    func resized(to newHeight: Float) -> GhostPlacement {
+        GhostPlacement(origin: origin, facing: facing, onWall: flushBack, width: width * newHeight / height, height: newHeight)
+    }
+}
+
 /// A hider's photo, cut out of its background and placed where they stood in the house.
 struct GhostCapture {
     /// The whole photo, upright.
@@ -12,14 +57,8 @@ struct GhostCapture {
     let person: CGImage
     /// Where the person is in the photo, in pixels from the top-left.
     let bounds: CGRect
-    /// Where a flat (2D) ghost goes in house coordinates: its center.
-    let transform: simd_float4x4
-    /// Where a 3D ghost stands: on the floor, +Z facing out. With `flushBack`, the origin is on
-    /// the nearest wall and the ghost's back goes against it.
-    let floorTransform: simd_float4x4
-    let flushBack: Bool
-    let width: Float
-    let height: Float
+    /// Where they stood: on the nearest wall within a metre (back against it), else facing the camera.
+    let placement: GhostPlacement
 
     /// A scanned wall: its plane is the transform's x-y plane, `width` along x.
     struct Wall {
@@ -38,13 +77,15 @@ struct GhostCapture {
         }
     }
 
-    static func make(from frame: ARFrame, floorY: Float, walls: [Wall]) throws -> GhostCapture {
-        let orientation = uprightOrientation(of: frame.camera)
-        let context = CIContext()
-        let upright = CIImage(cvPixelBuffer: frame.capturedImage).oriented(orientation)
-        guard let photo = context.createCGImage(upright, from: upright.extent) else { throw CaptureError.noPerson }
+    /// The current AR camera image, turned upright.
+    static func uprightPhoto(from frame: ARFrame) -> CGImage? {
+        let upright = CIImage(cvPixelBuffer: frame.capturedImage).oriented(uprightOrientation(of: frame.camera))
+        return CIContext().createCGImage(upright, from: upright.extent)
+    }
 
-        // Cut the person out.
+    /// Cuts the most prominent person out of an upright photo. `person` is the photo with
+    /// everything else transparent; `bounds` is their box in pixels from the top-left.
+    static func cutOut(_ photo: CGImage) throws -> (person: CGImage, bounds: CGRect) {
         let request = VNGeneratePersonSegmentationRequest()
         request.qualityLevel = .accurate
         request.outputPixelFormat = kCVPixelFormatType_OneComponent8
@@ -61,9 +102,16 @@ struct GhostCapture {
             kCIInputBackgroundImageKey: CIImage.empty(),
             kCIInputMaskImageKey: fullMask,
         ])
-        guard let person = context.createCGImage(cutout, from: CGRect(x: 0, y: 0, width: photo.width, height: photo.height)) else {
+        guard let person = CIContext().createCGImage(cutout, from: CGRect(x: 0, y: 0, width: photo.width, height: photo.height)) else {
             throw CaptureError.noPerson
         }
+        return (person, bounds)
+    }
+
+    static func make(from frame: ARFrame, floorY: Float, walls: [Wall]) throws -> GhostCapture {
+        let orientation = uprightOrientation(of: frame.camera)
+        guard let photo = uprightPhoto(from: frame) else { throw CaptureError.noPerson }
+        let (person, bounds) = try cutOut(photo)
 
         // Find the feet on the floor, then measure the person on an upright plane through the feet.
         let viewport = CGSize(width: photo.width, height: photo.height)
@@ -104,16 +152,8 @@ struct GhostCapture {
             origin = SIMD3(wall.point.x, feet.y, wall.point.z)
             facing = wall.normal
         }
-        let rotation = simd_quatf(angle: atan2(facing.x, facing.z), axis: up)
-        let floorTransform = Transform(rotation: rotation, translation: origin).matrix
-        // A flat ghost on a wall sits just off it so the wall doesn't hide it.
-        let transform = Transform(
-            rotation: rotation,
-            translation: origin + up * (height / 2) + (wall == nil ? .zero : facing * 0.02)
-        ).matrix
-
-        return GhostCapture(photo: photo, person: person, bounds: bounds, transform: transform,
-                            floorTransform: floorTransform, flushBack: wall != nil, width: width, height: height)
+        let placement = GhostPlacement(origin: origin, facing: facing, onWall: wall != nil, width: width, height: height)
+        return GhostCapture(photo: photo, person: person, bounds: bounds, placement: placement)
     }
 
     /// The person on a transparent background with some margin, the way Tripo likes its input.

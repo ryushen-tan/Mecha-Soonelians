@@ -11,6 +11,8 @@ import { RoomStage } from './room.js';
 import { buildBodyForms } from './forms.js';
 import { SurfacePlacement } from './surface-placement.js';
 import { ObjectManipulator } from './manipulation.js';
+import { bakeOnto } from './chameleon.js';
+import { bakeCharacterBody } from './character-body.js';
 
 const post = (type, value) => window.webkit?.messageHandlers.character.postMessage({ type, value });
 const status = document.getElementById('status');
@@ -682,7 +684,51 @@ window.characterViewer = {
     return { ...rig.report(), manipulation: manipulator.report(), placementRotation: placement.quaternion.toArray(), placementScale: placement.scale.toArray(), cameraPosition: camera.position.toArray(), quality: rig.surfaceQuality(), bounds: { min: box.min.toArray(), max: box.max.toArray() }, paint: painter.checksum(), background: { room: settings.room, wall: paintWallID }, history: painter.history(), clones: stage.clones.length, cloneBounds, remoteOwners: [...remoteGroups.keys()], remoteBounds, cameraDistance: camera.position.distanceTo(controls.target), placementPosition: settings.position, placementRevision, placementLocked: settings.placementLocked ?? false, surface: surfacePlacement.report(placement), placementValid, collision: surfacePlacement.obstruction(placement) };
   },
   screenshot() { renderer.render(scene, camera); return renderer.domElement.toDataURL('image/png').split(',')[1]; },
+  // Maps four photos onto the chameleon base body (base64 GLB from the app bundle), part by part,
+  // sends the GLB back, and opens it for posing and painting.
+  // Views: [{ image: base64 PNG cutout cropped head-to-feet, yaw: 0/90/180/270,
+  //           keypoints: { name: [x, y, confidence] } in crop pixels }].
+  async buildChameleon(views, options = {}, base) {
+    try {
+      const images = await Promise.all(views.map(async view => {
+        const image = new Image();
+        image.src = 'data:image/png;base64,' + view.image;
+        await image.decode();
+        return image;
+      }));
+      const body = (await decode(base)).scene;
+      bakeOnto(body, views.map((view, index) => ({ ...view, image: images[index] })), options);
+      const encoded = base64(await new GLTFExporter().parseAsync(body, { binary: true }));
+      post('chameleon', encoded);
+      await this.load(encoded, '');
+    } catch (error) { post('error', error.message); }
+  },
   // The painted, posed character as USDZ, for the hide-and-seek game's RealityKit ghosts.
+  /** Every pose baked to vertex positions (same vertices and uvs in each), for the game's AR chameleon. */
+  bakeCharacter() {
+    if (!character) throw new Error('Load a model first.');
+    const baked = bakeCharacterBody(character, rig, painter);
+    return { ...baked, data: base64(baked.data.buffer) };
+  },
+  bakePoses() {
+    if (!character) throw new Error('Load a model first.');
+    const poses = posePages.flat().filter(pose => pose.id !== 'original');
+    let uv, index;
+    const positions = [];
+    for (const pose of poses) {
+      this.configure({ preset: pose.id }, {}, 0, false, true);
+      const meshes = [];
+      bakedCopy(placement).traverse(node => { if (node.isMesh) meshes.push(node); });
+      if (meshes.length !== 1) throw new Error(`Expected one mesh, found ${meshes.length}.`);
+      const geometry = meshes[0].geometry;
+      // Attributes may be interleaved, so read them vertex by vertex.
+      const read = (attribute, size) => Array.from({ length: attribute.count * size }, (_, i) => attribute.getComponent(Math.floor(i / size), i % size));
+      uv ??= read(geometry.attributes.uv, 2);
+      index ??= Array.from(geometry.index.array);
+      positions.push(read(geometry.attributes.position, 3));
+    }
+    return { poses, uv, index, positions };
+  },
   async exportUSDZ() {
     try {
       if (!character) throw new Error('Load a model first.');

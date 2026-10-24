@@ -1,0 +1,7 @@
+chameleon-base.glb is adapted from "MECCHA CHAMELEON Player rig" by BlueMan
+(https://sketchfab.com/BlueMan_Dev), licensed under Creative Commons Attribution 4.0
+(http://creativecommons.org/licenses/by/4.0/).
+Source: https://sketchfab.com/3d-models/meccha-chameleon-player-rig-189e0b47f3fa4e56a50b27c0e55922a4
+
+Changes: merged, welded and simplified (about 292k to 20k triangles), new UVs (xatlas),
+bones renamed to Mixamo names. See Tools/ChameleonModel/prepare.mjs.

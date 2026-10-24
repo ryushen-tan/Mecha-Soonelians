@@ -5,7 +5,7 @@ import RoomPlan
 struct MechaSooneliansApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            CharacterLaunchGate { ContentView() }
                 .buttonStyle(HoverButtonStyle())
                 .tint(RallyStyle.ink)
                 .preferredColorScheme(.light)
@@ -59,7 +59,9 @@ struct ContentView: View {
                 case .studio: CaptureEditorView()
                 }
             }
-            .onAppear { hasHouse = HouseStore.hasHouse }
+            .onAppear {
+                hasHouse = HouseStore.hasHouse
+            }
         }
     }
 
