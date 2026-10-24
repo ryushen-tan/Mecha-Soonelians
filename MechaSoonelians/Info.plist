@@ -22,15 +22,20 @@
 	<string>1</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_mecha-soon._tcp</string>
 		<string>_mecha-soon._udp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>The camera is used to scan the house.</string>
+	<string>The camera is used to scan the house and capture people with depth for player cutouts.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Finds and connects to other players' phones on your Wi-Fi.</string>
+	<string>Connects to other players' phones on your Wi-Fi, and to your Mac to generate 3D characters with Tripo.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

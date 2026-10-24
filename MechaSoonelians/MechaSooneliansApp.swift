@@ -18,7 +18,7 @@ private enum EntryTab: String, CaseIterable {
 }
 
 private enum Route: Hashable {
-    case join, host, scan, mapTest
+    case join, host, scan, mapTest, studio
 }
 
 /// Home, in Rally's style: pick a face and a name, then join a game nearby or host one.
@@ -26,7 +26,7 @@ private enum Route: Hashable {
 struct ContentView: View {
     @State private var hasHouse = HouseStore.hasHouse
     @State private var tab = EntryTab.join
-    @State private var path: [Route] = []
+    @State private var path: [Route] = ProcessInfo.processInfo.arguments.contains("--mock-editor") ? [.studio] : []
     @AppStorage("playerName") private var name = ""
     @AppStorage("playerAvatar") private var avatar = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -56,6 +56,7 @@ struct ContentView: View {
                 case .host: HostGameView(name: trimmedName, avatar: avatar)
                 case .scan: ScanView(onSaved: { hasHouse = true })
                 case .mapTest: MapTestView()
+                case .studio: CaptureEditorView()
                 }
             }
             .onAppear { hasHouse = HouseStore.hasHouse }
@@ -129,6 +130,14 @@ struct ContentView: View {
                     Button("Test the house map") { path.append(.mapTest) }
                         .font(RallyStyle.font(14, .semibold))
                 }
+            }
+            card {
+                Eyebrow(text: "STUDIO")
+                Text("Capture someone, cut them out and pose them, or turn them into a 3D character.")
+                    .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button { path.append(.studio) } label: { ActionLabel(text: "Make a player") }
+                    .buttonStyle(PushButtonStyle(dark: true))
             }
             card {
                 identity

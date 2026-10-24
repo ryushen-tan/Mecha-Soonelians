@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum EntryTab: String, CaseIterable { case join = "Join", create = "Create" }
+private enum EntryTab: String, CaseIterable { case join = "Join", create = "Create", studio = "Studio" }
 
 struct HomeView: View {
     @EnvironmentObject private var store: LobbyStore
@@ -9,28 +9,35 @@ struct HomeView: View {
     @State private var code = ""
     @State private var joining = false
     @State private var settings = false
+    @State private var studioPath: [StudioRoute] = []
     @FocusState private var codeFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
-            navigation.padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    if tab == .create || joining {
-                        IdentityForm(creating: tab == .create, code: code, onCancel: { joining = false })
-                    } else {
-                        joinContent
-                    }
-                    if let error = store.error {
-                        ErrorNotice(message: error)
-                        Button("Connection settings") { settings = true }
-                            .font(RallyStyle.font(14, .semibold))
-                    }
-                }
-                .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
+            if tab != .studio || studioPath.isEmpty {
+                navigation.padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
             }
-            .scrollDismissesKeyboard(.interactively)
+            if tab == .studio {
+                NavigationStack(path: $studioPath) { StudioView() }
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        if tab == .create || joining {
+                            IdentityForm(creating: tab == .create, code: code, onCancel: { joining = false })
+                        } else {
+                            joinContent
+                        }
+                        if let error = store.error {
+                            ErrorNotice(message: error)
+                            Button("Connection settings") { settings = true }
+                                .font(RallyStyle.font(14, .semibold))
+                        }
+                    }
+                    .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
+                }
+                .scrollDismissesKeyboard(.interactively)
+            }
         }
         .background(RallyStyle.paper.ignoresSafeArea())
         .sheet(isPresented: $settings) { ServerSettingsView() }
@@ -67,7 +74,7 @@ struct HomeView: View {
                 .buttonStyle(.plain)
                 .rallyHover(cornerRadius: 24)
                 .accessibilityAddTraits(tab == item ? .isSelected : [])
-                .accessibilityIdentifier(item == .join ? "joinTab" : "createTab")
+                .accessibilityIdentifier(item.rawValue.lowercased() + "Tab")
                 .disabled(store.busy)
             }
         }

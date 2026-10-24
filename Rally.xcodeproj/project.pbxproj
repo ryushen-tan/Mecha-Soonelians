@@ -7,17 +7,44 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00B3EB602462456CD255989B /* StudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8FD72E7711289AC0EE43BB1 /* StudioView.swift */; };
+		0816E74D91A39F9A1B07475F /* human-depth-float32.bin in Resources */ = {isa = PBXBuildFile; fileRef = 5BDBCD74744380E200162BFF /* human-depth-float32.bin */; };
 		0948EECFAA369487BDBF7453 /* RallyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E9736BAC911881100623865 /* RallyTests.swift */; };
+		0D17EF66E11663557F81F837 /* Character3DTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97CEED9462C3511CB698276F /* Character3DTests.swift */; };
 		116CFB5536F536363551121B /* LobbyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A1EBB0D749F010D12D26105 /* LobbyView.swift */; };
+		1A0F768C80847C16562F3646 /* human-1-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = 267A606A1FCA4B349F86DC60 /* human-1-mask.png */; };
+		1B7993E0AB1980FC786B1E31 /* ATTRIBUTION.txt in Resources */ = {isa = PBXBuildFile; fileRef = 0C0F1C4CF7CE335710857B96 /* ATTRIBUTION.txt */; };
+		20316161DC7E2F39D8600595 /* CaptureEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B59AD523FFB9457D5299F6E /* CaptureEditorView.swift */; };
+		21CD6949CDB9CAF7ED161634 /* HumanAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7181F872208BA77804F181D /* HumanAnalyzer.swift */; };
+		230BF7D7EB2B05F70640B59C /* PersonCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 056E52BAE9921D90E62E47B0 /* PersonCameraView.swift */; };
+		268D177EA88CCF8CFC842D59 /* human-1-cutout.png in Resources */ = {isa = PBXBuildFile; fileRef = 35633084F38F4828E4F8CAA9 /* human-1-cutout.png */; };
+		26D32FBFB2E5E9CDA5AF3257 /* BodyRig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63B07F512024DD49E151AF96 /* BodyRig.swift */; };
 		2715DD42B703E6A012316F4D /* SessionVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08CDB9545107ED36C336392 /* SessionVault.swift */; };
 		277C64173862B96F03EB9983 /* LobbyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B84151F3143B02763882BE5 /* LobbyStore.swift */; };
+		2D314D38576A2F469AA32546 /* CaptureImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F524C9942059621A7CB50AF4 /* CaptureImage.swift */; };
+		2D67CDE4012AC128EB0A5346 /* human-analysis.json in Resources */ = {isa = PBXBuildFile; fileRef = 94AA4C31E9968BE0B2B4EC45 /* human-analysis.json */; };
+		2F341EE54A8782FB086342ED /* human-rgb.png in Resources */ = {isa = PBXBuildFile; fileRef = BE7204383933395BB6EA29BE /* human-rgb.png */; };
+		30C1795B64210673DD365598 /* human-depth-preview.png in Resources */ = {isa = PBXBuildFile; fileRef = 11FC3E7EE50792FAFF678C32 /* human-depth-preview.png */; };
+		336CDD0D797AFB66B94F4A6A /* human-2-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = 25F8C68D588D0059E8EC1735 /* human-2-mask.png */; };
+		353CD87EEE5F345A67145D94 /* test-rig.glb in Resources */ = {isa = PBXBuildFile; fileRef = 72461914D51662B6622BD726 /* test-rig.glb */; };
 		3B0F84735A5F82EDECFA646A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12939B1E41A27C1506CB2FB0 /* HomeView.swift */; };
+		460A7B29FD9A2EE136A24E7F /* CharacterWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 634F1013B6AB994CA4DECCF0 /* CharacterWebView.swift */; };
+		513A5FFC6FB379F7B3A87EE4 /* Character3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2180405361E6A1AD7E61BE6A /* Character3DView.swift */; };
+		56F7925EB178E26B23556B81 /* StudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04DD1F6B2FA3AC8E658EBC49 /* StudioTests.swift */; };
 		63D4CBDAAC02FA55731FA7EB /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = D91F4C3F7A383BC5D05C4C11 /* Settings.bundle */; };
+		681008CF7C72A1B93AF69ADB /* PoseCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 969A668C0EB79953E98D5A89 /* PoseCanvas.swift */; };
+		6A78BB5344C84DD02D50D2B2 /* HouseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35A3E51E0EAE1A07B5E38308 /* HouseStore.swift */; };
+		6AF06349143450F85833E620 /* human-2-cutout.png in Resources */ = {isa = PBXBuildFile; fileRef = 84D36CA1F9EE4A81B992924C /* human-2-cutout.png */; };
+		83F5AF99F4AC38CA35BCAE84 /* CharacterViewer in Resources */ = {isa = PBXBuildFile; fileRef = 45D6D7FD82120FFDCAFD29CB /* CharacterViewer */; };
 		909F948CF72ECDD8CC5DE153 /* RallyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06AF7CDCA7C84BDF18ABE4B8 /* RallyApp.swift */; };
 		9BA1A941884D2632878ADFC9 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3862E34262223F569A04E1A1 /* Design.swift */; };
 		9C1C83115AE50CDBFE9BC2BD /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BA32005EDFB2002ACBDDBC4 /* Models.swift */; };
+		AD9747DC51F0D4F288234269 /* Character3DModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867DF0DE4D9AB3EA0A021251 /* Character3DModel.swift */; };
 		ADE156BD12EA1C698996F870 /* RallyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC378DF8E881613B915D4178 /* RallyUITests.swift */; };
 		CCB2195A58AAE304F9D6625F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 01AF72E6A20623311E103964 /* Assets.xcassets */; };
+		DC201DB6456D22183E67FF2D /* human-depth-metadata.json in Resources */ = {isa = PBXBuildFile; fileRef = BF9923F31D22A5FACFC02AB3 /* human-depth-metadata.json */; };
+		DD040D09B38FDFBF2E42BAA4 /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BEE1A513F1447AAD4DEB851 /* ScanView.swift */; };
+		E0E298E4D111D90910E545D1 /* HumanEditorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6671B712AE41742545D94D /* HumanEditorModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,19 +66,46 @@
 
 /* Begin PBXFileReference section */
 		01AF72E6A20623311E103964 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		04DD1F6B2FA3AC8E658EBC49 /* StudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioTests.swift; sourceTree = "<group>"; };
+		056E52BAE9921D90E62E47B0 /* PersonCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonCameraView.swift; sourceTree = "<group>"; };
 		06AF7CDCA7C84BDF18ABE4B8 /* RallyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RallyApp.swift; sourceTree = "<group>"; };
+		0C0F1C4CF7CE335710857B96 /* ATTRIBUTION.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ATTRIBUTION.txt; sourceTree = "<group>"; };
+		11FC3E7EE50792FAFF678C32 /* human-depth-preview.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-depth-preview.png"; sourceTree = "<group>"; };
 		12939B1E41A27C1506CB2FB0 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		1992FEDC1F9125FC367F6B42 /* Rally.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Rally.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A1EBB0D749F010D12D26105 /* LobbyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LobbyView.swift; sourceTree = "<group>"; };
 		209FC7E269E2E1B3AB831AFE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		2180405361E6A1AD7E61BE6A /* Character3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DView.swift; sourceTree = "<group>"; };
+		25F8C68D588D0059E8EC1735 /* human-2-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-2-mask.png"; sourceTree = "<group>"; };
+		267A606A1FCA4B349F86DC60 /* human-1-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-1-mask.png"; sourceTree = "<group>"; };
+		2C6671B712AE41742545D94D /* HumanEditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanEditorModel.swift; sourceTree = "<group>"; };
+		35633084F38F4828E4F8CAA9 /* human-1-cutout.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-1-cutout.png"; sourceTree = "<group>"; };
+		35A3E51E0EAE1A07B5E38308 /* HouseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseStore.swift; sourceTree = "<group>"; };
 		3862E34262223F569A04E1A1 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
+		3BEE1A513F1447AAD4DEB851 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
 		40B0871EDA7A77A022C07DD7 /* RallyUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RallyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		446B15BB8FE53901E8CCAC3D /* RallyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RallyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		45D6D7FD82120FFDCAFD29CB /* CharacterViewer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CharacterViewer; path = MechaSoonelians/Capture/CharacterViewer; sourceTree = SOURCE_ROOT; };
+		4B59AD523FFB9457D5299F6E /* CaptureEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorView.swift; sourceTree = "<group>"; };
 		4BA32005EDFB2002ACBDDBC4 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		4E9736BAC911881100623865 /* RallyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RallyTests.swift; sourceTree = "<group>"; };
+		5BDBCD74744380E200162BFF /* human-depth-float32.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "human-depth-float32.bin"; sourceTree = "<group>"; };
+		634F1013B6AB994CA4DECCF0 /* CharacterWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterWebView.swift; sourceTree = "<group>"; };
+		63B07F512024DD49E151AF96 /* BodyRig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyRig.swift; sourceTree = "<group>"; };
 		6B84151F3143B02763882BE5 /* LobbyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LobbyStore.swift; sourceTree = "<group>"; };
+		72461914D51662B6622BD726 /* test-rig.glb */ = {isa = PBXFileReference; path = "test-rig.glb"; sourceTree = "<group>"; };
+		84D36CA1F9EE4A81B992924C /* human-2-cutout.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-2-cutout.png"; sourceTree = "<group>"; };
+		867DF0DE4D9AB3EA0A021251 /* Character3DModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DModel.swift; sourceTree = "<group>"; };
+		94AA4C31E9968BE0B2B4EC45 /* human-analysis.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "human-analysis.json"; sourceTree = "<group>"; };
+		969A668C0EB79953E98D5A89 /* PoseCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseCanvas.swift; sourceTree = "<group>"; };
+		97CEED9462C3511CB698276F /* Character3DTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DTests.swift; sourceTree = "<group>"; };
 		A08CDB9545107ED36C336392 /* SessionVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionVault.swift; sourceTree = "<group>"; };
+		A7181F872208BA77804F181D /* HumanAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanAnalyzer.swift; sourceTree = "<group>"; };
+		BE7204383933395BB6EA29BE /* human-rgb.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-rgb.png"; sourceTree = "<group>"; };
+		BF9923F31D22A5FACFC02AB3 /* human-depth-metadata.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "human-depth-metadata.json"; sourceTree = "<group>"; };
+		D8FD72E7711289AC0EE43BB1 /* StudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioView.swift; sourceTree = "<group>"; };
 		D91F4C3F7A383BC5D05C4C11 /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = wrapper.cfbundle; path = Settings.bundle; sourceTree = "<group>"; };
+		F524C9942059621A7CB50AF4 /* CaptureImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureImage.swift; sourceTree = "<group>"; };
 		FC378DF8E881613B915D4178 /* RallyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RallyUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -59,17 +113,61 @@
 		3D2FF739D935CAF8F2DF161E = {
 			isa = PBXGroup;
 			children = (
+				45D6D7FD82120FFDCAFD29CB /* CharacterViewer */,
+				71B492533C4BE05ABEFEC385 /* Capture */,
+				DC41C90A719883F9116BD334 /* Character3D */,
+				E057FE0C0BFE1DF3B63F7BE4 /* HumanDepth */,
 				8CFBFCD43FE93083878EA3EA /* Rally */,
 				7FE866764E535BBEEA0F53EE /* RallyTests */,
 				8EAA68B8DA5564832ECE5563 /* RallyUITests */,
+				6B15B572060945574EA9A904 /* Scan */,
+				741878460E02004B6215395D /* Shared */,
 				9739995A63F3CD966BCD2D13 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		6B15B572060945574EA9A904 /* Scan */ = {
+			isa = PBXGroup;
+			children = (
+				3BEE1A513F1447AAD4DEB851 /* ScanView.swift */,
+			);
+			name = Scan;
+			path = MechaSoonelians/Scan;
+			sourceTree = "<group>";
+		};
+		71B492533C4BE05ABEFEC385 /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				63B07F512024DD49E151AF96 /* BodyRig.swift */,
+				4B59AD523FFB9457D5299F6E /* CaptureEditorView.swift */,
+				F524C9942059621A7CB50AF4 /* CaptureImage.swift */,
+				867DF0DE4D9AB3EA0A021251 /* Character3DModel.swift */,
+				2180405361E6A1AD7E61BE6A /* Character3DView.swift */,
+				634F1013B6AB994CA4DECCF0 /* CharacterWebView.swift */,
+				A7181F872208BA77804F181D /* HumanAnalyzer.swift */,
+				2C6671B712AE41742545D94D /* HumanEditorModel.swift */,
+				056E52BAE9921D90E62E47B0 /* PersonCameraView.swift */,
+				969A668C0EB79953E98D5A89 /* PoseCanvas.swift */,
+			);
+			name = Capture;
+			path = MechaSoonelians/Capture;
+			sourceTree = "<group>";
+		};
+		741878460E02004B6215395D /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				35A3E51E0EAE1A07B5E38308 /* HouseStore.swift */,
+			);
+			name = Shared;
+			path = MechaSoonelians/Shared;
 			sourceTree = "<group>";
 		};
 		7FE866764E535BBEEA0F53EE /* RallyTests */ = {
 			isa = PBXGroup;
 			children = (
+				97CEED9462C3511CB698276F /* Character3DTests.swift */,
 				4E9736BAC911881100623865 /* RallyTests.swift */,
+				04DD1F6B2FA3AC8E658EBC49 /* StudioTests.swift */,
 			);
 			path = RallyTests;
 			sourceTree = "<group>";
@@ -87,6 +185,7 @@
 				06AF7CDCA7C84BDF18ABE4B8 /* RallyApp.swift */,
 				A08CDB9545107ED36C336392 /* SessionVault.swift */,
 				D91F4C3F7A383BC5D05C4C11 /* Settings.bundle */,
+				D8FD72E7711289AC0EE43BB1 /* StudioView.swift */,
 			);
 			path = Rally;
 			sourceTree = "<group>";
@@ -107,6 +206,33 @@
 				40B0871EDA7A77A022C07DD7 /* RallyUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		DC41C90A719883F9116BD334 /* Character3D */ = {
+			isa = PBXGroup;
+			children = (
+				72461914D51662B6622BD726 /* test-rig.glb */,
+			);
+			name = Character3D;
+			path = TestFixtures/Character3D;
+			sourceTree = "<group>";
+		};
+		E057FE0C0BFE1DF3B63F7BE4 /* HumanDepth */ = {
+			isa = PBXGroup;
+			children = (
+				0C0F1C4CF7CE335710857B96 /* ATTRIBUTION.txt */,
+				35633084F38F4828E4F8CAA9 /* human-1-cutout.png */,
+				267A606A1FCA4B349F86DC60 /* human-1-mask.png */,
+				84D36CA1F9EE4A81B992924C /* human-2-cutout.png */,
+				25F8C68D588D0059E8EC1735 /* human-2-mask.png */,
+				94AA4C31E9968BE0B2B4EC45 /* human-analysis.json */,
+				5BDBCD74744380E200162BFF /* human-depth-float32.bin */,
+				BF9923F31D22A5FACFC02AB3 /* human-depth-metadata.json */,
+				11FC3E7EE50792FAFF678C32 /* human-depth-preview.png */,
+				BE7204383933395BB6EA29BE /* human-rgb.png */,
+			);
+			name = HumanDepth;
+			path = TestFixtures/HumanDepth;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -153,6 +279,7 @@
 			buildConfigurationList = 3CF7D07B3A404A4358BF6B96 /* Build configuration list for PBXNativeTarget "RallyTests" */;
 			buildPhases = (
 				3C8744F0767C03D3869A375A /* Sources */,
+				2821802BF5ABEEDC6C49EAA9 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -202,12 +329,31 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		2821802BF5ABEEDC6C49EAA9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				353CD87EEE5F345A67145D94 /* test-rig.glb in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		30C1F423D426A2343D1D1B91 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1B7993E0AB1980FC786B1E31 /* ATTRIBUTION.txt in Resources */,
 				CCB2195A58AAE304F9D6625F /* Assets.xcassets in Resources */,
+				83F5AF99F4AC38CA35BCAE84 /* CharacterViewer in Resources */,
 				63D4CBDAAC02FA55731FA7EB /* Settings.bundle in Resources */,
+				268D177EA88CCF8CFC842D59 /* human-1-cutout.png in Resources */,
+				1A0F768C80847C16562F3646 /* human-1-mask.png in Resources */,
+				6AF06349143450F85833E620 /* human-2-cutout.png in Resources */,
+				336CDD0D797AFB66B94F4A6A /* human-2-mask.png in Resources */,
+				2D67CDE4012AC128EB0A5346 /* human-analysis.json in Resources */,
+				0816E74D91A39F9A1B07475F /* human-depth-float32.bin in Resources */,
+				DC201DB6456D22183E67FF2D /* human-depth-metadata.json in Resources */,
+				30C1795B64210673DD365598 /* human-depth-preview.png in Resources */,
+				2F341EE54A8782FB086342ED /* human-rgb.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -218,7 +364,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0D17EF66E11663557F81F837 /* Character3DTests.swift in Sources */,
 				0948EECFAA369487BDBF7453 /* RallyTests.swift in Sources */,
+				56F7925EB178E26B23556B81 /* StudioTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -226,13 +374,26 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				26D32FBFB2E5E9CDA5AF3257 /* BodyRig.swift in Sources */,
+				20316161DC7E2F39D8600595 /* CaptureEditorView.swift in Sources */,
+				2D314D38576A2F469AA32546 /* CaptureImage.swift in Sources */,
+				AD9747DC51F0D4F288234269 /* Character3DModel.swift in Sources */,
+				513A5FFC6FB379F7B3A87EE4 /* Character3DView.swift in Sources */,
+				460A7B29FD9A2EE136A24E7F /* CharacterWebView.swift in Sources */,
 				9BA1A941884D2632878ADFC9 /* Design.swift in Sources */,
 				3B0F84735A5F82EDECFA646A /* HomeView.swift in Sources */,
+				6A78BB5344C84DD02D50D2B2 /* HouseStore.swift in Sources */,
+				21CD6949CDB9CAF7ED161634 /* HumanAnalyzer.swift in Sources */,
+				E0E298E4D111D90910E545D1 /* HumanEditorModel.swift in Sources */,
 				277C64173862B96F03EB9983 /* LobbyStore.swift in Sources */,
 				116CFB5536F536363551121B /* LobbyView.swift in Sources */,
 				9C1C83115AE50CDBFE9BC2BD /* Models.swift in Sources */,
+				230BF7D7EB2B05F70640B59C /* PersonCameraView.swift in Sources */,
+				681008CF7C72A1B93AF69ADB /* PoseCanvas.swift in Sources */,
 				909F948CF72ECDD8CC5DE153 /* RallyApp.swift in Sources */,
+				DD040D09B38FDFBF2E42BAA4 /* ScanView.swift in Sources */,
 				2715DD42B703E6A012316F4D /* SessionVault.swift in Sources */,
+				00B3EB602462456CD255989B /* StudioView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -306,7 +467,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -454,7 +615,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;

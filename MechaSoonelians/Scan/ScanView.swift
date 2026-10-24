@@ -100,11 +100,9 @@ struct ScanView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
+                Eyebrow(text: "MAP YOUR PLAYGROUND")
                 if let message = controller.message {
-                    Text(message)
-                        .font(.callout)
-                        .padding(10)
-                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    ErrorNotice(message: message)
                 }
 
                 if controller.isSaving {
@@ -113,16 +111,16 @@ struct ScanView: View {
                         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
                 } else if controller.isScanning {
                     Button("Done with this room") { controller.finishRoom() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PushButtonStyle())
                 } else {
                     Text(controller.rooms.isEmpty
                          ? "Stand in the first room and tap Scan."
                          : "Walk into the next room with the app open, then tap Scan.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(RallyStyle.font(14))
+                        .foregroundStyle(RallyStyle.muted)
                     HStack {
                         Button("Scan room \(controller.rooms.count + 1)") { controller.startRoom() }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(PushButtonStyle())
                         if !controller.rooms.isEmpty {
                             Button("Finish house") {
                                 controller.finishHouse {
@@ -130,14 +128,17 @@ struct ScanView: View {
                                     dismiss()
                                 }
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(PushButtonStyle(dark: true))
                         }
                     }
                 }
             }
-            .padding()
+            .padding(20)
+            .background(RallyStyle.paper, in: RoundedRectangle(cornerRadius: 24))
+            .padding(24).frame(maxWidth: 540)
         }
-        .navigationTitle("Scan")
+        .foregroundStyle(RallyStyle.ink).tint(RallyStyle.ink).preferredColorScheme(.light)
+        .navigationTitle("Scan your house")
         .navigationBarTitleDisplayMode(.inline)
         .onDisappear { controller.stop() }
     }

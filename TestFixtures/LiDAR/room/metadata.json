@@ -1,0 +1,28 @@
+{
+  "source": "https://github.com/Galaxywalk/iLiDAR",
+  "source_commit": "66cd476170eae6f023f0a585d6e89f2a3e5c2bcf",
+  "synthetic": false,
+  "subject": "room, no people",
+  "rgb_size": [
+    1920,
+    1440
+  ],
+  "depth_size": [
+    320,
+    240
+  ],
+  "depth_format": "little-endian IEEE 754 Float16, row-major, no header",
+  "depth_units": "meters, based on upstream AVFoundation DepthFloat16 capture",
+  "depth_range": [
+    0.65478515625,
+    4.67578125
+  ],
+  "valid_fraction": 1.0,
+  "camera_calibration": null,
+  "pairing": "Upstream example pair; capture timestamps not supplied",
+  "preview": "8-bit visualization only; nearer is brighter; invalid is black",
+  "sha256": {
+    "rgb.jpg": "9b03376e7dac230cee283e34c0804c9705dd870d5bc5fe07933eb9aa519e84b3",
+    "depth-float16.bin": "75ef9e50fd708cc2997768aa27103bfeecc35828dbb5675ef54b443379118a1f"
+  }
+}
