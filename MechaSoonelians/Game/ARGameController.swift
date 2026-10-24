@@ -211,6 +211,11 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         return container
     }
 
+    /// Adds debug drawing in house coordinates.
+    func addDebug(_ entity: Entity) {
+        houseAnchor.addChild(entity)
+    }
+
     /// The model scaled to `height`, with its feet on the floor, centered left-right; its back on
     /// the wall (just in front of the wall's invisible blocker) or centered on the spot.
     private static func stand(_ model: Entity, floor: simd_float4x4, height: Float, flushBack: Bool) -> Entity {
