@@ -1,8 +1,9 @@
 import Foundation
 import Security
 
-/// The Mac running `npm run start:3d` (server/tripo.mjs), which turns hiders' photos into 3D
-/// models with Tripo. The token is that server's TRIPO_PROXY_TOKEN, never the Tripo API key.
+/// The 3D service that turns hiders' photos into 3D models with Tripo: the hosted server by
+/// default, or a Mac running `npm run start:3d` (server/tripo.mjs). The token is that server's
+/// TRIPO_PROXY_TOKEN, never the Tripo API key.
 struct ModelServer: Equatable {
     var address: String
     var token: String
@@ -21,7 +22,9 @@ struct ModelServer: Equatable {
             let token = arguments.firstIndex(of: "--model-token").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
             ModelServer(address: arguments[i + 1], token: token ?? "").save()
         }
-        return ModelServer(address: UserDefaults.standard.string(forKey: addressKey) ?? "", token: loadToken() ?? "")
+        // A saved empty address means the host chose flat cutouts.
+        let address = UserDefaults.standard.string(forKey: addressKey) ?? HostedCharacterService.address
+        return ModelServer(address: address, token: HostedCharacterService.token(for: address, saved: loadToken() ?? ""))
     }
 
     func save() {

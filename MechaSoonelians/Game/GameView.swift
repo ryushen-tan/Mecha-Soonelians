@@ -354,7 +354,7 @@ struct GameView: View {
                 Text(session.modelServer.isConfigured ? "On" : "Off · flat cutouts")
                     .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
             }
-            TextField("http://<Mac Wi-Fi IP>:3001", text: $serverAddress)
+            TextField(HostedCharacterService.address, text: $serverAddress)
                 .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().rallyField()
                 .accessibilityLabel("3D server address")
             SecureField("Server access token", text: $serverToken)
@@ -364,7 +364,7 @@ struct GameView: View {
             }
             .font(RallyStyle.font(14, .semibold))
             .disabled(ModelServer(address: serverAddress, token: serverToken) == session.modelServer)
-            Text("Run `npm run start:3d` in server/ on your Mac (TRIPO_HOST=0.0.0.0 and TRIPO_PROXY_TOKEN set). Each hider's 3D model uses Tripo credits and takes a few minutes, so give hiders 5+ minutes. Leave the address empty for flat cutouts.")
+            Text("Uses the hosted 3D server by default, or a Mac running `npm run start:3d` (TRIPO_HOST=0.0.0.0 and TRIPO_PROXY_TOKEN set). Each hider's 3D model uses Tripo credits and takes a few minutes, so give hiders 5+ minutes. Leave the address empty for flat cutouts.")
                 .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

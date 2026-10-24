@@ -7,7 +7,9 @@ const config = {
   async rewrites() {
     return [
       { source: '/health', destination: '/api/health' },
-      { source: '/rooms/:path*', destination: '/api/rooms/:path*' }
+      { source: '/rooms/:path*', destination: '/api/rooms/:path*' },
+      { source: '/characters', destination: '/api/characters' },
+      { source: '/characters/:path*', destination: '/api/characters/:path*' }
     ];
   }
 };

@@ -6,7 +6,7 @@ struct Character3DView: View {
     let attribution: String?
     let inputWarning: String?
     @StateObject private var model: Character3DModel
-    @AppStorage("tripoServer") private var serverAddress = "http://localhost:3001"
+    @AppStorage("tripoServer") private var serverAddress = HostedCharacterService.address
     @State private var accessToken = CharacterServiceSettings.saved.token
     @State private var confirmsUpload = false
 
@@ -88,13 +88,13 @@ struct Character3DView: View {
             if let asset = model.asset {
                 Text(asset.server).font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
             } else {
-                TextField("http://localhost:3001", text: $serverAddress)
+                TextField(HostedCharacterService.address, text: $serverAddress)
                     .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().rallyField()
                     .accessibilityLabel("3D server address")
             }
-            SecureField("Server access token (optional on this Mac)", text: $accessToken)
+            SecureField("Server access token", text: $accessToken)
                 .textInputAutocapitalization(.never).autocorrectionDisabled().rallyField()
-            Text("Run npm run start:3d in server/. Use your Mac’s Wi-Fi address on iPhone. This token is TRIPO_PROXY_TOKEN, never TRIPO_API_KEY.")
+            Text("Uses the hosted server by default. For a local one, run npm run start:3d in server/ and use your Mac’s Wi-Fi address on iPhone. This token is TRIPO_PROXY_TOKEN, never TRIPO_API_KEY.")
                 .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
         }
     }

@@ -412,6 +412,17 @@ enum CharacterProfile {
     }
 }
 
+/// The hosted 3D service (server/lib/characters.mjs on Vercel). The token is that deployment's
+/// TRIPO_PROXY_TOKEN, never the Tripo API key; the server's daily generation limit caps its use.
+enum HostedCharacterService {
+    static let address = "https://mecha-soonelians.vercel.app"
+    static let token = "78d80f57ee21bc84260f6a528c94cbf92832f1fb6b25bdb34546dd91385575a7"
+
+    static func token(for address: String, saved: String) -> String {
+        saved.isEmpty && address.trimmingCharacters(in: .whitespacesAndNewlines) == Self.address ? token : saved
+    }
+}
+
 struct CharacterServiceSettings {
     var address: String
     var token: String
@@ -426,12 +437,11 @@ struct CharacterServiceSettings {
         SecItemCopyMatching(request as CFDictionary, &result)
         let token = (result as? Data).flatMap { String(data: $0, encoding: .utf8) } ?? ""
         var address = UserDefaults.standard.string(forKey: "tripoServer") ?? UserDefaults.standard.string(forKey: "ghostModelServer") ?? ""
-        #if targetEnvironment(simulator)
-        if address.isEmpty { address = "http://localhost:3001" }
-        #endif
+        if address.isEmpty { address = HostedCharacterService.address }
         var settings = Self(address: address, token: token)
         if let index = arguments.firstIndex(of: "--model-server"), arguments.indices.contains(index + 1) { settings.address = arguments[index + 1] }
         if let index = arguments.firstIndex(of: "--model-token"), arguments.indices.contains(index + 1) { settings.token = arguments[index + 1] }
+        settings.token = HostedCharacterService.token(for: settings.address, saved: settings.token)
         return settings
     }
 
