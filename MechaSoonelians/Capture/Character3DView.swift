@@ -83,6 +83,8 @@ struct Character3DView: View {
 
 struct CharacterLaunchGate<Content: View>: View {
     @State private var hasCharacter = CharacterProfile.ready != nil
+    /// A generation has been requested. Players go straight in while it finishes in the background.
+    @State private var started = CharacterProfile.candidate() != nil
     @Environment(\.scenePhase) private var scenePhase
     @ViewBuilder var content: () -> Content
 
@@ -96,8 +98,12 @@ struct CharacterLaunchGate<Content: View>: View {
         Group {
             if hasCharacter || bypassSetup {
                 content()
+            } else if started {
+                content().overlay(alignment: .top) {
+                    CharacterBuildBanner(onReady: { hasCharacter = true }, onRestart: { started = false })
+                }
             } else {
-                CharacterSetupView { hasCharacter = CharacterProfile.ready != nil }
+                CharacterSetupView(onStarted: { started = true }) { hasCharacter = CharacterProfile.ready != nil }
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -107,6 +113,7 @@ struct CharacterLaunchGate<Content: View>: View {
 }
 
 struct CharacterSetupView: View {
+    var onStarted: () -> Void = {}
     var onComplete: () -> Void
     @StateObject private var human = HumanEditorModel()
     @StateObject private var model: Character3DModel
@@ -119,7 +126,8 @@ struct CharacterSetupView: View {
     @State private var allowsNewCapture = false
     @Environment(\.scenePhase) private var scenePhase
 
-    init(onComplete: @escaping () -> Void) {
+    init(onStarted: @escaping () -> Void = {}, onComplete: @escaping () -> Void) {
+        self.onStarted = onStarted
         self.onComplete = onComplete
         _model = StateObject(wrappedValue: Character3DModel(asset: CharacterProfile.candidate()))
     }
@@ -253,6 +261,8 @@ struct CharacterSetupView: View {
         guard human.selectedHuman?.generationWarning == nil, let png = human.make3DCutout() else { return }
         allowsNewCapture = false
         model.generate(png: png, attribution: nil, asProfile: true)
+        // The request ID is saved on the device, so the background builder resumes this same job.
+        if model.asset != nil { onStarted() }
     }
 
     private func resume() {
@@ -270,6 +280,103 @@ struct CharacterSetupView: View {
             }
             try CharacterProfile.saveBody(result, for: asset)
             onComplete()
+        } catch { message = error.localizedDescription }
+    }
+}
+
+/// Finishes building the player's character while they use the app: waits for Tripo, then prepares
+/// the poses. Resuming reuses the saved request ID, so it never starts (or pays for) a second job.
+private struct CharacterBuildBanner: View {
+    var onReady: () -> Void
+    var onRestart: () -> Void
+    @StateObject private var model: Character3DModel
+    @State private var message: String?
+    @State private var preparing = false
+    @State private var dismissed = false
+    @GestureState private var drag: CGFloat = 0
+    @Environment(\.scenePhase) private var scenePhase
+
+    init(onReady: @escaping () -> Void, onRestart: @escaping () -> Void) {
+        self.onReady = onReady
+        self.onRestart = onRestart
+        _model = StateObject(wrappedValue: Character3DModel(asset: CharacterProfile.candidate()))
+    }
+
+    private var failure: String? {
+        message ?? model.error ?? (model.modelData != nil && model.asset?.rigged == false
+            ? model.warning ?? "Tripo couldn't rig this scan. Start over with a full-body capture." : nil)
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                if failure == nil { ProgressView() }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(failure == nil ? "Building your 3D self…" : "Your 3D self needs attention")
+                        .font(RallyStyle.font(13, .semibold))
+                    Text(failure ?? (preparing ? "Preparing your poses and paint…" : model.status))
+                        .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted).lineLimit(2)
+                }
+                Spacer(minLength: 0)
+                if failure != nil {
+                    if model.asset?.rigged != false { Button("Retry") { retry() }.font(RallyStyle.font(13, .semibold)) }
+                    Button("Start over") { restart() }.font(RallyStyle.font(13, .semibold))
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(RallyStyle.paper, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(RallyStyle.ink.opacity(0.15)))
+            .foregroundStyle(RallyStyle.ink)
+            .padding(.horizontal, 16)
+            .offset(y: drag)
+            .opacity(dismissed ? 0 : 1 - min(abs(drag) / 120, 0.6))
+            .allowsHitTesting(!dismissed)
+            // Swipe it away (up or down) to get at what's underneath; errors bring it back.
+            .gesture(DragGesture(minimumDistance: 12)
+                .updating($drag) { value, state, _ in state = value.translation.height }
+                .onEnded { value in
+                    if abs(value.translation.height) > 30 { withAnimation(.easeOut(duration: 0.2)) { dismissed = true } }
+                })
+            // The 3D viewer prepares the poses, so it has to exist, even though nobody sees it.
+            if model.modelData != nil {
+                CharacterWebView(model: model).frame(width: 64, height: 64).opacity(0.01).allowsHitTesting(false)
+            }
+        }
+        .task { retry() }
+        .onChange(of: model.viewerLoaded) { _, loaded in
+            if loaded && model.asset?.rigged == true { Task { await prepare() } }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active && failure == nil { retry() }
+        }
+        .onChange(of: failure) { _, new in
+            if new != nil { withAnimation { dismissed = false } }
+        }
+        .onDisappear { model.stopPolling() }
+    }
+
+    private func retry() {
+        message = nil
+        guard model.asset != nil, model.modelData == nil, !model.busy else { return }
+        model.resume()
+    }
+
+    private func restart() {
+        model.stopPolling()
+        UserDefaults.standard.removeObject(forKey: CharacterProfile.preferenceKey)
+        onRestart()
+    }
+
+    private func prepare() async {
+        guard !preparing, model.viewerLoaded, let asset = model.asset, asset.rigged, let webView = model.webView else { return }
+        preparing = true
+        defer { preparing = false }
+        do {
+            guard let result = try await webView.callAsyncJavaScript("return window.characterViewer.bakeCharacter()", arguments: [:], in: nil, contentWorld: .page) as? [String: Any] else {
+                throw CharacterFailure("Couldn't prepare the character for the room editor.")
+            }
+            try CharacterProfile.saveBody(result, for: asset)
+            onReady()
         } catch { message = error.localizedDescription }
     }
 }
