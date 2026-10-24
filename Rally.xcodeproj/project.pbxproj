@@ -18,6 +18,7 @@
 		1874806EDB264FF4F2B17646 /* CharacterStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA276BD42A0FA77802CB386 /* CharacterStudioView.swift */; };
 		1A0F768C80847C16562F3646 /* human-1-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = 267A606A1FCA4B349F86DC60 /* human-1-mask.png */; };
 		1B7993E0AB1980FC786B1E31 /* ATTRIBUTION.txt in Resources */ = {isa = PBXBuildFile; fileRef = 0C0F1C4CF7CE335710857B96 /* ATTRIBUTION.txt */; };
+		1BA2E7C2558968906382FDF6 /* ProfilePhotos in Resources */ = {isa = PBXBuildFile; fileRef = 2E9C82CD1F157498F0F3E004 /* ProfilePhotos */; };
 		20316161DC7E2F39D8600595 /* CaptureEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B59AD523FFB9457D5299F6E /* CaptureEditorView.swift */; };
 		21CD6949CDB9CAF7ED161634 /* HumanAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7181F872208BA77804F181D /* HumanAnalyzer.swift */; };
 		230BF7D7EB2B05F70640B59C /* PersonCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 056E52BAE9921D90E62E47B0 /* PersonCameraView.swift */; };
@@ -36,16 +37,20 @@
 		460A7B29FD9A2EE136A24E7F /* CharacterWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 634F1013B6AB994CA4DECCF0 /* CharacterWebView.swift */; };
 		513A5FFC6FB379F7B3A87EE4 /* Character3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2180405361E6A1AD7E61BE6A /* Character3DView.swift */; };
 		56F7925EB178E26B23556B81 /* StudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04DD1F6B2FA3AC8E658EBC49 /* StudioTests.swift */; };
+		572B9E816F144242FFAA93B7 /* ProfileAvatarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F81920C392C1CC019C7D9A8 /* ProfileAvatarUITests.swift */; };
 		63D4CBDAAC02FA55731FA7EB /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = D91F4C3F7A383BC5D05C4C11 /* Settings.bundle */; };
 		681008CF7C72A1B93AF69ADB /* PoseCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 969A668C0EB79953E98D5A89 /* PoseCanvas.swift */; };
 		6A78BB5344C84DD02D50D2B2 /* HouseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35A3E51E0EAE1A07B5E38308 /* HouseStore.swift */; };
+		6A87314BCEA2BB28B43E2018 /* ProfilePhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C18E09F35141790B8E6204F /* ProfilePhoto.swift */; };
 		6AF06349143450F85833E620 /* human-2-cutout.png in Resources */ = {isa = PBXBuildFile; fileRef = 84D36CA1F9EE4A81B992924C /* human-2-cutout.png */; };
 		7F1BF371E051BFCDF8D9AA84 /* JellyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12B9B3806F4BF1D38F0BB25A /* JellyTests.swift */; };
+		813EACB0B195AE59733DBDDE /* ProfileAvatarButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C48B5B4AFC56F3C332AB1E /* ProfileAvatarButton.swift */; };
 		81900B850F5029CE32CF62D3 /* JellyExperienceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B3FA6EF373D06771E167B90 /* JellyExperienceView.swift */; };
 		83F5AF99F4AC38CA35BCAE84 /* CharacterViewer in Resources */ = {isa = PBXBuildFile; fileRef = 45D6D7FD82120FFDCAFD29CB /* CharacterViewer */; };
 		88A42FABA290F7A5DC6E2375 /* CharacterGame.swift in Sources */ = {isa = PBXBuildFile; fileRef = F869593F1BDCA74E39F30930 /* CharacterGame.swift */; };
 		8AD51F40601A9EEBDCB57F1B /* JellyStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C97513C7B4FB4C3761035337 /* JellyStyle.swift */; };
 		8BF29E098FADAA997D846DA7 /* CharacterEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71C493BA14980B6D88A4D56E /* CharacterEditing.swift */; };
+		8E47D72F3777873F1051221A /* ProfileAvatarMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13BD54C9A7B10C95BC4F606E /* ProfileAvatarMesh.swift */; };
 		909F948CF72ECDD8CC5DE153 /* RallyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06AF7CDCA7C84BDF18ABE4B8 /* RallyApp.swift */; };
 		9BA1A941884D2632878ADFC9 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3862E34262223F569A04E1A1 /* Design.swift */; };
 		9C1C83115AE50CDBFE9BC2BD /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BA32005EDFB2002ACBDDBC4 /* Models.swift */; };
@@ -57,6 +62,7 @@
 		E0E298E4D111D90910E545D1 /* HumanEditorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6671B712AE41742545D94D /* HumanEditorModel.swift */; };
 		E164366EBF5B23AA62B3201E /* JellyScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94870F72F5B1E46571E59171 /* JellyScene.swift */; };
 		E68D4B45ACFF81C327F898F3 /* GameRoomGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A3F1E7B9345C4FD483D41AE /* GameRoomGeometry.swift */; };
+		EB8A0E5B497A0F492223D011 /* ProfilePhotoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51DCF8BF4D7359F51164E73E /* ProfilePhotoTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -85,6 +91,7 @@
 		11FC3E7EE50792FAFF678C32 /* human-depth-preview.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-depth-preview.png"; sourceTree = "<group>"; };
 		12939B1E41A27C1506CB2FB0 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		12B9B3806F4BF1D38F0BB25A /* JellyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyTests.swift; sourceTree = "<group>"; };
+		13BD54C9A7B10C95BC4F606E /* ProfileAvatarMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAvatarMesh.swift; sourceTree = "<group>"; };
 		1992FEDC1F9125FC367F6B42 /* Rally.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Rally.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A1EBB0D749F010D12D26105 /* LobbyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LobbyView.swift; sourceTree = "<group>"; };
 		1BC2BC17997B0598F20AA27B /* JellyAssets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JellyAssets; path = Rally/JellyAssets; sourceTree = SOURCE_ROOT; };
@@ -93,7 +100,9 @@
 		25F8C68D588D0059E8EC1735 /* human-2-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-2-mask.png"; sourceTree = "<group>"; };
 		267A606A1FCA4B349F86DC60 /* human-1-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-1-mask.png"; sourceTree = "<group>"; };
 		2A3F1E7B9345C4FD483D41AE /* GameRoomGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameRoomGeometry.swift; sourceTree = "<group>"; };
+		2C18E09F35141790B8E6204F /* ProfilePhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoto.swift; sourceTree = "<group>"; };
 		2C6671B712AE41742545D94D /* HumanEditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanEditorModel.swift; sourceTree = "<group>"; };
+		2E9C82CD1F157498F0F3E004 /* ProfilePhotos */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ProfilePhotos; path = Rally/ProfilePhotos; sourceTree = SOURCE_ROOT; };
 		35633084F38F4828E4F8CAA9 /* human-1-cutout.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-1-cutout.png"; sourceTree = "<group>"; };
 		35A3E51E0EAE1A07B5E38308 /* HouseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseStore.swift; sourceTree = "<group>"; };
 		3862E34262223F569A04E1A1 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
@@ -106,14 +115,17 @@
 		4B59AD523FFB9457D5299F6E /* CaptureEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorView.swift; sourceTree = "<group>"; };
 		4BA32005EDFB2002ACBDDBC4 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		4E9736BAC911881100623865 /* RallyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RallyTests.swift; sourceTree = "<group>"; };
+		51DCF8BF4D7359F51164E73E /* ProfilePhotoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhotoTests.swift; sourceTree = "<group>"; };
 		5BDBCD74744380E200162BFF /* human-depth-float32.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "human-depth-float32.bin"; sourceTree = "<group>"; };
 		5E437B4394716C4E60030BAE /* CharacterGameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterGameTests.swift; sourceTree = "<group>"; };
 		5FA276BD42A0FA77802CB386 /* CharacterStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterStudioView.swift; sourceTree = "<group>"; };
 		634F1013B6AB994CA4DECCF0 /* CharacterWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterWebView.swift; sourceTree = "<group>"; };
 		63B07F512024DD49E151AF96 /* BodyRig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyRig.swift; sourceTree = "<group>"; };
 		6B84151F3143B02763882BE5 /* LobbyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LobbyStore.swift; sourceTree = "<group>"; };
+		6F81920C392C1CC019C7D9A8 /* ProfileAvatarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAvatarUITests.swift; sourceTree = "<group>"; };
 		71C493BA14980B6D88A4D56E /* CharacterEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterEditing.swift; sourceTree = "<group>"; };
 		72461914D51662B6622BD726 /* test-rig.glb */ = {isa = PBXFileReference; path = "test-rig.glb"; sourceTree = "<group>"; };
+		84C48B5B4AFC56F3C332AB1E /* ProfileAvatarButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAvatarButton.swift; sourceTree = "<group>"; };
 		84D36CA1F9EE4A81B992924C /* human-2-cutout.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-2-cutout.png"; sourceTree = "<group>"; };
 		867DF0DE4D9AB3EA0A021251 /* Character3DModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DModel.swift; sourceTree = "<group>"; };
 		94870F72F5B1E46571E59171 /* JellyScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyScene.swift; sourceTree = "<group>"; };
@@ -139,6 +151,7 @@
 			children = (
 				45D6D7FD82120FFDCAFD29CB /* CharacterViewer */,
 				1BC2BC17997B0598F20AA27B /* JellyAssets */,
+				2E9C82CD1F157498F0F3E004 /* ProfilePhotos */,
 				71B492533C4BE05ABEFEC385 /* Capture */,
 				DC41C90A719883F9116BD334 /* Character3D */,
 				E057FE0C0BFE1DF3B63F7BE4 /* HumanDepth */,
@@ -197,6 +210,7 @@
 				97CEED9462C3511CB698276F /* Character3DTests.swift */,
 				5E437B4394716C4E60030BAE /* CharacterGameTests.swift */,
 				12B9B3806F4BF1D38F0BB25A /* JellyTests.swift */,
+				51DCF8BF4D7359F51164E73E /* ProfilePhotoTests.swift */,
 				4E9736BAC911881100623865 /* RallyTests.swift */,
 				04DD1F6B2FA3AC8E658EBC49 /* StudioTests.swift */,
 			);
@@ -218,6 +232,9 @@
 				6B84151F3143B02763882BE5 /* LobbyStore.swift */,
 				1A1EBB0D749F010D12D26105 /* LobbyView.swift */,
 				4BA32005EDFB2002ACBDDBC4 /* Models.swift */,
+				84C48B5B4AFC56F3C332AB1E /* ProfileAvatarButton.swift */,
+				13BD54C9A7B10C95BC4F606E /* ProfileAvatarMesh.swift */,
+				2C18E09F35141790B8E6204F /* ProfilePhoto.swift */,
 				06AF7CDCA7C84BDF18ABE4B8 /* RallyApp.swift */,
 				A08CDB9545107ED36C336392 /* SessionVault.swift */,
 				D91F4C3F7A383BC5D05C4C11 /* Settings.bundle */,
@@ -229,6 +246,7 @@
 		8EAA68B8DA5564832ECE5563 /* RallyUITests */ = {
 			isa = PBXGroup;
 			children = (
+				6F81920C392C1CC019C7D9A8 /* ProfileAvatarUITests.swift */,
 				FC378DF8E881613B915D4178 /* RallyUITests.swift */,
 			);
 			path = RallyUITests;
@@ -381,6 +399,7 @@
 				CCB2195A58AAE304F9D6625F /* Assets.xcassets in Resources */,
 				83F5AF99F4AC38CA35BCAE84 /* CharacterViewer in Resources */,
 				2BE3B2F910D08B327C493BD4 /* JellyAssets in Resources */,
+				1BA2E7C2558968906382FDF6 /* ProfilePhotos in Resources */,
 				63D4CBDAAC02FA55731FA7EB /* Settings.bundle in Resources */,
 				268D177EA88CCF8CFC842D59 /* human-1-cutout.png in Resources */,
 				1A0F768C80847C16562F3646 /* human-1-mask.png in Resources */,
@@ -404,6 +423,7 @@
 				0D17EF66E11663557F81F837 /* Character3DTests.swift in Sources */,
 				11B1EAD23CDADC196899495B /* CharacterGameTests.swift in Sources */,
 				7F1BF371E051BFCDF8D9AA84 /* JellyTests.swift in Sources */,
+				EB8A0E5B497A0F492223D011 /* ProfilePhotoTests.swift in Sources */,
 				0948EECFAA369487BDBF7453 /* RallyTests.swift in Sources */,
 				56F7925EB178E26B23556B81 /* StudioTests.swift in Sources */,
 			);
@@ -438,6 +458,9 @@
 				9C1C83115AE50CDBFE9BC2BD /* Models.swift in Sources */,
 				230BF7D7EB2B05F70640B59C /* PersonCameraView.swift in Sources */,
 				681008CF7C72A1B93AF69ADB /* PoseCanvas.swift in Sources */,
+				813EACB0B195AE59733DBDDE /* ProfileAvatarButton.swift in Sources */,
+				8E47D72F3777873F1051221A /* ProfileAvatarMesh.swift in Sources */,
+				6A87314BCEA2BB28B43E2018 /* ProfilePhoto.swift in Sources */,
 				909F948CF72ECDD8CC5DE153 /* RallyApp.swift in Sources */,
 				DD040D09B38FDFBF2E42BAA4 /* ScanView.swift in Sources */,
 				2715DD42B703E6A012316F4D /* SessionVault.swift in Sources */,
@@ -449,6 +472,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				572B9E816F144242FFAA93B7 /* ProfileAvatarUITests.swift in Sources */,
 				ADE156BD12EA1C698996F870 /* RallyUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

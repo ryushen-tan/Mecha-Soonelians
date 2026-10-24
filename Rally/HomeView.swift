@@ -92,6 +92,9 @@ struct HomeView: View {
                 .onChange(of: store.nickname) { _, _ in audio.key(.type) }
                 .onSubmit { if store.validName { enter(roomCode) } }
             Text("1–20 characters").font(JellyStyle.body(12)).foregroundStyle(JellyStyle.muted)
+            if ProfilePhotos.avatarImage(for: store.nickname) != nil {
+                ProfileAvatarButton(name: store.nickname, color: store.avatar)
+            }
             Text("PICK A COLOR").font(JellyStyle.body(12)).tracking(1).foregroundStyle(JellyStyle.muted)
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 2) { colorChoices }

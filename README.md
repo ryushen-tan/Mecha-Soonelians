@@ -122,6 +122,14 @@ npm start
 
 Health check: `GET http://localhost:3000/health`. The HTML design preview remains a separate simulated UI.
 
+## Profile avatars
+
+Entering a full name from `Rally/ProfilePhotos/profiles.json` selects that person's AI-blended avatar, ignoring case and repeated whitespace. All 42 available profiles have bundled front, three-quarter, and rear views under `Rally/ProfilePhotos/AIAvatars`. The entry screen and lobby use the front view; **View avatar** opens a Front / Angle / Back selector. Matching and previews work offline. Unmatched names and Jaden Hum (no source photo) keep the selected color avatar.
+
+The PNGs are three-view rendered image sheets, not UV textures or 3D geometry. The app crops each sheet into individual views and caches them with a 32 MB limit. Replacing a sheet requires preserving the front / angle / back order. The generation prompts, original-photo comparisons and complete pack are in `artifacts/profile-avatars/ai-blended`.
+
+The earlier photo-projection mesh and its assets remain available for development in `ProfileAvatarMesh.swift`, `ProfilePhotos/Avatars`, and `Tools/ProfileAvatars`; they are no longer used by the profile preview.
+
 ## HTML design preview
 
 ```sh
