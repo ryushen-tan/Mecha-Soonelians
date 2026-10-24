@@ -52,6 +52,7 @@
 		E9B08F4081110F9BC2AAE35F /* CaptureImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE1EC8831CA5703DDB00CA1 /* CaptureImage.swift */; };
 		F52D814B2C79AB10F25475AC /* human-rgb.png in Resources */ = {isa = PBXBuildFile; fileRef = 0ABE41D7846B7EE0C68B2F1B /* human-rgb.png */; };
 		F57E21ADFF6E76FD88072716 /* SprayPaintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9A8B3A361FC622CEC3D641 /* SprayPaintView.swift */; };
+		F9204A235897A2ED8DFF6324 /* RoomObstacles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6094388F83BF57E6079B4861 /* RoomObstacles.swift */; };
 		FB79186CB13FA6F01ACB4321 /* ATTRIBUTION.txt in Resources */ = {isa = PBXBuildFile; fileRef = DBAC0F8CF5D53ED50877620D /* ATTRIBUTION.txt */; };
 /* End PBXBuildFile section */
 
@@ -74,6 +75,7 @@
 		5BE9FA0E1173D95D05C52BBA /* GameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameView.swift; sourceTree = "<group>"; };
 		5DE0F466297AA36DE58923B8 /* human-depth-preview.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-depth-preview.png"; sourceTree = "<group>"; };
 		5F8A94CD8A25738D99BA3FF7 /* CharacterWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterWebView.swift; sourceTree = "<group>"; };
+		6094388F83BF57E6079B4861 /* RoomObstacles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomObstacles.swift; sourceTree = "<group>"; };
 		6C2D535BD41EC0F0EBED9996 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
 		718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModels.swift; sourceTree = "<group>"; };
 		72DAACAF2F70200E7F265971 /* CharacterStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterStudioView.swift; sourceTree = "<group>"; };
@@ -180,6 +182,7 @@
 				1013AAE8F957E87D79BCB2E6 /* GhostCapture.swift */,
 				FB756F6C6B452E359FFDAB4D /* ModelServer.swift */,
 				F51E65ADE5E00819B806A976 /* PaintView.swift */,
+				6094388F83BF57E6079B4861 /* RoomObstacles.swift */,
 				9D67C6E4F96256D342E849EE /* SprayPainter.swift */,
 				FD9A8B3A361FC622CEC3D641 /* SprayPaintView.swift */,
 			);
@@ -352,6 +355,7 @@
 				A4C53F0F7411917B9C70F84E /* PaintView.swift in Sources */,
 				B67C1B83A11790E5D686ECF3 /* PersonCameraView.swift in Sources */,
 				216D3DA2E0C913B9D88C727D /* PoseCanvas.swift in Sources */,
+				F9204A235897A2ED8DFF6324 /* RoomObstacles.swift in Sources */,
 				DDA3913CE4881610A4129A29 /* ScanView.swift in Sources */,
 				F57E21ADFF6E76FD88072716 /* SprayPaintView.swift in Sources */,
 				5D3D823454B48F796734594E /* SprayPainter.swift in Sources */,

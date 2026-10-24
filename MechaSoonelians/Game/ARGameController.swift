@@ -24,6 +24,8 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     private var isRunning = false
     /// The scanned walls, for putting hiders' backs against them.
     private(set) var walls: [GhostCapture.Wall] = []
+    /// The scanned walls and furniture, so chameleons don't go inside them.
+    private(set) var obstacles = RoomObstacles()
 
     override init() {
         super.init()
@@ -83,9 +85,9 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         return floors.min() ?? frame.camera.transform.columns.3.y - 1.3
     }
 
-    /// Where a chameleon goes when the player taps this screen point: on a wall it stands on the
-    /// floor with its back to the wall; on the floor (or furniture) it faces the player.
-    func chameleonPlacement(at point: CGPoint) -> GhostPlacement? {
+    /// Where a chameleon goes when the player points at this screen point: on a wall it stands on the
+    /// floor with its back to the wall; on the floor or furniture it faces `facing`, else the player.
+    func chameleonPlacement(at point: CGPoint, height: Float = ChameleonStore.height, facing: SIMD3<Float>? = nil) -> GhostPlacement? {
         guard isRelocalized, let frame = currentFrame,
               let hit = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .any).first else { return nil }
         let position = simd_make_float3(hit.worldTransform.columns.3)
@@ -94,16 +96,21 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         var normal = simd_make_float3(hit.worldTransform.columns.1)
         let onWall = abs(normal.y) < 0.5
         var origin = position
-        var facing = camera - position
+        var facing = facing ?? camera - position
         if onWall {
             normal.y = 0
             facing = simd_dot(normal, camera - position) < 0 ? -normal : normal
+            // Line up with the scanned wall, so the body is just in front of it rather than in it.
+            if let wall = obstacles.nearestWall(to: position, within: 0.25), simd_dot(wall.normal, facing) > 0.7 {
+                origin = wall.point
+                facing = wall.normal
+            }
             origin.y = floorHeight(for: frame)
         }
         facing.y = 0
         guard simd_length(facing) > 0.01 else { return nil }
         return GhostPlacement(origin: origin, facing: simd_normalize(facing), onWall: onWall,
-                              width: ChameleonStore.height / 2, height: ChameleonStore.height)
+                              width: height / 2, height: height)
     }
 
     /// While set, a tap places a chameleon instead of tagging a ghost.
@@ -178,6 +185,8 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
 
     /// Shows a chameleon at its spot before it's hidden, while it's being painted.
     func addPreview(_ model: Entity, placement: GhostPlacement) -> Entity {
+        model.removeFromParent()
+        model.transform = .identity
         let container = Self.stand(model, floor: placement.floorTransform, height: placement.height, flushBack: placement.flushBack)
         houseAnchor.addChild(container)
         return container
@@ -275,6 +284,7 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
             houseAnchor.addChild(box)
         }
         walls = structure.walls.map { GhostCapture.Wall(transform: $0.transform, width: $0.dimensions.x) }
+        obstacles = RoomObstacles(structure)
         floorY = structure.floors.map { $0.transform.columns.3.y }.min()
     }
 

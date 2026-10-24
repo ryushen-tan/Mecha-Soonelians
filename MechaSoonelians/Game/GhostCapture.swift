@@ -27,11 +27,25 @@ struct GhostPlacement {
         self.height = height
     }
 
+    /// Where the feet are.
+    var origin: SIMD3<Float> { simd_make_float3(floorTransform.columns.3) }
+    /// The way the ghost faces, flat.
+    var facing: SIMD3<Float> { simd_make_float3(floorTransform.columns.2) }
+
     /// The same ghost slid along the floor by `offset` and turned by `turn` radians.
     func moved(by offset: SIMD3<Float>, turn: Float) -> GhostPlacement {
-        let origin = simd_make_float3(floorTransform.columns.3) + SIMD3(offset.x, 0, offset.z)
-        let facing = simd_quatf(angle: turn, axis: [0, 1, 0]).act(simd_make_float3(floorTransform.columns.2))
-        return GhostPlacement(origin: origin, facing: facing, onWall: flushBack, width: width, height: height)
+        let facing = simd_quatf(angle: turn, axis: [0, 1, 0]).act(facing)
+        return GhostPlacement(origin: origin + SIMD3(offset.x, 0, offset.z), facing: facing, onWall: flushBack, width: width, height: height)
+    }
+
+    /// The same ghost with its feet at `height` above the house's zero.
+    func raised(to y: Float) -> GhostPlacement {
+        GhostPlacement(origin: SIMD3(origin.x, y, origin.z), facing: facing, onWall: flushBack, width: width, height: height)
+    }
+
+    /// The same ghost at a new size, keeping its proportions.
+    func resized(to newHeight: Float) -> GhostPlacement {
+        GhostPlacement(origin: origin, facing: facing, onWall: flushBack, width: width * newHeight / height, height: newHeight)
     }
 }
 

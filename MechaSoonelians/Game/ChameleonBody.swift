@@ -1,5 +1,6 @@
 import Foundation
 import RealityKit
+import simd
 
 /// The white chameleon body in every pose, baked by Tools/ChameleonModel/bake-poses.mjs. Every pose
 /// has the same vertices and texture layout, so paint stays put when the pose changes, and other
@@ -14,6 +15,8 @@ final class ChameleonBody {
     static let shared = ChameleonBody()
 
     let poses: [Pose]
+    /// Each pose's box, in the body's own units (1.75 tall when standing).
+    let bounds: [(min: SIMD3<Float>, max: SIMD3<Float>)]
     private let uvs: [SIMD2<Float>]
     private let triangles: [SIMD3<Int32>]
     private let positions: [[SIMD3<Float>]]
@@ -45,6 +48,11 @@ final class ChameleonBody {
             return (0..<vertices).map { (i: Int) -> SIMD3<Float> in SIMD3(floats[start + i * 3], floats[start + i * 3 + 1], floats[start + i * 3 + 2]) }
         }
         poses = info.poses
+        bounds = positions.map { (points: [SIMD3<Float>]) -> (min: SIMD3<Float>, max: SIMD3<Float>) in
+            points.reduce((min: points[0], max: points[0])) { (box: (min: SIMD3<Float>, max: SIMD3<Float>), point: SIMD3<Float>) in
+                (min: simd_min(box.min, point), max: simd_max(box.max, point))
+            }
+        }
     }
 
     func index(of id: String?) -> Int? { poses.firstIndex { $0.id == id } }

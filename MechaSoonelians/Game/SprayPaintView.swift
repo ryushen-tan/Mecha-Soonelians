@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// The hiding controls over the AR view: a + in the middle, and one big button that picks up the
-/// color under the + from the real room, or sprays while held when the + is on the body. A pose
-/// button cycles poses, and a joystick and turn buttons walk the chameleon around.
+/// color under the + from the real room, or sprays while held when the + is on the body. The pose
+/// button cycles poses (hold it for the pose wheel); the chameleon can be dragged, pinched and
+/// twisted in the room, walked with the joystick, turned with a slider, or sent to the floor or a wall.
 struct SprayPaintView: View {
     @ObservedObject var painter: SprayPainter
     let timeLeft: String
@@ -11,6 +12,9 @@ struct SprayPaintView: View {
 
     /// Whether the current press is spraying (it started on the body) rather than picking.
     @State private var pressing = false
+    @State private var showsWheel = false
+    @State private var wheelPage = 0
+    @State private var highlightedPose: String?
 
     private var sprayMode: Bool { painter.isSpraying || painter.aimingAtBody }
 
@@ -23,11 +27,29 @@ struct SprayPaintView: View {
                 moveControls
                 bottomPanel
             }
+            if showsWheel { poseWheel }
+        }
+    }
+
+    private var poseWheel: some View {
+        ZStack {
+            RallyStyle.ink.opacity(0.22).ignoresSafeArea()
+                .onTapGesture { showsWheel = false }
+                .accessibilityLabel("Close pose wheel")
+                .accessibilityAddTraits(.isButton)
+            PoseWheel(page: $wheelPage, highlighted: $highlightedPose, current: painter.poseID, pages: painter.posePages) { id in
+                painter.setPose(id: id)
+                showsWheel = false
+            }
+            .frame(maxWidth: 340)
+            .padding(24)
         }
     }
 
     private var hint: String {
         if !painter.isReady { return "Putting your chameleon in the room…" }
+        if let notice = painter.notice { return notice }
+        if painter.isSelected { return "Drag it onto the floor, a wall or furniture. Pinch to resize, twist to turn. Tap it to let go." }
         if !painter.hasPickedColor { return "Point the + at the wall behind your chameleon and tap Pick." }
         if painter.isSpraying { return "Move the phone to spray. Step closer for detail, back for big areas." }
         return sprayMode ? "Hold to spray. Point at the wall again for a new color." : "Point the + at your chameleon to spray, or tap Pick for a new color."
@@ -45,17 +67,25 @@ struct SprayPaintView: View {
             roundButton("arrow.uturn.backward", label: "Undo") { painter.undo() }
                 .disabled(!painter.canUndo)
                 .opacity(painter.canUndo ? 1 : 0.4)
-            Button { painter.nextPose() } label: {
-                VStack(spacing: 2) {
-                    Image(systemName: painter.poseIcon).font(.system(size: 20, weight: .semibold))
-                    Text(painter.poseName).font(RallyStyle.font(10, .semibold)).lineLimit(1)
-                }
-                .frame(width: 64, height: 50)
-                .background(RallyStyle.lime, in: RoundedRectangle(cornerRadius: 14))
+            VStack(spacing: 2) {
+                Image(systemName: painter.poseIcon).font(.system(size: 20, weight: .semibold))
+                Text(painter.poseName).font(RallyStyle.font(10, .semibold)).lineLimit(1)
             }
-            .buttonStyle(.plain)
+            .frame(width: 64, height: 50)
+            .background(RallyStyle.lime, in: RoundedRectangle(cornerRadius: 14))
+            .contentShape(RoundedRectangle(cornerRadius: 14))
+            .onTapGesture { painter.nextPose() }
+            .onLongPressGesture(minimumDuration: 0.35) {
+                guard painter.isReady else { return }
+                highlightedPose = nil
+                showsWheel = true
+            }
+            .accessibilityElement()
             .accessibilityLabel("Pose: \(painter.poseName)")
-            .accessibilityHint("Switches to the next pose.")
+            .accessibilityHint("Switches to the next pose. Hold for every pose.")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { painter.nextPose() }
+            .accessibilityAction(named: "All poses") { showsWheel = true }
         }
         .padding(14)
         .background(RallyStyle.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: 18))
@@ -115,20 +145,46 @@ struct SprayPaintView: View {
         .padding(.bottom, 8)
     }
 
-    /// The joystick walks the chameleon across the floor the way the phone faces; the arrows turn it.
+    /// The joystick walks the chameleon across the floor the way the phone faces; the slider turns it.
     private var moveControls: some View {
-        HStack(alignment: .bottom) {
+        HStack(alignment: .bottom, spacing: 12) {
             Joystick { painter.joystick = $0 }
-            Spacer()
-            HStack(spacing: 10) {
-                holdButton("arrow.counterclockwise", label: "Turn left") { painter.turning = $0 ? -1 : 0 }
-                holdButton("arrow.clockwise", label: "Turn right") { painter.turning = $0 ? 1 : 0 }
+            VStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    placeButton("To floor", systemImage: "arrow.down.to.line") { painter.toFloor() }
+                    placeButton("Against wall", systemImage: "rectangle.portrait.and.arrow.right") { painter.againstWall() }
+                }
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 14, weight: .semibold))
+                        .accessibilityHidden(true)
+                    Slider(value: Binding(get: { painter.turn }, set: { painter.setTurn($0) }), in: -180...180)
+                        .tint(RallyStyle.ink)
+                        .accessibilityLabel("Turn")
+                        .accessibilityValue("\(Int(painter.turn)) degrees")
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(RallyStyle.surface.opacity(0.92), in: Capsule())
+                .overlay(Capsule().stroke(RallyStyle.ink, lineWidth: 2))
             }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
         .opacity(painter.isReady ? 1 : 0.5)
         .disabled(!painter.isReady)
+    }
+
+    private func placeButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(RallyStyle.font(13, .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .background(RallyStyle.surface.opacity(0.92), in: Capsule())
+                .overlay(Capsule().stroke(RallyStyle.ink, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
     }
 
     /// One button for both jobs, so the player never has to look away from the +.
@@ -174,29 +230,6 @@ struct SprayPaintView: View {
                 painter.pickColor()
             }
         }
-    }
-
-    /// A button that does something for as long as it's held.
-    private func holdButton(_ systemImage: String, label: String, onHold: @escaping (Bool) -> Void) -> some View {
-        Image(systemName: systemImage)
-            .font(.system(size: 20, weight: .bold))
-            .frame(width: 56, height: 56)
-            .background(RallyStyle.surface.opacity(0.92), in: Circle())
-            .overlay(Circle().stroke(RallyStyle.ink, lineWidth: 2))
-            .contentShape(Circle())
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in onHold(true) }
-                .onEnded { _ in onHold(false) })
-            .accessibilityElement()
-            .accessibilityLabel(label)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction {
-                onHold(true)
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(300))
-                    onHold(false)
-                }
-            }
     }
 
     private func roundButton(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {
