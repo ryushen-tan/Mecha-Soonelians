@@ -22,6 +22,7 @@
 		41523905A7AC596D58AD1F51 /* HouseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EE05025550A1C0ADC6A58D /* HouseStore.swift */; };
 		54501E87514E43B04138E862 /* CharacterGame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98A6BD433F465C227C7C182C /* CharacterGame.swift */; };
 		56780843821EFB47A198DF53 /* rgb.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 1DAD99AE1A3500130B641F6C /* rgb.jpg */; };
+		5D3D823454B48F796734594E /* SprayPainter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D67C6E4F96256D342E849EE /* SprayPainter.swift */; };
 		66650E709BCF023072433390 /* MechaSooneliansApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */; };
 		6767454F46983FD7EE922639 /* human-1-cutout.png in Resources */ = {isa = PBXBuildFile; fileRef = 3E4570DCDADD00D888DC06D1 /* human-1-cutout.png */; };
 		6BE465E0EC84E1FF5523ABE5 /* HumanAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F4D38EFC52020C49647B159 /* HumanAnalyzer.swift */; };
@@ -49,6 +50,7 @@
 		E8B933866B1E0C5DF7444820 /* ChameleonStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 832C5186DE797FF76CF6DA3F /* ChameleonStudioView.swift */; };
 		E9B08F4081110F9BC2AAE35F /* CaptureImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE1EC8831CA5703DDB00CA1 /* CaptureImage.swift */; };
 		F52D814B2C79AB10F25475AC /* human-rgb.png in Resources */ = {isa = PBXBuildFile; fileRef = 0ABE41D7846B7EE0C68B2F1B /* human-rgb.png */; };
+		F57E21ADFF6E76FD88072716 /* SprayPaintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9A8B3A361FC622CEC3D641 /* SprayPaintView.swift */; };
 		FB79186CB13FA6F01ACB4321 /* ATTRIBUTION.txt in Resources */ = {isa = PBXBuildFile; fileRef = DBAC0F8CF5D53ED50877620D /* ATTRIBUTION.txt */; };
 /* End PBXBuildFile section */
 
@@ -82,6 +84,7 @@
 		9392E082D145DE0B1F5484FA /* ARGameController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARGameController.swift; sourceTree = "<group>"; };
 		98A6BD433F465C227C7C182C /* CharacterGame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterGame.swift; sourceTree = "<group>"; };
 		9A7FFFBDBEC0B6D593AFC7A7 /* Character3DModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DModel.swift; sourceTree = "<group>"; };
+		9D67C6E4F96256D342E849EE /* SprayPainter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SprayPainter.swift; sourceTree = "<group>"; };
 		B1D8FE898C8C0F85CD06E342 /* human-depth-float32.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "human-depth-float32.bin"; sourceTree = "<group>"; };
 		B72EA1D5DC5972D7C62DD623 /* GameSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSession.swift; sourceTree = "<group>"; };
 		BBE1EC8831CA5703DDB00CA1 /* CaptureImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureImage.swift; sourceTree = "<group>"; };
@@ -97,6 +100,7 @@
 		F15CF7625006B02A6F8C92C4 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		F51E65ADE5E00819B806A976 /* PaintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaintView.swift; sourceTree = "<group>"; };
 		FB756F6C6B452E359FFDAB4D /* ModelServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelServer.swift; sourceTree = "<group>"; };
+		FD9A8B3A361FC622CEC3D641 /* SprayPaintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SprayPaintView.swift; sourceTree = "<group>"; };
 		FF79F3BBCC9CA2AC029477CB /* CaptureEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -173,6 +177,8 @@
 				1013AAE8F957E87D79BCB2E6 /* GhostCapture.swift */,
 				FB756F6C6B452E359FFDAB4D /* ModelServer.swift */,
 				F51E65ADE5E00819B806A976 /* PaintView.swift */,
+				9D67C6E4F96256D342E849EE /* SprayPainter.swift */,
+				FD9A8B3A361FC622CEC3D641 /* SprayPaintView.swift */,
 			);
 			path = Game;
 			sourceTree = "<group>";
@@ -343,6 +349,8 @@
 				B67C1B83A11790E5D686ECF3 /* PersonCameraView.swift in Sources */,
 				216D3DA2E0C913B9D88C727D /* PoseCanvas.swift in Sources */,
 				DDA3913CE4881610A4129A29 /* ScanView.swift in Sources */,
+				F57E21ADFF6E76FD88072716 /* SprayPaintView.swift in Sources */,
+				5D3D823454B48F796734594E /* SprayPainter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
