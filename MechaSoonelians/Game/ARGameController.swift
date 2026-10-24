@@ -22,6 +22,9 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     private var shownGhosts: Set<UUID> = []
     private var floorY: Float?
     private var isRunning = false
+    /// What the session was started with, so the camera can be brought back without losing the house.
+    private var configuration: ARWorldTrackingConfiguration?
+    private var watchdog: Timer?
     /// The scanned walls, for putting hiders' backs against them.
     private(set) var walls: [GhostCapture.Wall] = []
     /// The scanned walls and furniture, so chameleons don't go inside them.
@@ -64,13 +67,31 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         if ARWorldTrackingConfiguration.supportsFrameSemantics(.personSegmentationWithDepth) {
             config.frameSemantics.insert(.personSegmentationWithDepth)
         }
+        configuration = config
         arView.session.run(config, options: [.resetTracking, .removeExistingAnchors])
         trackingMessage = "Look around so your phone can find the house…"
+        // If frames stop arriving (a covered or interrupted view), bring the camera back by itself.
+        watchdog?.invalidate()
+        watchdog = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            guard let self, self.isRunning else { return }
+            let age = self.arView.session.currentFrame.map { ProcessInfo.processInfo.systemUptime - $0.timestamp }
+            if age == nil || age! > 3 { self.restartCamera() }
+        }
     }
 
     func stop() {
+        watchdog?.invalidate()
+        watchdog = nil
         arView.session.pause()
         isRunning = false
+    }
+
+    /// Runs the session again with the same house map, without resetting where the phone thinks it is.
+    /// Fixes a camera view that went black after being covered or interrupted.
+    func restartCamera() {
+        guard isRunning, let configuration else { return }
+        arView.session.run(configuration)
+        arView.setNeedsDisplay()
     }
 
     var currentFrame: ARFrame? { arView.session.currentFrame }
@@ -321,6 +342,12 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
 
     func session(_ session: ARSession, didFailWithError error: Error) {
         trackingMessage = "AR error: \(error.localizedDescription)"
+        // Try once more: most failures are the camera being taken away for a moment.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.restartCamera() }
+    }
+
+    func sessionInterruptionEnded(_ session: ARSession) {
+        restartCamera()
     }
 }
 

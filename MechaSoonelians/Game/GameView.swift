@@ -113,6 +113,7 @@ struct GameView: View {
         .onChange(of: session.ghostModels) { syncGhosts() }
         .onChange(of: state.phase) {
             announcePhase()
+            ar.restartCamera() // The seeker's camera sits under a cover while everyone hides.
             if state.phase != .hiding {
                 sculptor?.cancel()
                 sculptor = nil
@@ -333,6 +334,8 @@ struct GameView: View {
             Text("Found \(found) of \(state.ghosts.count)").font(RallyStyle.font(23, .bold))
             Text(ar.isRelocalized ? "Tap a hider when you spot them." : ar.trackingMessage)
                 .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+            Button("Camera black? Restart it") { ar.restartCamera() }
+                .font(RallyStyle.font(13, .semibold))
             if session.isHost {
                 Button("End round") { session.skipPhase() }
                     .font(RallyStyle.font(14, .semibold))
