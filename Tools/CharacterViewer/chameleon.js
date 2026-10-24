@@ -1,67 +1,67 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-// A blocky, faceless Meccha-style mannequin, generated in code so it needs no model file.
-// It faces +Z with its left side at +X, stands 1.75 m tall in an A-pose, and uses
-// Mixamo bone names so the pose wheel (rig.js) works on it.
+// A smooth, chubby, faceless Meccha-style figure (big round head, stubby rounded limbs, mitten
+// hands), generated in code so it needs no model file. It faces +Z with its left side at +X,
+// stands 1.75 m tall in an A-pose, and uses Mixamo bone names so the pose wheel (rig.js) works.
+// Every part is a capsule or ball riding rigidly on one bone; the rounded ends overlap at the
+// joints, so bending an elbow or knee stays seamless.
 
 const HEIGHT = 1.75;
-const ATLAS = 512;
+const ATLAS = 1024;
 const ARM_DROP = THREE.MathUtils.degToRad(40);
 
 // Bone name, parent, world position in the rest pose.
 function skeletonLayout() {
   const arm = new THREE.Vector3(Math.cos(ARM_DROP), -Math.sin(ARM_DROP), 0);
   const bones = [
-    ['Hips', null, [0, 0.95, 0]], ['Spine', 'Hips', [0, 1.05, 0]], ['Spine1', 'Spine', [0, 1.17, 0]],
-    ['Spine2', 'Spine1', [0, 1.29, 0]], ['Neck', 'Spine2', [0, 1.46, 0]], ['Head', 'Neck', [0, 1.52, 0]],
+    ['Hips', null, [0, 0.82, 0]], ['Spine', 'Hips', [0, 0.92, 0]], ['Spine1', 'Spine', [0, 1.04, 0]],
+    ['Spine2', 'Spine1', [0, 1.16, 0]], ['Neck', 'Spine2', [0, 1.3, 0]], ['Head', 'Neck', [0, 1.36, 0]],
     ['HeadTop_End', 'Head', [0, HEIGHT, 0]]
   ];
   for (const [side, sign] of [['Left', 1], ['Right', -1]]) {
-    const shoulder = new THREE.Vector3(sign * 0.21, 1.42, 0);
+    const shoulder = new THREE.Vector3(sign * 0.25, 1.24, 0);
     const along = arm.clone().setX(arm.x * sign);
-    const elbow = shoulder.clone().addScaledVector(along, 0.29);
-    const wrist = elbow.clone().addScaledVector(along, 0.26);
-    const fingers = wrist.clone().addScaledVector(along, 0.16);
+    const elbow = shoulder.clone().addScaledVector(along, 0.24);
+    const wrist = elbow.clone().addScaledVector(along, 0.21);
+    const fingers = wrist.clone().addScaledVector(along, 0.1);
     bones.push(
-      [side + 'Shoulder', 'Spine2', [sign * 0.08, 1.42, 0]], [side + 'Arm', side + 'Shoulder', shoulder.toArray()],
+      [side + 'Shoulder', 'Spine2', [sign * 0.1, 1.24, 0]], [side + 'Arm', side + 'Shoulder', shoulder.toArray()],
       [side + 'ForeArm', side + 'Arm', elbow.toArray()], [side + 'Hand', side + 'ForeArm', wrist.toArray()],
       [side + 'HandMiddle1', side + 'Hand', fingers.toArray()],
-      [side + 'UpLeg', 'Hips', [sign * 0.1, 0.9, 0]], [side + 'Leg', side + 'UpLeg', [sign * 0.1, 0.49, 0]],
-      [side + 'Foot', side + 'Leg', [sign * 0.1, 0.08, 0]], [side + 'ToeBase', side + 'Foot', [sign * 0.1, 0.03, 0.15]],
-      [side + 'Toe_End', side + 'ToeBase', [sign * 0.1, 0.03, 0.2]]
+      [side + 'UpLeg', 'Hips', [sign * 0.12, 0.76, 0]], [side + 'Leg', side + 'UpLeg', [sign * 0.12, 0.43, 0]],
+      [side + 'Foot', side + 'Leg', [sign * 0.12, 0.1, 0]], [side + 'ToeBase', side + 'Foot', [sign * 0.12, 0.04, 0.12]],
+      [side + 'Toe_End', side + 'ToeBase', [sign * 0.12, 0.04, 0.17]]
     );
   }
   return bones;
 }
 
-// Each part is a box riding rigidly on one bone: [bone, from, to, width, depth].
-// Torso parts run vertically; limbs run from one bone to the next.
+// [bone, from, to, radius, squash (x, z scale of the cross-section)]. A ball has from == to.
 function partLayout(world) {
-  const p = name => world.get(name);
+  const p = name => world.get(name).toArray();
   const parts = [
-    ['Hips', [0, 0.86, 0], [0, 1.05, 0], 0.34, 0.21],
-    ['Spine1', [0, 1.05, 0], [0, 1.25, 0], 0.31, 0.19],
-    ['Spine2', [0, 1.25, 0], [0, 1.47, 0], 0.4, 0.22],
-    ['Neck', [0, 1.45, 0], [0, 1.53, 0], 0.11, 0.11],
-    ['Head', [0, 1.52, 0], [0, HEIGHT, 0], 0.2, 0.22]
+    ['Hips', [0, 0.78, 0], [0, 0.98, 0], 0.2, [1.15, 0.85]],
+    ['Spine1', [0, 0.98, 0], [0, 1.2, 0], 0.21, [1.12, 0.82]],
+    ['Head', [0, 1.54, 0], [0, 1.54, 0], 0.21, [1, 0.95]]
   ];
   for (const side of ['Left', 'Right']) {
+    const foot = world.get(side + 'Foot');
     parts.push(
-      [side + 'Arm', p(side + 'Arm'), p(side + 'ForeArm'), 0.1, 0.1],
-      [side + 'ForeArm', p(side + 'ForeArm'), p(side + 'Hand'), 0.085, 0.085],
-      [side + 'Hand', p(side + 'Hand'), p(side + 'HandMiddle1'), 0.09, 0.04],
-      [side + 'UpLeg', p(side + 'UpLeg'), p(side + 'Leg'), 0.15, 0.16],
-      [side + 'Leg', p(side + 'Leg'), p(side + 'Foot'), 0.115, 0.12],
-      [side + 'Foot', [p(side + 'Foot').x, 0.045, -0.05], [p(side + 'Foot').x, 0.045, 0.17], 0.1, 0.09]
+      [side + 'Arm', p(side + 'Arm'), p(side + 'ForeArm'), 0.075, [1, 1]],
+      [side + 'ForeArm', p(side + 'ForeArm'), p(side + 'Hand'), 0.068, [1, 1]],
+      [side + 'Hand', p(side + 'HandMiddle1'), p(side + 'HandMiddle1'), 0.072, [0.85, 0.7]],
+      [side + 'UpLeg', p(side + 'UpLeg'), p(side + 'Leg'), 0.1, [1, 1]],
+      [side + 'Leg', p(side + 'Leg'), p(side + 'Foot'), 0.088, [1, 1]],
+      [side + 'Foot', [foot.x, 0.06, 0.0], [foot.x, 0.06, 0.07], 0.06, [1.2, 1]]
     );
   }
-  return parts.map(([bone, from, to, width, depth]) => ({
-    bone, from: new THREE.Vector3(...from), to: new THREE.Vector3(...to), width, depth
+  return parts.map(([bone, from, to, radius, squash]) => ({
+    bone, from: new THREE.Vector3(...from), to: new THREE.Vector3(...to), radius, squash
   }));
 }
 
-/// Builds the skinned mannequin. Returns the mesh plus each box face's corners for baking.
+/// Builds the skinned figure. Returns its parts (geometry, atlas cell, capsule for occlusion).
 export function buildMannequin() {
   const world = new Map();
   const bones = new Map();
@@ -76,90 +76,72 @@ export function buildMannequin() {
   }
   const boneList = [...bones.values()];
 
-  const geometries = [];
-  const faces = [];
-  const boxes = [];
-  for (const part of partLayout(world)) {
+  const parts = partLayout(world).map(part => {
     const axis = part.to.clone().sub(part.from);
     const length = axis.length();
-    // Feet lie along Z; everything else is a box stood along its segment.
-    const geometry = new THREE.BoxGeometry(part.width, length, part.depth);
-    const rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.clone().normalize());
-    const center = part.from.clone().add(part.to).multiplyScalar(0.5);
+    const geometry = length < 1e-4
+      ? new THREE.SphereGeometry(part.radius, 32, 20)
+      : new THREE.CapsuleGeometry(part.radius, length, 10, 28, 4);
+    geometry.scale(part.squash[0], 1, part.squash[1]);
+    const rotation = length < 1e-4 ? new THREE.Quaternion()
+      : new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.clone().normalize());
     geometry.applyQuaternion(rotation);
+    const center = part.from.clone().add(part.to).multiplyScalar(0.5);
     geometry.translate(center.x, center.y, center.z);
     const boneIndex = boneList.indexOf(bones.get(part.bone));
     const count = geometry.attributes.position.count;
     geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Array(count).fill(0).flatMap(() => [boneIndex, 0, 0, 0]), 4));
     geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(new Array(count).fill(0).flatMap(() => [1, 0, 0, 0]), 4));
-    boxes.push({ part: part.bone, center, rotation, half: new THREE.Vector3(part.width / 2, length / 2, part.depth / 2) });
-
-    // BoxGeometry has 4 vertices per face; remember each face's corners by their UV.
-    const positions = geometry.attributes.position;
-    const uvs = geometry.attributes.uv;
-    const normals = geometry.attributes.normal;
-    for (let face = 0; face < 6; face++) {
-      const corner = {};
-      for (let vertex = face * 4; vertex < face * 4 + 4; vertex++) {
-        corner[`${uvs.getX(vertex)},${uvs.getY(vertex)}`] = new THREE.Vector3().fromBufferAttribute(positions, vertex);
-      }
-      faces.push({
-        geometryIndex: geometries.length, first: face * 4, part: part.bone,
-        normal: new THREE.Vector3().fromBufferAttribute(normals, face * 4),
-        p00: corner['0,0'], p10: corner['1,0'], p01: corner['0,1'], p11: corner['1,1']
-      });
-    }
-    geometries.push(geometry);
-  }
-  packFaces(faces);
-  // Point each face's UVs at its own patch of the texture.
-  for (const face of faces) {
-    const uvs = geometries[face.geometryIndex].attributes.uv;
-    for (let vertex = face.first; vertex < face.first + 4; vertex++) {
-      uvs.setXY(vertex, (face.rect.x + uvs.getX(vertex) * face.rect.w) / ATLAS, (face.rect.y + uvs.getY(vertex) * face.rect.h) / ATLAS);
+    // Cell size in the texture: around the part by along it.
+    const around = 2 * Math.PI * part.radius * (part.squash[0] + part.squash[1]) / 2;
+    return { ...part, geometry, lengthU: around, lengthV: length + 2 * part.radius,
+      radiusForOcclusion: part.radius * Math.min(...part.squash) };
+  });
+  packParts(parts);
+  for (const part of parts) {
+    const uvs = part.geometry.attributes.uv;
+    for (let vertex = 0; vertex < uvs.count; vertex++) {
+      uvs.setXY(vertex, (part.rect.x + uvs.getX(vertex) * part.rect.w) / ATLAS, (part.rect.y + uvs.getY(vertex) * part.rect.h) / ATLAS);
     }
   }
-  return { geometries, faces, boxes, boneList, root: bones.get('Hips') };
+  return { parts, boneList, root: bones.get('Hips') };
 }
 
-/// Shelf-packs every face into the atlas at the largest uniform texels-per-metre that fits.
-function packFaces(faces) {
-  for (const face of faces) {
-    face.lengthU = face.p10.distanceTo(face.p00);
-    face.lengthV = face.p01.distanceTo(face.p00);
-  }
-  const order = [...faces].sort((a, b) => b.lengthV - a.lengthV);
+/// Shelf-packs every part's cell into the atlas at the largest uniform texels-per-metre that fits.
+function packParts(parts) {
+  const order = [...parts].sort((a, b) => b.lengthV - a.lengthV);
   const fits = scale => {
     let x = 0, y = 0, row = 0;
-    for (const face of order) {
-      const w = Math.max(2, Math.floor(face.lengthU * scale)), h = Math.max(2, Math.floor(face.lengthV * scale));
-      if (x + w + 2 > ATLAS) { x = 0; y += row + 2; row = 0; }
-      if (y + h + 2 > ATLAS || w + 2 > ATLAS) return false;
-      face.rect = { x: x + 1, y: y + 1, w, h };
-      x += w + 2; row = Math.max(row, h);
+    for (const part of order) {
+      const w = Math.max(4, Math.floor(part.lengthU * scale)), h = Math.max(4, Math.floor(part.lengthV * scale));
+      if (x + w + 4 > ATLAS) { x = 0; y += row + 4; row = 0; }
+      if (y + h + 4 > ATLAS || w + 4 > ATLAS) return false;
+      part.rect = { x: x + 2, y: y + 2, w, h };
+      x += w + 4; row = Math.max(row, h);
     }
     return true;
   };
-  let low = 1, high = 4000;
+  let low = 1, high = 8000;
   for (let step = 0; step < 24; step++) { const middle = (low + high) / 2; if (fits(middle)) low = middle; else high = middle; }
   fits(low);
 }
 
-/// Ray (origin, direction) against an oriented box; true when it hits in front of the origin.
-function rayHitsBox(origin, direction, box) {
-  const inverse = box.rotation.clone().invert();
-  const o = origin.clone().sub(box.center).applyQuaternion(inverse);
-  const d = direction.clone().applyQuaternion(inverse);
-  let near = -Infinity, far = Infinity;
-  for (const axis of ['x', 'y', 'z']) {
-    if (Math.abs(d[axis]) < 1e-9) { if (Math.abs(o[axis]) > box.half[axis]) return false; continue; }
-    const a = (-box.half[axis] - o[axis]) / d[axis], b = (box.half[axis] - o[axis]) / d[axis];
-    near = Math.max(near, Math.min(a, b)); far = Math.min(far, Math.max(a, b));
+/// Distance along a ray (origin, direction) to a capsule, or Infinity. Used for occlusion.
+function rayCapsule(origin, direction, a, b, radius) {
+  // Sample along the capsule's axis; plenty for deciding whether one limb hides another.
+  const steps = a.distanceTo(b) < 1e-4 ? 1 : 6;
+  const point = new THREE.Vector3(), toPoint = new THREE.Vector3();
+  for (let step = 0; step < steps; step++) {
+    point.lerpVectors(a, b, steps === 1 ? 0 : step / (steps - 1));
+    toPoint.subVectors(point, origin);
+    const along = toPoint.dot(direction);
+    if (along <= 0.01) continue;
+    if (toPoint.lengthSq() - along * along < radius * radius) return along;
   }
-  return far >= Math.max(near, 0.001);
+  return Infinity;
 }
 
-/// Projects the turnaround photos onto the mannequin's texture.
+/// Projects the turnaround photos onto the figure's texture.
 /// Each view is a person cutout cropped head-to-feet, the turn in degrees (turning to their
 /// right is positive), and where the hips are across the crop (0–1).
 export function bakeTexture(mannequin, views, { faceless = true } = {}) {
@@ -179,44 +161,69 @@ export function bakeTexture(mannequin, views, { faceless = true } = {}) {
       centerX: view.centerX ?? 0.5
     };
   });
-  const point = new THREE.Vector3(), start = new THREE.Vector3();
-  for (const face of mannequin.faces) {
-    const others = mannequin.boxes.filter(box => box.part !== face.part);
-    const skipFront = faceless && face.part === 'Head' && face.normal.z > 0.9;
-    for (let ty = 0; ty < face.rect.h; ty++) {
-      for (let tx = 0; tx < face.rect.w; tx++) {
-        const u = (tx + 0.5) / face.rect.w, v = (ty + 0.5) / face.rect.h;
-        point.copy(face.p00).multiplyScalar((1 - u) * (1 - v)).addScaledVector(face.p10, u * (1 - v))
-          .addScaledVector(face.p01, (1 - u) * v).addScaledVector(face.p11, u * v);
-        let red = 0, green = 0, blue = 0, total = 0;
-        if (!skipFront) {
-          for (const view of samples) {
-            const facing = face.normal.dot(view.toCamera);
-            if (facing < 0.2) continue;
-            start.copy(point).addScaledVector(face.normal, 0.003);
-            if (others.some(box => rayHitsBox(start, view.toCamera, box))) continue;
-            // Orthographic: head-to-feet of the mannequin spans the crop's height.
-            const scale = view.height / HEIGHT;
-            const px = Math.round(view.centerX * view.width + point.dot(view.right) * scale);
-            const py = Math.round(view.height - point.y * scale);
-            if (px < 0 || py < 0 || px >= view.width || py >= view.height) continue;
-            const index = (py * view.width + px) * 4;
-            if (view.pixels[index + 3] < 128) continue;
-            const weight = facing ** 3;
-            red += view.pixels[index] * weight; green += view.pixels[index + 1] * weight; blue += view.pixels[index + 2] * weight;
-            total += weight;
-          }
+
+  const color = (point, normal, others, skip) => {
+    if (skip) return null;
+    let red = 0, green = 0, blue = 0, total = 0;
+    const start = point.clone().addScaledVector(normal, 0.004);
+    for (const view of samples) {
+      const facing = normal.dot(view.toCamera);
+      if (facing < 0.15) continue;
+      if (others.some(part => rayCapsule(start, view.toCamera, part.from, part.to, part.radiusForOcclusion) < Infinity)) continue;
+      // Orthographic: head-to-feet of the figure spans the crop's height.
+      const scale = view.height / HEIGHT;
+      const px = Math.round(view.centerX * view.width + point.dot(view.right) * scale);
+      const py = Math.round(view.height - point.y * scale);
+      if (px < 0 || py < 0 || px >= view.width || py >= view.height) continue;
+      const index = (py * view.width + px) * 4;
+      if (view.pixels[index + 3] < 128) continue;
+      const weight = facing ** 3;
+      red += view.pixels[index] * weight; green += view.pixels[index + 1] * weight; blue += view.pixels[index + 2] * weight;
+      total += weight;
+    }
+    return total ? [red / total, green / total, blue / total] : null;
+  };
+
+  const a = new THREE.Vector2(), b = new THREE.Vector2(), c = new THREE.Vector2();
+  const pa = new THREE.Vector3(), pb = new THREE.Vector3(), pc = new THREE.Vector3();
+  const na = new THREE.Vector3(), nb = new THREE.Vector3(), nc = new THREE.Vector3();
+  for (const part of mannequin.parts) {
+    const others = mannequin.parts.filter(other => other !== part);
+    const { position, normal, uv } = part.geometry.attributes;
+    const index = part.geometry.index;
+    const centerZ = part.from.z;
+    for (let triangle = 0; triangle < index.count; triangle += 3) {
+      const [i, j, k] = [index.getX(triangle), index.getX(triangle + 1), index.getX(triangle + 2)];
+      a.fromBufferAttribute(uv, i).multiplyScalar(ATLAS); b.fromBufferAttribute(uv, j).multiplyScalar(ATLAS); c.fromBufferAttribute(uv, k).multiplyScalar(ATLAS);
+      pa.fromBufferAttribute(position, i); pb.fromBufferAttribute(position, j); pc.fromBufferAttribute(position, k);
+      na.fromBufferAttribute(normal, i); nb.fromBufferAttribute(normal, j); nc.fromBufferAttribute(normal, k);
+      const area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+      if (Math.abs(area) < 1e-9) continue;
+      const minX = Math.max(0, Math.floor(Math.min(a.x, b.x, c.x))), maxX = Math.min(ATLAS - 1, Math.ceil(Math.max(a.x, b.x, c.x)));
+      const minY = Math.max(0, Math.floor(Math.min(a.y, b.y, c.y))), maxY = Math.min(ATLAS - 1, Math.ceil(Math.max(a.y, b.y, c.y)));
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const px = x + 0.5, py = y + 0.5;
+          const w1 = ((b.x - px) * (c.y - py) - (c.x - px) * (b.y - py)) / area;
+          const w2 = ((c.x - px) * (a.y - py) - (a.x - px) * (c.y - py)) / area;
+          const w3 = 1 - w1 - w2;
+          if (w1 < -0.01 || w2 < -0.01 || w3 < -0.01) continue;
+          const point = pa.clone().multiplyScalar(w1).addScaledVector(pb, w2).addScaledVector(pc, w3);
+          const surface = na.clone().multiplyScalar(w1).addScaledVector(nb, w2).addScaledVector(nc, w3).normalize();
+          // Faceless: the front of the head stays white.
+          const skip = faceless && part.bone === 'Head' && surface.z > 0.35 && point.z > centerZ;
+          const rgb = color(point, surface, others, skip);
+          const pixel = (y * ATLAS + x) * 4;
+          // Anything no photo saw stays figure white.
+          atlas.data[pixel] = rgb ? rgb[0] : 255;
+          atlas.data[pixel + 1] = rgb ? rgb[1] : 255;
+          atlas.data[pixel + 2] = rgb ? rgb[2] : 255;
+          atlas.data[pixel + 3] = 255;
         }
-        const index = ((face.rect.y + ty) * ATLAS + face.rect.x + tx) * 4;
-        // Anything no photo saw stays mannequin white.
-        atlas.data[index] = total ? red / total : 255;
-        atlas.data[index + 1] = total ? green / total : 255;
-        atlas.data[index + 2] = total ? blue / total : 255;
-        atlas.data[index + 3] = 255;
       }
     }
   }
-  dilate(atlas, 2);
+  dilate(atlas, 3);
   context.putImageData(atlas, 0, 0);
   return canvas;
 }
@@ -245,11 +252,11 @@ function dilate(image, passes) {
 
 /// The finished chameleon: one skinned mesh with the baked texture, ready for GLTFExporter.
 export function chameleonScene(mannequin, texture) {
-  const geometry = mergeGeometries(mannequin.geometries, false);
+  const geometry = mergeGeometries(mannequin.parts.map(part => part.geometry), false);
   const map = new THREE.CanvasTexture(texture);
   map.flipY = false;
   map.colorSpace = THREE.SRGBColorSpace;
-  const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshStandardMaterial({ map, roughness: 0.85 }));
+  const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshStandardMaterial({ map, roughness: 0.6 }));
   mesh.name = 'Chameleon';
   mesh.add(mannequin.root);
   mesh.bind(new THREE.Skeleton(mannequin.boneList));
