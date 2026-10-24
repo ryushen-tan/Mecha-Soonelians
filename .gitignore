@@ -5,6 +5,7 @@ build/
 *.xcuserstate
 xcuserdata/
 node_modules/
+.next/
 .env
 artifacts/
 

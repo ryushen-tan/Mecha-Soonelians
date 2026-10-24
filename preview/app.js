@@ -4,7 +4,7 @@ const app = document.querySelector('#app');
 const surface = document.querySelector('#app-surface');
 const dialog = document.querySelector('#confirm-dialog');
 const faceNames = ['Sunny', 'Cool', 'Peppy', 'Dreamer', 'Sprout', 'Peach'];
-const state = { screen: 'home', name: '', avatar: 0, capacity: 8, code: '482916', role: 'host', locked: false, players: [], entry: 'create' };
+const state = { screen: 'home', name: '', avatar: 0, code: '482916', role: 'host', locked: false, players: [], entry: 'create' };
 let toastTimer;
 
 const paths = {
@@ -89,7 +89,6 @@ function profile() {
     <form id="profile-form" novalidate>
       <div class="field-group"><span class="field-label" id="face-label">Pick your face</span><div class="avatar-options" role="group" aria-labelledby="face-label">${faceNames.map((name, i) => `<button type="button" class="avatar-option" data-avatar="${i}" aria-label="${name} avatar" aria-pressed="${state.avatar === i}">${avatar(i)}</button>`).join('')}</div></div>
       <div class="field-group"><label class="field-label" for="nickname">Nickname</label><input class="name-input" id="nickname" name="nickname" placeholder="Your nickname" value="${escapeHTML(state.name)}" maxlength="20" autocomplete="nickname" aria-describedby="name-hint"><p class="helper" id="name-hint">1–20 characters</p></div>
-      ${creating ? `<div class="field-group"><span class="field-label" id="size-label">Room size</span><div class="size-options" role="group" aria-labelledby="size-label">${[4, 8, 12, 20].map(n => `<button type="button" data-capacity="${n}" aria-pressed="${state.capacity === n}">${n}</button>`).join('')}</div></div>` : ''}
       <button class="btn spread" type="submit">${creating ? 'Create room' : 'Join room'}${icon('arrow')}</button>
     </form>
   </section>`;
@@ -102,10 +101,10 @@ function lobby() {
   return `<section class="screen lobby-screen" aria-label="Lobby">
     <div class="app-header">${brand()}</div>
     <div class="code-ticket"><p class="eyebrow">${state.locked ? 'ROOM LOCKED' : 'ROOM CODE'}</p><div class="room-code">${formattedCode()}</div><div class="ticket-actions"><button data-action="copy">${icon('copy')}Copy code</button><button data-action="share">${icon('share')}Share invite</button></div></div>
-    <div class="crew-heading"><h3>Players</h3><span class="count">${state.players.length}/${state.capacity}</span></div>
-    <div class="player-grid">${state.players.map((player, index) => `<div class="player-tile">${host && !player.me ? `<button class="remove-player" data-remove="${index}" aria-label="Remove ${escapeHTML(player.name)}">×</button>` : ''}${avatar(player.avatar)}<div class="player-name">${escapeHTML(player.name)} ${player.me ? '<small>(you)</small>' : ''}</div><span class="player-status ${player.ready ? 'is-ready' : ''}">${icon(player.host ? 'crown' : player.ready ? 'check' : 'clock')}${player.host ? 'Host' : player.ready ? 'Ready to go' : 'Getting ready'}</span></div>`).join('')}${state.players.length < state.capacity ? '<div class="player-tile empty"><span class="empty-seat">+</span></div>' : ''}</div>
+    <div class="crew-heading"><h3>Players</h3><span class="count">${state.players.length}</span></div>
+    <div class="player-grid">${state.players.map((player, index) => `<div class="player-tile">${host && !player.me ? `<button class="remove-player" data-remove="${index}" aria-label="Remove ${escapeHTML(player.name)}">×</button>` : ''}${avatar(player.avatar)}<div class="player-name">${escapeHTML(player.name)} ${player.me ? '<small>(you)</small>' : ''}</div><span class="player-status ${player.ready ? 'is-ready' : ''}">${icon(player.host ? 'crown' : player.ready ? 'check' : 'clock')}${player.host ? 'Host' : player.ready ? 'Ready to go' : 'Getting ready'}</span></div>`).join('')}</div>
     <div class="lobby-bottom">${host ? `<div class="room-lock-row"><div><label id="lock-label">Lock the room</label></div><button class="toggle" role="switch" aria-checked="${state.locked}" aria-labelledby="lock-label" data-action="lock"></button></div><button class="btn spread" data-action="start" ${canStart ? '' : 'disabled'}>Start session ${icon('arrow')}</button><p class="fine-print">${state.players.length < 2 ? 'At least 2 players required.' : canStart ? 'Everyone is ready.' : `${readyCount} of ${state.players.length} ready.`}</p>` : `<div class="waiting-note">${icon('clock')}<div><strong>Waiting for the host</strong></div></div><button class="btn ${me.ready ? 'btn-ink' : ''}" data-action="ready">${icon('check')}${me.ready ? 'Ready · tap to undo' : 'I’m ready'}</button>`}
-    <button class="text-button end-room" data-action="leave">${host ? 'End room' : 'Leave room'}</button></div>
+    <button class="btn btn-end-room end-room" data-action="leave">${host ? 'End room' : 'Leave room'}</button></div>
   </section>`;
 }
 function started() {
@@ -133,14 +132,11 @@ document.addEventListener('click', async event => {
     return;
   }
   if (button.dataset.avatar !== undefined) {
-    state.avatar = Number(button.dataset.avatar);
-    document.querySelector('#profile-avatar').innerHTML = avatar(state.avatar);
+    const nextAvatar = Number(button.dataset.avatar);
+    if (nextAvatar === state.avatar) return;
+    state.avatar = nextAvatar;
+    document.querySelector('#profile-avatar').innerHTML = avatar(state.avatar, 'avatar-rock');
     document.querySelectorAll('[data-avatar]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.avatar) === state.avatar)));
-    return;
-  }
-  if (button.dataset.capacity) {
-    state.capacity = Number(button.dataset.capacity);
-    document.querySelectorAll('[data-capacity]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.capacity) === state.capacity)));
     return;
   }
   if (button.dataset.remove !== undefined) {
@@ -149,7 +145,7 @@ document.addEventListener('click', async event => {
     render(); toast(`${name} left the room.`); return;
   }
   switch (button.dataset.action) {
-    case 'reset': Object.assign(state, { name: '', avatar: 0, capacity: 8, locked: false, players: [], code: '482916', role: 'host' }); navigate('home'); break;
+    case 'reset': Object.assign(state, { name: '', avatar: 0, locked: false, players: [], code: '482916', role: 'host' }); navigate('home'); break;
     case 'home': navigate('home'); break;
     case 'settings': navigate('settings'); break;
     case 'create': state.entry = 'create'; navigate('profile'); break;
@@ -161,15 +157,18 @@ document.addEventListener('click', async event => {
       try { await navigator.clipboard.writeText(`Join my Rally room: ${formattedCode()} (design preview)`); toast('Invite copied. Send it to your people.'); }
       catch { toast(`Invite your friends with code ${formattedCode()}.`); }
       break;
-    case 'lock': state.locked = !state.locked; render(); toast(state.locked ? 'Room locked. Just your crew.' : 'Room unlocked. Come on in.'); break;
+    case 'lock': state.locked = !state.locked; render(); break;
     case 'ready': { const me = state.players.find(p => p.me); me.ready = !me.ready; render(); break; }
     case 'start': if (state.players.length >= 2 && state.players.every(p => p.ready)) navigate('started'); break;
     case 'back-lobby': state.locked = false; state.players.forEach(p => p.ready = !!p.host); navigate('lobby'); break;
     case 'add-player': {
       if (state.locked) { toast('The room is locked. Unlock it to let someone in.'); break; }
-      if (state.players.length >= state.capacity) { toast('Every spot is taken. This room is full.'); break; }
       const names = ['Maya', 'Alex', 'Jules', 'Sam', 'Robin', 'Remy', 'Casey', 'Ari', 'Noah', 'Quinn', 'Jamie', 'River', 'Blair', 'Reese', 'Sky', 'Drew', 'Lee', 'Ash', 'Cameron'];
-      const name = names.find(n => !state.players.some(p => p.name === n)) || 'Friend';
+      let name = names.find(n => !state.players.some(p => p.name === n));
+      if (!name) {
+        let number = 1;
+        do { name = `Guest ${number++}`; } while (state.players.some(p => p.name === name));
+      }
       state.players.push({ name, avatar: state.players.length % 6, ready: false });
       render(); toast(`${name} just joined. The crew is growing.`); break;
     }

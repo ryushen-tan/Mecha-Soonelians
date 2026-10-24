@@ -16,7 +16,7 @@ final class RallyTests: XCTestCase {
         let waiting = Player(id: "guest", name: "Maya", avatar: 1, host: false, ready: false)
         let ready = Player(id: "guest", name: "Maya", avatar: 1, host: false, ready: true)
         func room(_ players: [Player], status: String = "waiting") -> Room {
-            Room(code: "482916", capacity: 8, locked: false, status: status, createdAt: "2026-10-24", members: players)
+            Room(code: "482916", locked: false, status: status, createdAt: "2026-10-24", members: players)
         }
         XCTAssertFalse(room([host]).canStart)
         XCTAssertFalse(room([host, waiting]).canStart)
@@ -26,7 +26,7 @@ final class RallyTests: XCTestCase {
     }
 
     func testPublicRoomDecodesWithoutMembershipCredentials() throws {
-        let data = Data(#"{"room":{"code":"482916","capacity":8,"locked":false,"status":"waiting","createdAt":"2026-10-24","members":[{"id":"1","name":"Kai","avatar":0,"host":true,"ready":true}]}}"#.utf8)
+        let data = Data(#"{"room":{"code":"482916","locked":false,"status":"waiting","createdAt":"2026-10-24","members":[{"id":"1","name":"Kai","avatar":0,"host":true,"ready":true}]}}"#.utf8)
         let response = try JSONDecoder().decode(RoomResponse.self, from: data)
         XCTAssertEqual(response.room.members.first?.name, "Kai")
         XCTAssertEqual(response.room.readyCount, 1)

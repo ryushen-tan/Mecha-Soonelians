@@ -23,29 +23,19 @@ struct LobbyView: View {
                     roomTicket
                     HStack(spacing: 8) {
                         Text("Players").font(RallyStyle.font(23, .bold)).accessibilityAddTraits(.isHeader)
-                        Text("\(room.members.count)/\(room.capacity)")
+                        Text("\(room.members.count)")
                             .font(.system(size: 12, design: .monospaced)).foregroundStyle(RallyStyle.muted)
                             .padding(6).background(RallyStyle.line.opacity(0.35), in: Capsule())
                     }
                     LazyVGrid(columns: columns, spacing: 10) {
                         ForEach(room.members) { player in playerTile(player) }
-                        if room.members.count < room.capacity {
-                            Image(systemName: "plus").font(.system(size: 24, weight: .light))
-                                .foregroundStyle(RallyStyle.muted)
-                                .frame(width: 46, height: 46)
-                                .overlay(Circle().stroke(RallyStyle.line, style: StrokeStyle(lineWidth: 1, dash: [3])))
-                                .frame(maxWidth: .infinity, minHeight: 138)
-                                .overlay(RoundedRectangle(cornerRadius: 18).stroke(RallyStyle.line, style: StrokeStyle(lineWidth: 1, dash: [3])))
-                                .accessibilityLabel("Empty player slot")
-                        }
                     }
                     controls
                 }
                 if let error = store.error { ErrorNotice(message: error) }
                 Button(store.isHost ? "End room" : "Leave room") { confirmingLeave = true }
-                    .font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
-                    .frame(maxWidth: .infinity, minHeight: 44).disabled(store.busy)
-                    .accessibilityIdentifier("leaveRoomButton")
+                    .buttonStyle(PushButtonStyle(destructive: true))
+                    .disabled(store.busy).accessibilityIdentifier("leaveRoomButton")
             }
             .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
         }
@@ -74,10 +64,11 @@ struct LobbyView: View {
                     copied = true
                 } label: { Label(copied ? "Copied" : "Copy code", systemImage: copied ? "checkmark" : "square.on.square") }
                     .frame(maxWidth: .infinity, minHeight: 44)
+                    .rallyHover()
                 Rectangle().fill(RallyStyle.limeEdge).frame(width: 1, height: 24)
                 ShareLink(item: "Join my Rally room: \(room.displayCode)\nrally://join/\(room.code)") {
                     Label("Share invite", systemImage: "square.and.arrow.up")
-                }.frame(maxWidth: .infinity, minHeight: 44)
+                }.frame(maxWidth: .infinity, minHeight: 44).rallyHover()
             }
             .font(RallyStyle.font(12, .semibold)).buttonStyle(.plain)
         }
@@ -86,7 +77,7 @@ struct LobbyView: View {
 
     private func playerTile(_ player: Player) -> some View {
         VStack(spacing: 8) {
-            AvatarView(index: player.avatar, size: 49).accessibilityHidden(true)
+            AvatarView(index: player.avatar, size: 36).accessibilityHidden(true)
             HStack(spacing: 3) {
                 Text(player.name).font(RallyStyle.font(14, .bold)).lineLimit(1)
                 if player.id == store.me?.id { Text("(you)").font(RallyStyle.font(10)).foregroundStyle(RallyStyle.muted) }
@@ -95,7 +86,7 @@ struct LobbyView: View {
                   systemImage: player.host ? "crown" : player.ready ? "checkmark" : "clock")
                 .font(RallyStyle.font(11)).foregroundStyle(player.ready ? RallyStyle.success : RallyStyle.muted)
         }
-        .padding(12).frame(maxWidth: .infinity, minHeight: 138)
+        .padding(12).frame(maxWidth: .infinity, minHeight: 112)
         .background(RallyStyle.surface, in: RoundedRectangle(cornerRadius: 18))
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(RallyStyle.line, lineWidth: 1))
         .overlay(alignment: .topTrailing) {
@@ -103,7 +94,8 @@ struct LobbyView: View {
                 Button { Task { await store.remove(player) } } label: {
                     Image(systemName: "xmark").font(.system(size: 11)).frame(width: 44, height: 44)
                 }
-                .foregroundStyle(RallyStyle.muted).disabled(store.busy)
+                .foregroundStyle(RallyStyle.muted)
+                .buttonStyle(.plain).rallyHover().disabled(store.busy)
                 .accessibilityLabel("Remove \(player.name)")
             }
         }
@@ -115,6 +107,7 @@ struct LobbyView: View {
                 Rectangle().fill(RallyStyle.line).frame(height: 1)
                 Toggle("Lock the room", isOn: Binding(get: { room.locked }, set: { _ in Task { await store.setLocked() } }))
                     .font(RallyStyle.font(14, .semibold)).tint(RallyStyle.ink)
+                    .rallyHover()
                     .disabled(store.busy || store.reconnecting).accessibilityIdentifier("roomLockToggle")
                 Button { Task { await store.start() } } label: { ActionLabel(text: "Start session", busy: store.busy) }
                     .buttonStyle(PushButtonStyle()).disabled(!room.canStart || store.busy || store.reconnecting)

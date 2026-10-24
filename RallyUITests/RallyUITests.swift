@@ -12,7 +12,7 @@ final class RallyUITests: XCTestCase {
         app.buttons["createTab"].tap()
         XCTAssertTrue(app.textFields["nicknameInput"].exists)
         XCTAssertFalse(app.buttons["confirmEntryButton"].isEnabled)
-        XCTAssertFalse(app.staticTexts["Players, including you."].exists)
+        XCTAssertFalse(app.staticTexts["Room size"].exists)
         app.textFields["nicknameInput"].tap()
         app.textFields["nicknameInput"].typeText("Kai")
         XCTAssertTrue(app.buttons["confirmEntryButton"].isEnabled)

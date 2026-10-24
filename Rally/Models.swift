@@ -10,7 +10,6 @@ struct Player: Codable, Identifiable, Equatable {
 
 struct Room: Codable, Equatable {
     let code: String
-    let capacity: Int
     let locked: Bool
     let status: String
     let createdAt: String
