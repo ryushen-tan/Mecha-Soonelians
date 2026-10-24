@@ -54,6 +54,7 @@ final class CharacterGameTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(400))
         hider.command("fill")
         hider.command("clone")
+        hider.lockPlacement()
         hidingGame.publishCurrent()
         for _ in 0..<300 {
             if !hidingGame.busy { break }
@@ -72,6 +73,36 @@ final class CharacterGameTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(100))
         }
         XCTAssertTrue(rendered, huntingGame.error ?? "The real published human must load in the hunter's renderer.")
+        let original = try await hider.webView?.callAsyncJavaScript("return window.characterViewer.diagnostics()", arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+        for _ in 0..<50 {
+            if hidingGame.snapshot?.eject?.available == true { break }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertEqual(hidingGame.snapshot?.eject?.available, true)
+        hidingGame.eject()
+        for _ in 0..<200 {
+            if !hidingGame.busy { break }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertNil(hidingGame.error)
+        XCTAssertEqual(hidingGame.snapshot?.eject?.used, true)
+        let moved = try await hider.webView?.callAsyncJavaScript("return window.characterViewer.diagnostics()", arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+        let before = try XCTUnwrap(original?["bounds"] as? [String: [Double]])
+        let after = try XCTUnwrap(moved?["bounds"] as? [String: [Double]])
+        XCTAssertNotEqual(before["min"], after["min"])
+        XCTAssertEqual(original?["paint"] as? NSNumber, moved?["paint"] as? NSNumber)
+        XCTAssertEqual(original?["preset"] as? String, moved?["preset"] as? String)
+        let destination = try XCTUnwrap(hidingGame.snapshot?.eject?.bounds)
+        for (actual, expected) in zip(try XCTUnwrap(after["min"]), destination.min) { XCTAssertEqual(actual, expected, accuracy: 0.0001) }
+        var updatedRemote = false
+        for _ in 0..<100 {
+            let reports = try await view.callAsyncJavaScript("return window.characterViewer.diagnostics().remoteBounds", arguments: [:], in: nil, contentWorld: .page) as? [String: [String: [Double]]]
+            if let minimum = reports?[guest.memberID]?["min"], zip(minimum, destination.min).allSatisfy({ abs($0 - $1) < 0.0001 }) { updatedRemote = true; break }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertTrue(updatedRemote, "The seeker must render the same ejected location as the hider and server.")
+        let center = zip(destination.min, destination.max).map { ($0 + $1) / 2 }
+        _ = try await view.callAsyncJavaScript("window.characterViewer.lookAt(point)", arguments: ["point": center], in: nil, contentWorld: .page)
         let evidence = HouseStore.documents.appendingPathComponent("Verification/character-gameplay", isDirectory: true)
         try FileManager.default.createDirectory(at: evidence, withIntermediateDirectories: true)
         let screenshot = try await view.callAsyncJavaScript("return window.characterViewer.screenshot()", arguments: [:], in: nil, contentWorld: .page) as? String

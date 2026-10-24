@@ -132,6 +132,7 @@ final class Character3DModel: ObservableObject {
     @Published var redoCount = 0
     @Published var cloneCount = 0
     @Published var showsWheel = false
+    @Published var objectSelected = false
     @Published var roomName = "Practice room"
     var savedPaint: [String: Any]?
     var savedScene: [String: Any]?
@@ -139,6 +140,7 @@ final class Character3DModel: ObservableObject {
     var onTaunt: (() -> Void)?
     var onExport: ((Data, [[String: Any]]) -> Void)?
     weak var webView: WKWebView?
+    var placementRevision = 0
     private var work: Task<Void, Never>?
 
     init(asset: CharacterAsset? = nil) {
@@ -218,6 +220,7 @@ final class Character3DModel: ObservableObject {
     }
 
     func setAngle(_ angle: Double) {
+        guard !editing.frozen, editing.placementLocked != true else { return }
         var values = angles[String(selectedBone)] ?? [0, 0, 0]
         values[selectedAxis] = min(angleRange.upperBound, max(angleRange.lowerBound, angle))
         angles[String(selectedBone)] = values
@@ -225,7 +228,7 @@ final class Character3DModel: ObservableObject {
     }
 
     func selectPose(_ id: String) {
-        guard !editing.frozen else { return }
+        guard !editing.frozen, editing.placementLocked != true else { return }
         angles = [:]
         editing.preset = id
         showsWheel = false
@@ -239,6 +242,37 @@ final class Character3DModel: ObservableObject {
         }
     }
 
+    func preparePainting(againstWall: Bool = false) {
+        guard viewerLoaded else { return }
+        let unplaced = !editing.room && abs(editing.position[0]) < 0.0001 && abs(editing.position[2]) < 0.0001 && editing.rotation == [0, 0, 0, 1]
+        editing.room = true
+        Task {
+            do {
+                _ = try await webView?.callAsyncJavaScript("window.characterViewer.configure(editing, angles, yaw, skeleton, true, revision); return window.characterViewer.paintBackground(attach, movable)",
+                    arguments: ["editing": editing.dictionary, "angles": angles, "yaw": yaw, "skeleton": showsSkeleton, "revision": placementRevision,
+                        "attach": againstWall || unplaced, "movable": !editing.frozen && editing.placementLocked != true], in: nil, contentWorld: .page)
+            } catch { self.error = "Could not show the painting background." }
+        }
+    }
+
+    func lockPlacement() {
+        guard viewerLoaded else { return }
+        editing.placementLocked = true
+        editing.frozen = false
+        showsSkeleton = false
+        showsWheel = false
+        editing.tool = "paint"
+        preparePainting()
+    }
+
+    func unlockPlacement() {
+        editing.placementLocked = false
+        editing.frozen = false
+        editing.room = true
+        editing.tool = "orbit"
+        if viewerLoaded { command("roomView") }
+    }
+
     static func readObject(_ url: URL) -> [String: Any]? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -250,8 +284,8 @@ final class Character3DModel: ObservableObject {
         error = nil
         Task {
             do {
-                _ = try await webView?.callAsyncJavaScript("window.characterViewer.configure(editing, angles, yaw, skeleton, true); await window.characterViewer.exportModel()",
-                    arguments: ["editing": editing.dictionary, "angles": angles, "yaw": yaw, "skeleton": showsSkeleton], in: nil, contentWorld: .page)
+                _ = try await webView?.callAsyncJavaScript("window.characterViewer.configure(editing, angles, yaw, skeleton, true, revision); await window.characterViewer.exportModel()",
+                    arguments: ["editing": editing.dictionary, "angles": angles, "yaw": yaw, "skeleton": showsSkeleton, "revision": placementRevision], in: nil, contentWorld: .page)
             } catch { exporting = false; self.error = "Could not export the 3D character." }
         }
     }

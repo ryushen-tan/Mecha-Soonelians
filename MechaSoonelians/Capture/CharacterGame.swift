@@ -19,7 +19,9 @@ extension EnvironmentValues {
 }
 
 struct GameSnapshot: Decodable {
-    struct Visible: Decodable { let id: String; let version: String }
+    struct Visible: Decodable { let id: String; let version: String; let offset: [Double]? }
+    struct Bounds: Decodable { let min: [Double]; let max: [Double] }
+    struct Eject: Decodable { let available: Bool; let used: Bool; let bounds: Bounds? }
     struct Score: Decodable, Identifiable { let id: String; let name: String; let points: Int; let found: Bool }
     struct Hint: Decodable { let id: String; let at: Double; let position: [Double] }
     let mode: String
@@ -33,6 +35,7 @@ struct GameSnapshot: Decodable {
     let scores: [Score]
     let taunts: [Hint]
     let room: GameRoomGeometry?
+    let eject: Eject?
 }
 
 @MainActor
@@ -51,11 +54,12 @@ final class CharacterGameModel: ObservableObject {
     private var lastHint: Double = 0
     private var loadedRoom: Data?
     private var huntCameraStarted = false
+    private var loadedOwnVersion: String?
 
     func connect(_ connection: GameConnection?, editor: Character3DModel) {
         stop()
         self.connection = connection
-        loaded = [:]; loadedRoom = nil; huntCameraStarted = false
+        loaded = [:]; loadedRoom = nil; huntCameraStarted = false; loadedOwnVersion = nil
         self.editor = editor
         Task { _ = try? await editor.webView?.callAsyncJavaScript("window.characterViewer.owner(id)", arguments: ["id": connection?.memberID ?? "practice"], in: nil, contentWorld: .page) }
         editor.onShot = { [weak self] ray in self?.shot(ray) }
@@ -112,6 +116,7 @@ final class CharacterGameModel: ObservableObject {
         }
         try accept(try await request("game", body: camera))
         guard let snapshot, let connection, let editor, editor.viewerLoaded, let view = editor.webView else { return }
+        _ = try await view.callAsyncJavaScript("window.characterViewer.huntLock(locked)", arguments: ["locked": snapshot.phase == "hunting"], in: nil, contentWorld: .page)
         _ = try await view.callAsyncJavaScript("window.characterViewer.owner(id)", arguments: ["id": connection.memberID], in: nil, contentWorld: .page)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
@@ -130,8 +135,13 @@ final class CharacterGameModel: ObservableObject {
         } else { huntCameraStarted = false }
         for owner in snapshot.visible where owner.id != connection.memberID && loaded[owner.id] != owner.version {
             let data = try await request("disguise/\(owner.id)")
-            _ = try await view.callAsyncJavaScript("await window.characterViewer.remote(id, data)", arguments: ["id": owner.id, "data": data.base64EncodedString()], in: nil, contentWorld: .page)
+            _ = try await view.callAsyncJavaScript("await window.characterViewer.remote(id, data, offset)", arguments: ["id": owner.id, "data": data.base64EncodedString(), "offset": owner.offset ?? [0, 0, 0]], in: nil, contentWorld: .page)
             loaded[owner.id] = owner.version
+        }
+        if snapshot.phase == "hunting", let own = snapshot.visible.first(where: { $0.id == connection.memberID }),
+           own.version != loadedOwnVersion, let bounds = snapshot.eject?.bounds {
+            _ = try await view.callAsyncJavaScript("window.characterViewer.relocateTo(bounds, frame)", arguments: ["bounds": ["min": bounds.min, "max": bounds.max], "frame": snapshot.role == "hider"], in: nil, contentWorld: .page)
+            loadedOwnVersion = own.version
         }
         let found = snapshot.scores.first(where: { $0.id == connection.memberID })?.found ?? false
         let showOwn = snapshot.phase != "hunting" || (!found && !["hunter", "dual"].contains(snapshot.role))
@@ -148,6 +158,8 @@ final class CharacterGameModel: ObservableObject {
 
     func publishCurrent() {
         guard !busy, let editor else { return }
+        guard snapshot?.phase != "hunting" else { error = "Disguises are locked during the hunt."; return }
+        guard editor.editing.placementLocked == true else { error = "Lock your position and pose before publishing."; return }
         publishing = true
         busy = true
         message = "Saving and publishing your disguise…"
@@ -205,6 +217,19 @@ final class CharacterGameModel: ObservableObject {
         }
     }
 
+    func eject() {
+        guard !busy, snapshot?.eject?.available == true else { return }
+        busy = true
+        Task {
+            defer { busy = false }
+            do {
+                try accept(try await request("game", body: ["action": "eject"]))
+                try await refresh()
+                message = "Ejected! Same disguise, random new spot. No take-backs."
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+
     func practice() {
         guard let editor else { return }
         editor.editing.room = true; editor.editing.tool = "tag"
@@ -234,6 +259,19 @@ struct CharacterPlayPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(connection.map { "Room \($0.code)" } ?? "Solo practice").font(RallyStyle.font(18, .bold))
+            if game.snapshot?.phase == "hunting", game.snapshot?.role != "hunter" {
+                VStack(alignment: .leading, spacing: 8) {
+                    Button { game.eject() } label: {
+                        Label(game.snapshot?.eject?.used == true ? "Eject used this round" : "Emergency eject · 1 use", systemImage: "arrow.up.forward.circle.fill")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(PushButtonStyle(destructive: true))
+                    .disabled(game.busy || game.snapshot?.eject?.available != true)
+                    .accessibilityIdentifier("emergencyEjectButton")
+                    Text("Random spot. Same paint, pose and size. You could land in plain sight. No preview or undo; your clones move with you.")
+                        .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+                }
+            }
             if let snapshot = game.snapshot {
                 HStack {
                     Text("\(snapshot.phase.capitalized) · \(snapshot.role.capitalized)")
@@ -248,7 +286,7 @@ struct CharacterPlayPanel: View {
             Text(game.message).font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
             if connection != nil {
                 Button { game.publishCurrent() } label: { Label(game.busy ? "Publishing…" : "Publish disguise", systemImage: "square.and.arrow.up") }
-                    .disabled(game.busy || model.exporting)
+                    .disabled(game.busy || model.exporting || model.editing.placementLocked != true || game.snapshot?.phase == "hunting")
                 if connection?.isHost == true && (game.snapshot?.phase == "lobby" || game.snapshot?.phase == "finished") {
                     Picker("Game mode", selection: $mode) {
                         Text("Basic").tag("basic"); Text("Infection").tag("infection"); Text("Double").tag("double"); Text("Chicken race").tag("chicken")

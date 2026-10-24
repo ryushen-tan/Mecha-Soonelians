@@ -16,12 +16,15 @@ struct CharacterEditingSettings: Codable, Equatable {
     var frozen = false
     var form: String? = nil
     var xray: Bool? = nil
+    var placementLocked: Bool? = nil
+    var transformMode: String? = nil
 
     var dictionary: [String: Any] {
         guard let data = try? JSONEncoder().encode(self),
               let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
         var result = value
         result["form"] = form ?? "person"
+        result["transformMode"] = transformMode ?? "translate"
         return result
     }
 }

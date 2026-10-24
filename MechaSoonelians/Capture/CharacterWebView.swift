@@ -59,13 +59,13 @@ struct CharacterWebView: UIViewRepresentable {
             }
             guard model.viewerLoaded else { return }
             let arguments: [String: Any] = ["editing": model.editing.dictionary, "angles": model.angles, "yaw": model.yaw,
-                "skeleton": model.showsSkeleton, "immediate": UIAccessibility.isReduceMotionEnabled]
+                "skeleton": model.showsSkeleton, "immediate": UIAccessibility.isReduceMotionEnabled, "revision": model.placementRevision]
             let state = try? JSONSerialization.data(withJSONObject: arguments, options: .sortedKeys)
             guard state != lastPose else { return }
             lastPose = state
             Task {
                 do {
-                    _ = try await webView.callAsyncJavaScript("window.characterViewer.configure(editing, angles, yaw, skeleton, immediate)", arguments: arguments, in: nil, contentWorld: .page)
+                    _ = try await webView.callAsyncJavaScript("window.characterViewer.configure(editing, angles, yaw, skeleton, immediate, revision)", arguments: arguments, in: nil, contentWorld: .page)
                 } catch { model.error = "Could not update the 3D pose." }
             }
         }
@@ -104,11 +104,23 @@ struct CharacterWebView: UIViewRepresentable {
             case "warning": model.warning = body["value"] as? String
             case "placed":
                 if let value = body["value"] as? [String: Any] {
-                    if let position = value["position"] as? [Double] { model.editing.position = position }
-                    if let rotation = value["rotation"] as? [Double] { model.editing.rotation = rotation }
+                    if let revision = value["revision"] as? Int {
+                        guard revision >= model.placementRevision else { return }
+                        model.placementRevision = revision
+                    }
+                    var editing = model.editing
+                    if let position = value["position"] as? [Double] { editing.position = position }
+                    if let rotation = value["rotation"] as? [Double] { editing.rotation = rotation }
+                    if let scale = value["scale"] as? Double { editing.scale = scale }
+                    if let form = value["form"] as? String { editing.form = form }
+                    if let preset = value["preset"] as? String { editing.preset = preset }
+                    if let yaw = value["yaw"] as? Double { model.yaw = yaw }
+                    if let angles = value["angles"] as? [String: [Double]] { model.angles = angles }
+                    model.editing = editing
                     model.warning = value["warning"] as? String
                 }
             case "wheel": model.showsWheel = body["value"] as? Bool ?? false
+            case "selection": model.objectSelected = body["value"] as? Bool ?? false
             case "tool": if let tool = body["value"] as? String { model.editing.tool = tool }
             case "shot": if let ray = body["value"] as? [String: Any] { model.onShot?(ray) }
             case "taunt": model.onTaunt?()

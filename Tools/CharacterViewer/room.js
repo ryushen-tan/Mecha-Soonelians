@@ -58,6 +58,7 @@ export class RoomStage {
       } else mesh.position.fromArray(surface.position ?? [0, 0, 0]);
       mesh.name = surface.id;
       mesh.userData.kind = surface.kind;
+      mesh.userData.holes = surface.holes ?? [];
       mesh.receiveShadow = true;
       this.room.add(mesh);
       this.surfaces.push(mesh);
@@ -67,6 +68,51 @@ export class RoomStage {
   }
 
   show(value) { this.visible = value; this.room.visible = value; }
+
+  paintWall(group, bounds, preferredID) {
+    group.updateMatrixWorld(true);
+    this.room.updateMatrixWorld(true);
+    const body = bounds ?? new THREE.Box3().setFromObject(group);
+    const center = body.getCenter(new THREE.Vector3());
+    const feet = center.clone().setY(body.min.y);
+    const height = body.max.y - body.min.y;
+    let nearest = null, distance = Infinity;
+    for (const wall of this.surfaces.filter(surface => surface.userData.kind === 'wall' && (!preferredID || surface.name === preferredID))) {
+      wall.geometry.computeBoundingBox();
+      const box = wall.geometry.boundingBox;
+      const size = box.getSize(new THREE.Vector3()).toArray();
+      const thin = size.indexOf(Math.min(...size));
+      const axes = [0, 1, 2].filter(axis => axis !== thin);
+      const vertical = axes.reduce((first, second) => Math.abs(wall.matrixWorld.elements[first * 4 + 1]) > Math.abs(wall.matrixWorld.elements[second * 4 + 1]) ? first : second);
+      const horizontal = axes.find(axis => axis !== vertical);
+      const up = wall.matrixWorld.elements[vertical * 4 + 1];
+      if (Math.abs(up) < 0.7) continue;
+      const inverse = wall.matrixWorld.clone().invert();
+      const local = feet.clone().applyMatrix4(inverse);
+      const sign = center.clone().applyMatrix4(inverse).getComponent(thin) >= box.getCenter(new THREE.Vector3()).getComponent(thin) ? 1 : -1;
+      const normal = new THREE.Vector3().setComponent(thin, sign);
+      const worldNormal = normal.clone().applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(wall.matrixWorld)).normalize();
+      const minimum = box.min.getComponent(vertical) + 0.006 + (up < 0 ? height / Math.abs(up) : 0);
+      const maximum = box.max.getComponent(vertical) - 0.006 - (up > 0 ? height / Math.abs(up) : 0);
+      if (maximum < minimum) continue;
+      local.setComponent(vertical, THREE.MathUtils.clamp(local.getComponent(vertical), minimum, maximum));
+      local.setComponent(thin, (sign > 0 ? box.max : box.min).getComponent(thin));
+      const lower = box.min.getComponent(horizontal) + 0.15, upper = box.max.getComponent(horizontal) - 0.15;
+      if (upper < lower) continue;
+      const candidates = [THREE.MathUtils.clamp(local.getComponent(horizontal), lower, upper), (lower + upper) / 2,
+        THREE.MathUtils.lerp(lower, upper, 0.25), THREE.MathUtils.lerp(lower, upper, 0.75)];
+      for (const candidate of candidates) {
+        const point = local.clone().setComponent(horizontal, candidate).applyMatrix4(wall.matrixWorld);
+        const solid = [0.2, 0.5, 0.8].every(fraction => {
+          const origin = point.clone().addScaledVector(worldNormal, 0.2).add(new THREE.Vector3(0, height * fraction, 0));
+          return new THREE.Raycaster(origin, worldNormal.clone().negate(), 0, 0.5).intersectObject(wall, false).length > 0;
+        });
+        const score = point.distanceToSquared(feet);
+        if (solid && score < distance) { distance = score; nearest = { point, face: { normal }, object: wall, worldNormal }; }
+      }
+    }
+    return nearest;
+  }
 
   spawn() {
     this.room.updateMatrixWorld(true);
@@ -116,14 +162,15 @@ export class RoomStage {
     this.clones = [];
   }
 
-  attach(group, hit) {
+  attach(group, hit, forward = new THREE.Vector3(0, 0, -1)) {
     const normal = hit.face.normal.clone().applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize();
     const up = Math.abs(normal.y) > 0.9 ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(0, 1, 0);
     const back = normal.clone().negate();
     const right = new THREE.Vector3().crossVectors(up, back).normalize();
     up.crossVectors(back, right).normalize();
     if (hit.object.userData.kind === 'floor') group.quaternion.identity();
-    else group.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, back));
+    else group.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, up, back))
+      .multiply(new THREE.Quaternion().setFromUnitVectors(forward.clone().setY(0).normalize(), new THREE.Vector3(0, 0, -1)));
     group.position.copy(hit.point);
     group.updateMatrixWorld(true);
     let minimum = Infinity;

@@ -50,7 +50,7 @@ struct LobbyView: View {
             .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
         }
         .background(RallyStyle.paper.ignoresSafeArea())
-        .sheet(isPresented: $showsStudio) {
+        .fullScreenCover(isPresented: $showsStudio) {
             NavigationStack {
                 StudioView()
                     .toolbar {

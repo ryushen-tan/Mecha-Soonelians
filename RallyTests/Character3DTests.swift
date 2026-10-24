@@ -1,8 +1,351 @@
 import XCTest
 import SwiftUI
+import WebKit
 @testable import Rally
 
 final class Character3DTests: XCTestCase {
+    @MainActor func testDirectMeshDraggingAxisRotationResizeAndSave() async throws {
+        guard let existing = CharacterAsset.all().first(where: { $0.hasModel && $0.rigged }) else {
+            throw XCTSkip("Direct manipulation uses the existing generated human, without paid jobs.")
+        }
+        var editing = CharacterEditingSettings()
+        editing.preset = "stand"; editing.scale = 0.5; editing.room = true
+        let asset = CharacterAsset(id: UUID().uuidString, createdAt: Date(), server: existing.server, rigged: true, editing: editing)
+        try asset.save()
+        try FileManager.default.copyItem(at: existing.directory.appendingPathComponent("source.glb"), to: asset.directory.appendingPathComponent("source.glb"))
+        defer { try? FileManager.default.removeItem(at: asset.directory) }
+        let model = Character3DModel(asset: asset)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: CharacterWebView(model: model).frame(width: 420, height: 520))
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        try await waitForViewer(model)
+        try await Task.sleep(for: .milliseconds(250))
+        let view = try XCTUnwrap(model.webView)
+        let dragged = try await view.callAsyncJavaScript("""
+            const viewer = window.characterViewer, canvas = document.querySelector('canvas');
+            const before = viewer.diagnostics(), center = before.manipulation.center, rect = canvas.getBoundingClientRect();
+            const fire = (type, x, y, id = 91) => canvas.dispatchEvent(new PointerEvent(type, {bubbles:true, cancelable:true,
+              pointerId:id, pointerType:'touch', button: type === 'pointermove' ? -1 : 0,
+              clientX:rect.left + (x + 1) / 2 * rect.width, clientY:rect.top + (1 - y) / 2 * rect.height}));
+            window.testMeshPointer = fire;
+            fire('pointerdown', center[0], center[1]);
+            const selected = viewer.diagnostics();
+            for (let step = 1; step <= 5; step++) fire('pointermove', center[0] + step * 0.03, center[1] + step * 0.02);
+            fire('pointerup', center[0] + 0.15, center[1] + 0.1);
+            const after = viewer.diagnostics();
+            fire('pointerdown', after.manipulation.center[0], after.manipulation.center[1]);
+            fire('pointermove', after.manipulation.center[0] - 0.1, after.manipulation.center[1]);
+            fire('pointercancel', after.manipulation.center[0] - 0.1, after.manipulation.center[1]);
+            const cancelled = viewer.diagnostics(), mid = cancelled.manipulation.center;
+            fire('pointerdown', mid[0], mid[1], 92);
+            fire('pointermove', mid[0] + 0.04, mid[1], 92);
+            fire('pointerdown', mid[0] + 0.2, mid[1], 93);
+            fire('pointermove', mid[0] - 0.1, mid[1], 92);
+            fire('pointermove', mid[0] + 0.3, mid[1], 93);
+            fire('pointerup', mid[0] - 0.1, mid[1], 92);
+            fire('pointerup', mid[0] + 0.3, mid[1], 93);
+            const pinched = viewer.diagnostics();
+            viewer.action('inspect');
+            return {before, selected, after, cancelled, pinched};
+            """, arguments: [:], in: nil, contentWorld: .page) as? [String: [String: Any]]
+        XCTAssertEqual((dragged?["selected"]?["manipulation"] as? [String: Any])?["selected"] as? Bool, true)
+        XCTAssertNotEqual(dragged?["before"]?["placementPosition"] as? [Double], dragged?["after"]?["placementPosition"] as? [Double])
+        XCTAssertEqual(dragged?["before"]?["cameraPosition"] as? [Double], dragged?["after"]?["cameraPosition"] as? [Double], "Dragging the person must not orbit the camera.")
+        let afterDrag = try XCTUnwrap(dragged?["after"]?["placementPosition"] as? [Double])
+        let cancelled = try XCTUnwrap(dragged?["cancelled"]?["placementPosition"] as? [Double])
+        for (expected, actual) in zip(afterDrag, cancelled) { XCTAssertEqual(expected, actual, accuracy: 0.00001) }
+        let pinched = try XCTUnwrap(dragged?["pinched"]?["placementPosition"] as? [Double])
+        for (expected, actual) in zip(afterDrag, pinched) { XCTAssertEqual(expected, actual, accuracy: 0.00001) }
+        XCTAssertLessThan(try XCTUnwrap(dragged?["pinched"]?["cameraDistance"] as? Double), try XCTUnwrap(dragged?["cancelled"]?["cameraDistance"] as? Double))
+        model.editing.transformMode = "rotate"
+        try await Task.sleep(for: .milliseconds(150))
+        let rotated = try await view.callAsyncJavaScript("""
+            const viewer = window.characterViewer, fire = window.testMeshPointer, rotations = [];
+            for (const axis of ['X','Y','Z']) {
+              const before = viewer.diagnostics();
+              let picked = false;
+              for (const point of before.manipulation.handles[axis]) {
+                fire('pointerdown', point[0], point[1]);
+                const selection = viewer.diagnostics().manipulation;
+                if (selection.dragging && selection.axis === axis) {
+                  const center = before.manipulation.center, dx = point[0] - center[0], dy = point[1] - center[1];
+                  fire('pointermove', point[0] - dy * 0.5 + 0.025, point[1] + dx * 0.5 + 0.015);
+                  fire('pointerup', point[0] - dy * 0.5 + 0.025, point[1] + dx * 0.5 + 0.015);
+                  picked = true; break;
+                }
+                fire('pointercancel', point[0], point[1]);
+              }
+              rotations.push({axis,picked,before:before.placementRotation,after:viewer.diagnostics()});
+            }
+            return rotations;
+            """, arguments: [:], in: nil, contentWorld: .page) as? [[String: Any]]
+        for rotation in try XCTUnwrap(rotated) {
+            let axis = rotation["axis"] as? String ?? ""
+            XCTAssertEqual(rotation["picked"] as? Bool, true, axis)
+            let after = try XCTUnwrap(rotation["after"] as? [String: Any])
+            XCTAssertNotEqual(rotation["before"] as? [Double], after["placementRotation"] as? [Double], axis)
+            XCTAssertTrue(after["collision"] is NSNull, axis)
+            XCTAssertEqual(try XCTUnwrap((after["surface"] as? [String: Any])?["gap"] as? Double), 0.006, accuracy: 0.00001)
+        }
+        model.editing.transformMode = "scale"
+        try await Task.sleep(for: .milliseconds(150))
+        let resized = try await view.callAsyncJavaScript("""
+            const viewer = window.characterViewer, fire = window.testMeshPointer, before = viewer.diagnostics();
+            const center = before.manipulation.center;
+            fire('pointerdown', center[0] + 0.03, center[1] + 0.12);
+            fire('pointermove', center[0] + 0.09, center[1] + 0.26);
+            fire('pointerup', center[0] + 0.09, center[1] + 0.26);
+            return {before,after:viewer.diagnostics()};
+            """, arguments: [:], in: nil, contentWorld: .page) as? [String: [String: Any]]
+        let scale = try XCTUnwrap(resized?["after"]?["placementScale"] as? [Double])
+        XCTAssertNotEqual(scale, resized?["before"]?["placementScale"] as? [Double])
+        XCTAssertEqual(scale[0], scale[1]); XCTAssertEqual(scale[1], scale[2])
+        try await Task.sleep(for: .milliseconds(150))
+        XCTAssertEqual(model.editing.scale, scale[0], accuracy: 0.00001)
+        let rotation = model.editing.rotation
+        model.lockPlacement()
+        try await Task.sleep(for: .milliseconds(150))
+        let locked = try await view.callAsyncJavaScript("return window.characterViewer.diagnostics().manipulation", arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+        XCTAssertEqual(locked?["selected"] as? Bool, false)
+        XCTAssertEqual(locked?["axes"] as? [String], [])
+        model.export()
+        for _ in 0..<100 {
+            if model.saved || model.error != nil { break }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertNil(model.error); XCTAssertTrue(model.saved)
+        let stored = try JSONDecoder().decode(CharacterAsset.self, from: Data(contentsOf: asset.directory.appendingPathComponent("character.json")))
+        XCTAssertEqual(stored.editing?.rotation, rotation)
+        XCTAssertEqual(try XCTUnwrap(stored.editing?.scale), scale[0], accuracy: 0.00001)
+        var wallEditing = CharacterEditingSettings()
+        wallEditing.preset = "stand"; wallEditing.room = true
+        wallEditing.position = [-2.6725407150526226, 0.6559999879687148, 0.45454769367638764]
+        wallEditing.rotation = [0, 0.7071067775318448, 0, 0.7071067848412502]
+        let wallAsset = CharacterAsset(id: UUID().uuidString, createdAt: Date(), server: existing.server, rigged: true, editing: wallEditing)
+        try wallAsset.save()
+        try FileManager.default.copyItem(at: existing.directory.appendingPathComponent("source.glb"), to: wallAsset.directory.appendingPathComponent("source.glb"))
+        defer { try? FileManager.default.removeItem(at: wallAsset.directory) }
+        let wallModel = Character3DModel(asset: wallAsset)
+        window.rootViewController = UIHostingController(rootView: CharacterWebView(model: wallModel).frame(width: 420, height: 520))
+        try await waitForViewer(wallModel)
+        try await Task.sleep(for: .milliseconds(200))
+        let wallView = try XCTUnwrap(wallModel.webView)
+        let sideways = try await wallView.callAsyncJavaScript("""
+            const viewer = window.characterViewer, canvas = document.querySelector('canvas'), rect = canvas.getBoundingClientRect();
+            viewer.action('roomView');
+            const body = viewer.diagnostics().bounds, middle = body.min.map((value, axis) => (value + body.max[axis]) / 2);
+            viewer.lookAt(middle, [middle[0], middle[1] + 0.4, middle[2] - 3]);
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            const before = viewer.diagnostics(), center = before.manipulation.center;
+            const fire = (type,x) => canvas.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerId:94,pointerType:'touch',
+              button:type==='pointermove'?-1:0,clientX:rect.left+(x+1)/2*rect.width,clientY:rect.top+(1-center[1])/2*rect.height}));
+            fire('pointerdown',center[0]);
+            const selected = viewer.diagnostics().manipulation;
+            for(let step=1;step<=5;step++) fire('pointermove',center[0]-step*0.04);
+            fire('pointerup',center[0]-0.2);
+            return {before,selected,after:viewer.diagnostics()};
+            """, arguments: [:], in: nil, contentWorld: .page) as? [String: [String: Any]]
+        XCTAssertEqual((sideways?["before"]?["surface"] as? [String: Any])?["surface"] as? String, "left-wall")
+        XCTAssertEqual(sideways?["selected"]?["selected"] as? Bool, true)
+        let originalPosition = try XCTUnwrap(sideways?["before"]?["placementPosition"] as? [Double])
+        let movedPosition = try XCTUnwrap(sideways?["after"]?["placementPosition"] as? [Double])
+        XCTAssertGreaterThan(movedPosition[0], originalPosition[0] + 0.05, "A pure sideways drag must move away from a side wall, not stay pinned to it.")
+        XCTAssertEqual((sideways?["after"]?["surface"] as? [String: Any])?["surface"] as? String, "floor")
+        XCTAssertTrue(sideways?["after"]?["collision"] is NSNull)
+        XCTAssertEqual(try XCTUnwrap((sideways?["after"]?["surface"] as? [String: Any])?["gap"] as? Double),0.006,accuracy:0.00001)
+    }
+
+    @MainActor func testPaintingShowsAndSamplesTheWallBehindTheHuman() async throws {
+        guard let existing = CharacterAsset.all().first(where: { $0.hasModel && $0.rigged }) else {
+            throw XCTSkip("This renderer test uses an existing generated human without spending credits.")
+        }
+        let asset = CharacterAsset(id: UUID().uuidString, createdAt: Date(), server: existing.server, rigged: true)
+        try asset.save()
+        try FileManager.default.copyItem(at: existing.directory.appendingPathComponent("source.glb"), to: asset.directory.appendingPathComponent("source.glb"))
+        defer { try? FileManager.default.removeItem(at: asset.directory) }
+        let model = Character3DModel(asset: asset)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: CharacterWebView(model: model).frame(width: 420, height: 520))
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        try await waitForViewer(model)
+        model.selectPose("stand")
+        model.editing.tool = "paint"
+        model.preparePainting()
+        for _ in 0..<100 {
+            if model.editing.position.contains(where: { abs($0) > 0.1 }) { break }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertNil(model.error)
+        XCTAssertTrue(model.editing.room)
+        let view = try XCTUnwrap(model.webView)
+        let result = try await view.callAsyncJavaScript("return window.characterViewer.diagnostics()", arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+        let background = try XCTUnwrap(result?["background"] as? [String: Any])
+        XCTAssertEqual(background["wall"] as? String, "back-wall")
+        let sampled = try await view.callAsyncJavaScript("return window.characterViewer.sampleAt(-0.8, 0.2)", arguments: [:], in: nil, contentWorld: .page) as? String
+        XCTAssertEqual(sampled, "#d2d7c0", "The actual wall behind the human must be visible and sampleable.")
+        let evidence = HouseStore.documents.appendingPathComponent("Verification/character-gameplay", isDirectory: true)
+        try FileManager.default.createDirectory(at: evidence, withIntermediateDirectories: true)
+        let screenshot = try await view.callAsyncJavaScript("return window.characterViewer.screenshot()", arguments: [:], in: nil, contentWorld: .page) as? String
+        try XCTUnwrap(screenshot.flatMap { Data(base64Encoded: $0) }).write(to: evidence.appendingPathComponent("paint-against-wall.png"))
+        model.editing.position[0] += 0.2
+        let deliberate = model.editing.position
+        try await Task.sleep(for: .milliseconds(200))
+        model.preparePainting()
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(model.editing.position, deliberate, "Entering paint must not overwrite an intentional placement.")
+        model.editing.scale = 0.3
+        model.lockPlacement()
+        try await Task.sleep(for: .milliseconds(250))
+        let lockedPosition = model.editing.position
+        let lockedPose = model.editing.preset
+        model.selectPose("crouch")
+        model.setAngle(30)
+        XCTAssertEqual(model.editing.preset, lockedPose)
+        XCTAssertTrue(model.angles.isEmpty)
+        try await Task.sleep(for: .milliseconds(200))
+        let zoom = try await view.callAsyncJavaScript("const before = window.characterViewer.diagnostics(); window.characterViewer.action('zoomIn'); window.characterViewer.action('zoomIn'); const after = window.characterViewer.diagnostics(); return { before, after };", arguments: [:], in: nil, contentWorld: .page) as? [String: [String: Any]]
+        XCTAssertLessThan(try XCTUnwrap(zoom?["after"]?["cameraDistance"] as? Double), try XCTUnwrap(zoom?["before"]?["cameraDistance"] as? Double))
+        XCTAssertEqual(model.editing.position, lockedPosition)
+        XCTAssertEqual(model.editing.scale, 0.3)
+        XCTAssertEqual(zoom?["after"]?["placementLocked"] as? Bool, true)
+        model.unlockPlacement()
+        model.selectPose("crouch")
+        XCTAssertEqual(model.editing.preset, "crouch")
+        try await Task.sleep(for: .milliseconds(250))
+        model.selectPose("stand")
+        try await Task.sleep(for: .milliseconds(350))
+        let beforeMove = model.editing.position
+        let dragged = try await dragBody(view, dx: 0.12, dy: 0)
+        let moved = try XCTUnwrap(dragged["after"]?["placementPosition"] as? [Double])
+        XCTAssertNotEqual(moved, beforeMove, "Dragging the unlocked body must move it.")
+        let stale = try await view.callAsyncJavaScript("window.characterViewer.configure({position: old}, {}, 0, false, true, 0); return window.characterViewer.diagnostics()", arguments: ["old": beforeMove], in: nil, contentWorld: .page) as? [String: Any]
+        for (actual, expected) in zip(try XCTUnwrap(stale?["placementPosition"] as? [Double]), moved) {
+            XCTAssertEqual(actual, expected, accuracy: 0.00001, "A stale native update must not undo a drag.")
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        for (actual, expected) in zip(model.editing.position, moved) { XCTAssertEqual(actual, expected, accuracy: 0.00001) }
+        model.lockPlacement()
+        try await Task.sleep(for: .milliseconds(250))
+        let lockedAfterMove = model.editing.position
+        _ = try await dragBody(view, dx: 0.12, dy: 0)
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(model.editing.position, lockedAfterMove, "Locked painting must reject body drags.")
+        model.export()
+        for _ in 0..<100 {
+            if model.saved || model.error != nil { break }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertNil(model.error)
+        XCTAssertTrue(model.saved)
+        let saved = try JSONDecoder().decode(CharacterAsset.self, from: Data(contentsOf: asset.directory.appendingPathComponent("character.json")))
+        XCTAssertEqual(saved.editing?.position, lockedAfterMove, "Dragged placement must persist when saving.")
+    }
+
+    @MainActor func testHumanStaysOnSurfacesAndRepairsIntersectingSavedPlacement() async throws {
+        guard let existing = CharacterAsset.all().first(where: { $0.hasModel && $0.rigged }) else {
+            throw XCTSkip("This collision test uses the cached human without spending credits.")
+        }
+        var legacyPlacement = CharacterEditingSettings()
+        legacyPlacement.preset = "stand"
+        legacyPlacement.position = [-2.25, 0.1, 1.6]
+        legacyPlacement.room = true
+        let asset = CharacterAsset(id: UUID().uuidString, createdAt: Date(), server: existing.server, rigged: true, editing: legacyPlacement)
+        try asset.save()
+        try FileManager.default.copyItem(at: existing.directory.appendingPathComponent("source.glb"), to: asset.directory.appendingPathComponent("source.glb"))
+        defer { try? FileManager.default.removeItem(at: asset.directory) }
+        let model = Character3DModel(asset: asset)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: CharacterWebView(model: model).frame(width: 420, height: 520))
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        try await waitForViewer(model)
+        let view = try XCTUnwrap(model.webView)
+        func diagnostics() async throws -> [String: Any] {
+            let value = try await view.callAsyncJavaScript("return window.characterViewer.diagnostics()", arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
+            return try XCTUnwrap(value)
+        }
+        try await Task.sleep(for: .milliseconds(400))
+        var result = ["repaired": try await diagnostics()]
+        model.command("detach")
+        try await Task.sleep(for: .milliseconds(200))
+        result["floor"] = try await diagnostics()
+        XCTAssertEqual((result["floor"]?["surface"] as? [String: Any])?["surface"] as? String, "floor")
+        _ = try await dragBody(view, dx: 0, dy: 0.12)
+        try await Task.sleep(for: .milliseconds(100))
+        result["afterHeight"] = try await diagnostics()
+        model.editing.position = [0, 0, 0]
+        try await Task.sleep(for: .milliseconds(200))
+        model.preparePainting(againstWall: true)
+        try await Task.sleep(for: .milliseconds(250))
+        result["wall"] = try await diagnostics()
+        _ = try await dragBody(view, dx: 0, dy: 0.12)
+        try await Task.sleep(for: .milliseconds(100))
+        result["wallRaised"] = try await diagnostics()
+        func report(_ key: String) throws -> [String: Any] { try XCTUnwrap(result[key]) }
+        for key in ["repaired", "floor", "afterHeight", "wall", "wallRaised"] {
+            let state = try report(key)
+            XCTAssertTrue(state["collision"] is NSNull, key)
+            XCTAssertEqual(state["placementValid"] as? Bool, true, key)
+            XCTAssertNotNil((state["surface"] as? [String: Any])?["surface"] as? String, key)
+            XCTAssertEqual(try XCTUnwrap((state["surface"] as? [String: Any])?["gap"] as? Double), 0.006, accuracy: 0.00001, key)
+        }
+        let repairedPosition = try XCTUnwrap(try report("repaired")["placementPosition"] as? [Double])
+        XCTAssertNotEqual(repairedPosition, [-2.25, 0.1, 1.6], "Old placements embedded inside the sofa must be repaired.")
+        let floorPosition = try XCTUnwrap(try report("floor")["placementPosition"] as? [Double])
+        let afterHeight = try XCTUnwrap(try report("afterHeight")["placementPosition"] as? [Double])
+        XCTAssertEqual(floorPosition[1], afterHeight[1], accuracy: 0.00001, "Dragging up cannot lift a grounded person into empty space.")
+        let wallPosition = try XCTUnwrap(try report("wall")["placementPosition"] as? [Double])
+        let raisedPosition = try XCTUnwrap(try report("wallRaised")["placementPosition"] as? [Double])
+        XCTAssertGreaterThan(raisedPosition[1], wallPosition[1], "Dragging up should slide the body along a real wall.")
+        XCTAssertEqual(raisedPosition[2], wallPosition[2], accuracy: 0.00001)
+        for preset in ["star", "prone", "crouch", "handsUp", "stand"] {
+            model.editing.scale = 1.5
+            model.selectPose(preset)
+            try await Task.sleep(for: .milliseconds(350))
+            let state = try await diagnostics()
+            XCTAssertTrue(state["collision"] is NSNull, "Changing pose or size must not push any part through a surface.")
+            XCTAssertEqual(state["placementValid"] as? Bool, true)
+            result[preset] = state
+        }
+        model.editing.scale = 0.4
+        model.selectPose("stand")
+        try await Task.sleep(for: .milliseconds(350))
+        let evidence = HouseStore.documents.appendingPathComponent("Verification/character-gameplay", isDirectory: true)
+        try FileManager.default.createDirectory(at: evidence, withIntermediateDirectories: true)
+        let screenshot = try await view.callAsyncJavaScript("window.characterViewer.action('inspect'); return window.characterViewer.screenshot()", arguments: [:], in: nil, contentWorld: .page) as? String
+        try XCTUnwrap(screenshot.flatMap { Data(base64Encoded: $0) }).write(to: evidence.appendingPathComponent("surface-constrained-human.png"))
+        try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]).write(to: evidence.appendingPathComponent("surface-constraints.json"))
+        model.editing.position = [0, 0, 0]
+        try await Task.sleep(for: .milliseconds(350))
+        _ = try await view.callAsyncJavaScript("window.characterViewer.setRoom({surfaces: [{id:'small-floor', kind:'floor', dimensions:[0.5,0.1,0.5], position:[0,-0.05,0]}]})", arguments: [:], in: nil, contentWorld: .page)
+        try await Task.sleep(for: .milliseconds(200))
+        let before = try await diagnostics()
+        XCTAssertEqual(before["placementValid"] as? Bool, true)
+        model.selectPose("tpose")
+        try await Task.sleep(for: .milliseconds(400))
+        let blockedAnimation = try await diagnostics()
+        XCTAssertEqual(blockedAnimation["preset"] as? String, "stand", "An interrupted pose must restore a complete safe pose, not leave a partial animation labeled as the new pose.")
+        let safeJoints = try XCTUnwrap(before["joints"] as? [[String: Any]])
+        let restoredJoints = try XCTUnwrap(blockedAnimation["joints"] as? [[String: Any]])
+        for (safe, restored) in zip(safeJoints, restoredJoints) {
+            for (coordinate, actual) in zip(try XCTUnwrap(safe["position"] as? [Double]), try XCTUnwrap(restored["position"] as? [Double])) {
+                XCTAssertEqual(coordinate, actual, accuracy: 0.00001)
+            }
+        }
+        model.editing.scale = 1.5
+        model.selectPose("star")
+        try await Task.sleep(for: .milliseconds(400))
+        let rejected = try await diagnostics()
+        XCTAssertEqual(rejected["placementValid"] as? Bool, true)
+        XCTAssertEqual(rejected["preset"] as? String, "stand", "An impossible size/pose must restore the last safe body, not overlap the room.")
+        XCTAssertTrue(rejected["collision"] is NSNull)
+    }
+
     @MainActor func testGeneratedHumanPosesPaintClonesAndReopenEndToEnd() async throws {
         guard let existing = CharacterAsset.all().first(where: { $0.hasModel && $0.rigged }) else {
             throw XCTSkip("This end-to-end test uses an existing generated human; it never spends Tripo credits.")
@@ -121,6 +464,22 @@ final class Character3DTests: XCTestCase {
             let screenshot = try await reopened.webView?.callAsyncJavaScript("return window.characterViewer.screenshot()", arguments: [:], in: nil, contentWorld: .page) as? String
             try XCTUnwrap(screenshot.flatMap { Data(base64Encoded: $0) }).write(to: evidence.appendingPathComponent("form-\(form).png"))
         }
+    }
+
+    /// Drags the body from its projected center by a normalized-device offset, using real canvas pointer events.
+    @MainActor private func dragBody(_ view: WKWebView, dx: Double, dy: Double) async throws -> [String: [String: Any]] {
+        let value = try await view.callAsyncJavaScript("""
+            const viewer = window.characterViewer, canvas = document.querySelector('canvas'), rect = canvas.getBoundingClientRect();
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            const before = viewer.diagnostics(), [x, y] = before.manipulation.center;
+            const fire = (type, step) => canvas.dispatchEvent(new PointerEvent(type, {bubbles: true, cancelable: true, pointerId: 95, pointerType: 'touch',
+              button: type === 'pointermove' ? -1 : 0, clientX: rect.left + (x + dx * step / 5 + 1) / 2 * rect.width, clientY: rect.top + (1 - y - dy * step / 5) / 2 * rect.height}));
+            fire('pointerdown', 0);
+            for (let step = 1; step <= 5; step++) fire('pointermove', step);
+            fire('pointerup', 5);
+            return { before, after: viewer.diagnostics() };
+            """, arguments: ["dx": dx, "dy": dy], in: nil, contentWorld: .page) as? [String: [String: Any]]
+        return try XCTUnwrap(value)
     }
 
     @MainActor private func waitForViewer(_ model: Character3DModel) async throws {

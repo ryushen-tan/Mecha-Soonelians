@@ -59,6 +59,15 @@ export class SurfacePainter {
     this.stroke = this.states.map(state => ({ state, before: new Uint32Array(state.packed) }));
   }
 
+  cancelStroke() {
+    if (!this.stroke) return;
+    for (const { state, before } of this.stroke) {
+      state.packed.set(before);
+      this.refresh(state);
+    }
+    this.stroke = null;
+  }
+
   end() {
     if (!this.stroke) return false;
     const entries = [];

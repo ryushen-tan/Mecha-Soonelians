@@ -22,6 +22,7 @@ struct Character3DView: View {
             else { generationView }
         }
         .navigationTitle("3D character").navigationBarTitleDisplayMode(.inline)
+        .toolbar(model.modelData == nil ? .visible : .hidden, for: .navigationBar)
         .onDisappear { model.stopPolling() }
     }
 
