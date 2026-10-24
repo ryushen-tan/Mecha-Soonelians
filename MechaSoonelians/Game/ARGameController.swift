@@ -83,6 +83,32 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         return floors.min() ?? frame.camera.transform.columns.3.y - 1.3
     }
 
+    /// Where a chameleon goes when the player taps this screen point: on a wall it stands on the
+    /// floor with its back to the wall; on the floor (or furniture) it faces the player.
+    func chameleonPlacement(at point: CGPoint) -> GhostPlacement? {
+        guard isRelocalized, let frame = currentFrame,
+              let hit = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .any).first else { return nil }
+        let position = simd_make_float3(hit.worldTransform.columns.3)
+        let camera = simd_make_float3(frame.camera.transform.columns.3)
+        // A raycast result's Y axis is the surface normal.
+        var normal = simd_make_float3(hit.worldTransform.columns.1)
+        let onWall = abs(normal.y) < 0.5
+        var origin = position
+        var facing = camera - position
+        if onWall {
+            normal.y = 0
+            facing = simd_dot(normal, camera - position) < 0 ? -normal : normal
+            origin.y = floorHeight(for: frame)
+        }
+        facing.y = 0
+        guard simd_length(facing) > 0.01 else { return nil }
+        return GhostPlacement(origin: origin, facing: simd_normalize(facing), onWall: onWall,
+                              width: ChameleonStore.height / 2, height: ChameleonStore.height)
+    }
+
+    /// While set, a tap places a chameleon instead of tagging a ghost.
+    var onTapPlace: ((CGPoint) -> Void)?
+
     // MARK: Ghosts
 
     /// Makes the scene show exactly these ghosts: the 3D model once it has arrived, else the flat cutout.
@@ -126,7 +152,8 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
             defer { loadingModels.remove(ghost.id) }
             guard let model = try? await Entity(contentsOf: url) else { return }
             let bounds = model.visualBounds(relativeTo: nil)
-            let scale = ghost.height / max(bounds.extents.y, 0.01)
+            // The 3D editor normalizes every character to 1.75 m standing, so a crouch stays a crouch.
+            let scale = ghost.height / 1.75
             model.scale = SIMD3(repeating: scale)
             // Feet on the floor, centered left-right; back on the wall (just in front of the wall's
             // invisible blocker) or centered on the spot.
@@ -191,6 +218,10 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     }
 
     @objc private func tapped(_ gesture: UITapGestureRecognizer) {
+        if let onTapPlace {
+            onTapPlace(gesture.location(in: arView))
+            return
+        }
         var entity = arView.entity(at: gesture.location(in: arView))
         while let current = entity {
             if let id = UUID(uuidString: current.name), ghostEntities[id] != nil {

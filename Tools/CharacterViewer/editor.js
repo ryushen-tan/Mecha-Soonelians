@@ -9,6 +9,7 @@ import { HumanoidRig, posePages } from './rig.js';
 import { SurfacePainter } from './paint.js';
 import { RoomStage } from './room.js';
 import { buildBodyForms } from './forms.js';
+import { buildMannequin, bakeTexture, chameleonScene } from './chameleon.js';
 
 const post = (type, value) => window.webkit?.messageHandlers.character.postMessage({ type, value });
 const status = document.getElementById('status');
@@ -423,6 +424,23 @@ window.characterViewer = {
     return { ...rig.report(), quality: rig.surfaceQuality(), bounds: { min: box.min.toArray(), max: box.max.toArray() }, paint: painter.checksum(), history: painter.history(), clones: stage.clones.length, cloneBounds, remoteOwners: [...remoteGroups.keys()], collision: stage.collision(placement, box) };
   },
   screenshot() { renderer.render(scene, camera); return renderer.domElement.toDataURL('image/png').split(',')[1]; },
+  // Maps a 360° turnaround onto the blocky mannequin, sends the GLB back, and opens it for posing
+  // and painting. Views: [{ image: base64 PNG cutout cropped head-to-feet, yaw: degrees, centerX: 0–1 }].
+  async buildChameleon(views, options = {}) {
+    try {
+      const images = await Promise.all(views.map(async view => {
+        const image = new Image();
+        image.src = 'data:image/png;base64,' + view.image;
+        await image.decode();
+        return image;
+      }));
+      const mannequin = buildMannequin();
+      const texture = bakeTexture(mannequin, views.map((view, index) => ({ ...view, image: images[index] })), options);
+      const encoded = base64(await new GLTFExporter().parseAsync(chameleonScene(mannequin, texture), { binary: true }));
+      post('chameleon', encoded);
+      await this.load(encoded, '');
+    } catch (error) { post('error', error.message); }
+  },
   // The painted, posed character as USDZ, for the hide-and-seek game's RealityKit ghosts.
   async exportUSDZ() {
     try {

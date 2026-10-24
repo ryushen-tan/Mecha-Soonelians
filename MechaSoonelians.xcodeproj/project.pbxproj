@@ -43,8 +43,10 @@
 		D3AEDA1013AA53DDAC5CC361 /* human-2-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = E981861409898200BC9CCBF6 /* human-2-mask.png */; };
 		D546689ECAB0C3F7F1912FE9 /* Ghost3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BDB2E1BCEB1FCFDA269353B /* Ghost3DView.swift */; };
 		D6FA24E44C694A306F2179CE /* GameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BE9FA0E1173D95D05C52BBA /* GameView.swift */; };
+		DA45C1EC1D7889100B32C3DB /* ChameleonCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3757EA99DEEB8D6C2972EE /* ChameleonCapture.swift */; };
 		DD2079108A4E5E81740ED31D /* GameModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */; };
 		DDA3913CE4881610A4129A29 /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E306C8758FEAB51BA780EC0 /* ScanView.swift */; };
+		E8B933866B1E0C5DF7444820 /* ChameleonStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 832C5186DE797FF76CF6DA3F /* ChameleonStudioView.swift */; };
 		E9B08F4081110F9BC2AAE35F /* CaptureImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE1EC8831CA5703DDB00CA1 /* CaptureImage.swift */; };
 		F52D814B2C79AB10F25475AC /* human-rgb.png in Resources */ = {isa = PBXBuildFile; fileRef = 0ABE41D7846B7EE0C68B2F1B /* human-rgb.png */; };
 		FB79186CB13FA6F01ACB4321 /* ATTRIBUTION.txt in Resources */ = {isa = PBXBuildFile; fileRef = DBAC0F8CF5D53ED50877620D /* ATTRIBUTION.txt */; };
@@ -72,6 +74,7 @@
 		6C2D535BD41EC0F0EBED9996 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
 		718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModels.swift; sourceTree = "<group>"; };
 		72DAACAF2F70200E7F265971 /* CharacterStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterStudioView.swift; sourceTree = "<group>"; };
+		832C5186DE797FF76CF6DA3F /* ChameleonStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonStudioView.swift; sourceTree = "<group>"; };
 		8913A7AC10A5CE0BD4D9535A /* MapTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTestView.swift; sourceTree = "<group>"; };
 		8A050B6E930C000EB23AB2C7 /* human-analysis.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "human-analysis.json"; sourceTree = "<group>"; };
 		8F4D38EFC52020C49647B159 /* HumanAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanAnalyzer.swift; sourceTree = "<group>"; };
@@ -83,6 +86,7 @@
 		B72EA1D5DC5972D7C62DD623 /* GameSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSession.swift; sourceTree = "<group>"; };
 		BBE1EC8831CA5703DDB00CA1 /* CaptureImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureImage.swift; sourceTree = "<group>"; };
 		C3168DEE1FE4E95A6318A1DE /* BodyRig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyRig.swift; sourceTree = "<group>"; };
+		CA3757EA99DEEB8D6C2972EE /* ChameleonCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonCapture.swift; sourceTree = "<group>"; };
 		D18296BB4C1D5B457A9563D1 /* HumanEditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanEditorModel.swift; sourceTree = "<group>"; };
 		D5281FE38E7FADB0605FF96B /* PoseCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseCanvas.swift; sourceTree = "<group>"; };
 		D99F9A560431B9C94F58D80E /* Character3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DView.swift; sourceTree = "<group>"; };
@@ -160,6 +164,8 @@
 			isa = PBXGroup;
 			children = (
 				9392E082D145DE0B1F5484FA /* ARGameController.swift */,
+				CA3757EA99DEEB8D6C2972EE /* ChameleonCapture.swift */,
+				832C5186DE797FF76CF6DA3F /* ChameleonStudioView.swift */,
 				718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */,
 				B72EA1D5DC5972D7C62DD623 /* GameSession.swift */,
 				5BE9FA0E1173D95D05C52BBA /* GameView.swift */,
@@ -312,6 +318,8 @@
 				6D367233E6EE450CFB8FACE5 /* BodyRig.swift in Sources */,
 				331E1FE4BD86D07DD19B84F3 /* CaptureEditorView.swift in Sources */,
 				E9B08F4081110F9BC2AAE35F /* CaptureImage.swift in Sources */,
+				DA45C1EC1D7889100B32C3DB /* ChameleonCapture.swift in Sources */,
+				E8B933866B1E0C5DF7444820 /* ChameleonStudioView.swift in Sources */,
 				0185AB12EFDA0D8A1732AC6A /* Character3DModel.swift in Sources */,
 				4107B9CBB99AE55C1EB502A4 /* Character3DView.swift in Sources */,
 				B5504EE75E860DF11D7BCC96 /* CharacterEditing.swift in Sources */,

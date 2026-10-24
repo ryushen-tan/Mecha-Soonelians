@@ -83,6 +83,12 @@ struct JoinGameView: View {
     }
 }
 
+/// A spot picked for the player's chameleon, plus what the camera saw there for picking colors.
+private struct ChameleonSpot {
+    let placement: GhostPlacement
+    let photo: CGImage?
+}
+
 /// One screen for the whole round. The AR view stays alive underneath so the phone keeps
 /// knowing where it is; each phase puts its own panel on top.
 struct GameView: View {
@@ -93,6 +99,9 @@ struct GameView: View {
     @State private var capture: GhostCapture?
     /// Building and painting a 3D ghost; nil means painting the flat cutout.
     @State private var sculptor: GhostSculptor?
+    /// Waiting for a tap on the spot to put the player's saved chameleon.
+    @State private var placingChameleon = false
+    @State private var chameleonSpot: ChameleonSpot?
     @State private var isCapturing = false
     @State private var countdown: Int?
     @State private var useTimer = true
@@ -117,14 +126,19 @@ struct GameView: View {
                     Text("It's a big file, so this can take a minute.")
                         .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
                 }
+            } else if let spot = chameleonSpot, let sculptor {
+                Ghost3DView(sculptor: sculptor, photo: spot.photo, placeTitle: "Hide here", onCancel: {
+                    chameleonSpot = nil
+                    self.sculptor = nil
+                })
             } else if let capture, let sculptor {
-                Ghost3DView(capture: capture, sculptor: sculptor, onUse2D: {
+                Ghost3DView(sculptor: sculptor, photo: capture.photo, waitingImage: capture.person, onUse2D: {
                     sculptor.cancel()
                     self.sculptor = nil
                 })
             } else if let capture {
                 PaintView(capture: capture, onDone: { image in
-                    placeGhost(capture, image: image)
+                    placeGhost(capture.placement, image: image)
                 }, onRetake: {
                     self.capture = nil
                 })
@@ -172,6 +186,9 @@ struct GameView: View {
                 sculptor?.cancel()
                 sculptor = nil
                 capture = nil
+                chameleonSpot = nil
+                placingChameleon = false
+                ar.onTapPlace = nil
             }
         }
     }
@@ -365,26 +382,46 @@ struct GameView: View {
     private var hidingPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             Eyebrow(text: "HIDE · \(timeLeft)")
-            if session.myGhost != nil {
-                Text("Ghost placed ✅").font(RallyStyle.font(23, .bold))
-                Text("You can walk around now. Retake it any time before hiding ends.")
+            if placingChameleon {
+                Text("Tap where to hide").font(RallyStyle.font(23, .bold))
+                Text("Tap a wall to stand with your back to it, or the floor to stand there facing you.")
                     .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                Button("Cancel") {
+                    placingChameleon = false
+                    ar.onTapPlace = nil
+                }
+                .font(RallyStyle.font(14, .semibold))
             } else {
-                Text("Find your spot").font(RallyStyle.font(23, .bold))
-                Text("Have a friend take your photo, or prop the phone up and use the timer. Get your whole body in.")
-                    .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                if session.myGhost != nil {
+                    Text("Ghost placed ✅").font(RallyStyle.font(23, .bold))
+                    Text("You can walk around now. Redo it any time before hiding ends.")
+                        .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                } else if ChameleonStore.hasChameleon {
+                    Text("Find your spot").font(RallyStyle.font(23, .bold))
+                    Text("Place your chameleon, pick a pose, then paint it to blend in.")
+                        .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                } else {
+                    Text("Find your spot").font(RallyStyle.font(23, .bold))
+                    Text("Have a friend take your photo, or prop the phone up and use the timer. Get your whole body in. (Make a chameleon from the home screen to hide as one.)")
+                        .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                }
+                if !ar.isRelocalized {
+                    Text(ar.trackingMessage).font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+                }
+                if ChameleonStore.hasChameleon {
+                    Button { startPlacingChameleon() } label: { ActionLabel(text: "Place my chameleon") }
+                        .buttonStyle(PushButtonStyle())
+                        .disabled(!ar.isRelocalized)
+                }
+                Toggle("5-second timer", isOn: $useTimer)
+                    .font(RallyStyle.font(14, .semibold)).tint(RallyStyle.ink)
+                Button { takePhoto() } label: {
+                    ActionLabel(text: isCapturing ? "Cutting you out…" : session.myGhost == nil ? "Take hiding photo" : "Retake photo",
+                                busy: isCapturing)
+                }
+                .buttonStyle(PushButtonStyle(dark: ChameleonStore.hasChameleon))
+                .disabled(!ar.isRelocalized || isCapturing || countdown != nil)
             }
-            if !ar.isRelocalized {
-                Text(ar.trackingMessage).font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
-            }
-            Toggle("5-second timer", isOn: $useTimer)
-                .font(RallyStyle.font(14, .semibold)).tint(RallyStyle.ink)
-            Button { takePhoto() } label: {
-                ActionLabel(text: isCapturing ? "Cutting you out…" : session.myGhost == nil ? "Take hiding photo" : "Retake photo",
-                            busy: isCapturing)
-            }
-            .buttonStyle(PushButtonStyle())
-            .disabled(!ar.isRelocalized || isCapturing || countdown != nil)
             if session.isHost {
                 Button("Start seeking now") { session.endPhase() }
                     .font(RallyStyle.font(14, .semibold))
@@ -495,7 +532,7 @@ struct GameView: View {
                     let sculptor = GhostSculptor()
                     sculptor.onExported = { [weak sculptor] usdz in
                         guard sculptor != nil else { return }
-                        placeGhost(capture, image: capture.flatCutoutPNG() ?? Data(), model: usdz)
+                        placeGhost(capture.placement, image: capture.flatCutoutPNG() ?? Data(), model: usdz)
                     }
                     sculptor.generate(png: png, server: session.modelServer)
                     self.sculptor = sculptor
@@ -506,7 +543,25 @@ struct GameView: View {
         }
     }
 
-    private func placeGhost(_ capture: GhostCapture, image: Data, model: Data? = nil) {
+    /// The next tap on the house picks the spot; then the chameleon opens for posing and painting.
+    private func startPlacingChameleon() {
+        placingChameleon = true
+        ar.onTapPlace = { point in
+            guard let placement = ar.chameleonPlacement(at: point), let model = ChameleonStore.load() else {
+                captureError = "Couldn't find a floor or wall there. Point at it from closer and tap again."
+                return
+            }
+            ar.onTapPlace = nil
+            placingChameleon = false
+            let photo = ar.currentFrame.flatMap(GhostCapture.uprightPhoto)
+            let sculptor = GhostSculptor(modelData: model)
+            sculptor.onExported = { usdz in placeGhost(placement, image: Data(), model: usdz) }
+            self.sculptor = sculptor
+            chameleonSpot = ChameleonSpot(placement: placement, photo: photo)
+        }
+    }
+
+    private func placeGhost(_ placement: GhostPlacement, image: Data, model: Data? = nil) {
         let id = UUID()
         var modelURL: URL?
         if let model {
@@ -519,11 +574,12 @@ struct GameView: View {
                 return
             }
         }
-        let ghost = Ghost(id: id, ownerID: session.me.id, transform: capture.transform.floats,
-                          floorTransform: capture.floorTransform.floats, flushBack: capture.flushBack,
-                          hasModel: modelURL != nil, width: capture.width, height: capture.height, foundBy: nil)
+        let ghost = Ghost(id: id, ownerID: session.me.id, transform: placement.transform.floats,
+                          floorTransform: placement.floorTransform.floats, flushBack: placement.flushBack,
+                          hasModel: modelURL != nil, width: placement.width, height: placement.height, foundBy: nil)
         session.placeGhost(ghost, image: image, model: modelURL)
         sculptor = nil
-        self.capture = nil
+        capture = nil
+        chameleonSpot = nil
     }
 }

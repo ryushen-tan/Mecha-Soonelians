@@ -1,10 +1,16 @@
 import SwiftUI
 import WebKit
 
-/// Turns a hider's cutout into a 3D model on the Mac's Tripo server, then lets them paint it in
-/// the bundled 3D viewer and exports it as USDZ for RealityKit.
+/// Drives Ryu's bundled 3D viewer for the game: shows a model (from Tripo, or the player's saved
+/// chameleon) or builds a chameleon from turnaround shots, then poses, paints and exports it as USDZ.
 @MainActor
 final class GhostSculptor: ObservableObject {
+    struct Pose: Identifiable, Decodable {
+        let id: String
+        let name: String
+        let icon: String
+    }
+
     @Published var status = "Sending your photo to the 3D maker…"
     @Published var modelData: Data?
     @Published var error: String?
@@ -13,11 +19,27 @@ final class GhostSculptor: ObservableObject {
     @Published var painting = true
     @Published var color = UIColor.gray
     @Published var brushSize = 0.035
+    @Published var poses: [Pose] = []
+    @Published var preset = "original"
 
-    weak var webView: WKWebView?
+    /// Turnaround shots to build a chameleon from, instead of loading `modelData`.
+    var pendingViews: [ChameleonView]?
+    var faceless = true
+    /// Called with the GLB when a chameleon has been built from `pendingViews`.
+    var onChameleon: ((Data) -> Void)?
     var onExported: ((Data) -> Void)?
+    weak var webView: WKWebView?
     private var work: Task<Void, Never>?
     private let requestID = UUID().uuidString
+
+    init(modelData: Data? = nil, views: [ChameleonView]? = nil, faceless: Bool = true) {
+        self.modelData = modelData
+        pendingViews = views
+        self.faceless = faceless
+        painting = views == nil
+    }
+
+    var showsViewer: Bool { modelData != nil || pendingViews != nil }
 
     func generate(png: Data, server: ModelServer) {
         work = Task {
@@ -74,28 +96,49 @@ final class GhostSculptor: ObservableObject {
         onExported?(data)
     }
 
-    fileprivate var brushArguments: [String: Any] {
+    fileprivate func receiveChameleon(_ base64: String) {
+        guard let data = Data(base64Encoded: base64) else { return }
+        modelData = data
+        pendingViews = nil
+        onChameleon?(data)
+    }
+
+    fileprivate var settingsArguments: [String: Any] {
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0
         color.getRed(&red, green: &green, blue: &blue, alpha: nil)
         let hex = String(format: "#%02X%02X%02X", Int(red * 255), Int(green * 255), Int(blue * 255))
-        return ["painting": painting, "color": hex, "size": brushSize]
+        return ["painting": painting, "color": hex, "size": brushSize, "preset": preset]
     }
 }
 
 struct Ghost3DView: View {
-    let capture: GhostCapture
     @ObservedObject var sculptor: GhostSculptor
-    var onUse2D: () -> Void
+    /// Where the player is hiding, for picking colors. Nil hides the eyedropper.
+    var photo: CGImage?
+    /// Shown while a Tripo model is being made.
+    var waitingImage: CGImage?
+    var placeTitle = "Place 3D ghost"
+    var onUse2D: (() -> Void)?
+    var onCancel: (() -> Void)?
 
     @State private var pickingFromPhoto = false
 
     var body: some View {
         VStack(spacing: 0) {
-            if sculptor.modelData != nil {
-                GhostSculptWebView(sculptor: sculptor)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel("Your 3D ghost. Paint it with one finger, or switch to Turn to look around it.")
-                paintControls
+            if sculptor.showsViewer {
+                ZStack {
+                    GhostSculptWebView(sculptor: sculptor)
+                        .accessibilityLabel("Your 3D ghost. Paint it with one finger, or switch to Turn to look around it.")
+                    if !sculptor.viewerLoaded && sculptor.error == nil {
+                        VStack(spacing: 10) {
+                            ProgressView()
+                            Text(sculptor.pendingViews != nil ? "Making your chameleon…" : "Loading…")
+                                .font(RallyStyle.font(14, .semibold))
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                controls
             } else {
                 waiting
             }
@@ -108,9 +151,11 @@ struct Ghost3DView: View {
     private var waiting: some View {
         VStack(spacing: 20) {
             Spacer()
-            Image(decorative: capture.person, scale: 1)
-                .resizable().scaledToFit()
-                .frame(maxHeight: 280)
+            if let waitingImage {
+                Image(decorative: waitingImage, scale: 1)
+                    .resizable().scaledToFit()
+                    .frame(maxHeight: 280)
+            }
             if let error = sculptor.error {
                 ErrorNotice(message: error)
             } else {
@@ -123,14 +168,35 @@ struct Ghost3DView: View {
                     .multilineTextAlignment(.center)
             }
             Spacer()
-            Button { onUse2D() } label: { ActionLabel(text: "Use a flat cutout instead") }
-                .buttonStyle(PushButtonStyle(dark: true))
+            if let onUse2D {
+                Button { onUse2D() } label: { ActionLabel(text: "Use a flat cutout instead") }
+                    .buttonStyle(PushButtonStyle(dark: true))
+            }
         }
         .padding(24)
     }
 
-    private var paintControls: some View {
+    private var controls: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if !sculptor.poses.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(sculptor.poses) { pose in
+                            Button { sculptor.preset = pose.id } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: pose.icon).font(.system(size: 18))
+                                    Text(pose.name).font(RallyStyle.font(10, .semibold)).lineLimit(1)
+                                }
+                                .frame(width: 64, height: 54)
+                                .background(sculptor.preset == pose.id ? RallyStyle.lime : RallyStyle.line.opacity(0.35),
+                                            in: RoundedRectangle(cornerRadius: 12))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(sculptor.preset == pose.id ? .isSelected : [])
+                        }
+                    }
+                }
+            }
             Eyebrow(text: sculptor.painting ? "PAINT TO MATCH WHERE YOU'RE HIDING" : "DRAG TO TURN, PINCH TO ZOOM")
             HStack(spacing: 10) {
                 Circle()
@@ -138,10 +204,12 @@ struct Ghost3DView: View {
                     .frame(width: 40, height: 40)
                     .overlay(Circle().stroke(RallyStyle.ink, lineWidth: 2))
                     .accessibilityLabel("Current color")
-                tool(sculptor.painting ? "paintbrush.pointed.fill" : "rotate.3d", label: sculptor.painting ? "Painting. Tap to turn instead." : "Turning. Tap to paint instead.", active: sculptor.painting) {
-                    sculptor.painting.toggle()
+                tool(sculptor.painting ? "paintbrush.pointed.fill" : "rotate.3d",
+                     label: sculptor.painting ? "Painting. Tap to turn instead." : "Turning. Tap to paint instead.",
+                     active: sculptor.painting) { sculptor.painting.toggle() }
+                if photo != nil {
+                    tool("eyedropper", label: "Pick a color from your hiding spot", active: false) { pickingFromPhoto = true }
                 }
-                tool("eyedropper", label: "Pick a color from your photo", active: false) { pickingFromPhoto = true }
                 ColorPicker("Color", selection: Binding(get: { Color(sculptor.color) }, set: { sculptor.color = UIColor($0) }))
                     .labelsHidden()
                 tool("arrow.uturn.backward", label: "Undo", active: false) { sculptor.undo() }
@@ -152,36 +220,46 @@ struct Ghost3DView: View {
                     .accessibilityLabel("Brush size")
             }
             if let error = sculptor.error { ErrorNotice(message: error) }
-            Button { sculptor.export() } label: { ActionLabel(text: "Place 3D ghost", busy: sculptor.exporting) }
+            Button { sculptor.export() } label: { ActionLabel(text: placeTitle, busy: sculptor.exporting) }
                 .buttonStyle(PushButtonStyle())
                 .disabled(!sculptor.viewerLoaded || sculptor.exporting)
-            Button("Use a flat cutout instead", action: onUse2D)
-                .font(RallyStyle.font(14, .semibold))
-                .frame(maxWidth: .infinity)
+            if let onUse2D {
+                Button("Use a flat cutout instead", action: onUse2D)
+                    .font(RallyStyle.font(14, .semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            if let onCancel {
+                Button("Cancel", action: onCancel)
+                    .font(RallyStyle.font(14, .semibold))
+                    .frame(maxWidth: .infinity)
+            }
         }
         .padding(20)
         .background(RallyStyle.surface)
     }
 
+    @ViewBuilder
     private var photoPicker: some View {
-        VStack(spacing: 16) {
-            Eyebrow(text: "TAP WHAT'S BEHIND YOU")
-            GeometryReader { geo in
-                let size = CGSize(width: capture.photo.width, height: capture.photo.height)
-                let scale = min(geo.size.width / size.width, geo.size.height / size.height)
-                Image(decorative: capture.photo, scale: 1).resizable()
-                    .frame(width: size.width * scale, height: size.height * scale)
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        sculptor.color = PaintView.color(at: CGPoint(x: location.x / scale, y: location.y / scale), in: capture.photo)
-                        pickingFromPhoto = false
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        if let photo {
+            VStack(spacing: 16) {
+                Eyebrow(text: "TAP A COLOR FROM YOUR HIDING SPOT")
+                GeometryReader { geo in
+                    let size = CGSize(width: photo.width, height: photo.height)
+                    let scale = min(geo.size.width / size.width, geo.size.height / size.height)
+                    Image(decorative: photo, scale: 1).resizable()
+                        .frame(width: size.width * scale, height: size.height * scale)
+                        .contentShape(Rectangle())
+                        .onTapGesture { location in
+                            sculptor.color = PaintView.color(at: CGPoint(x: location.x / scale, y: location.y / scale), in: photo)
+                            pickingFromPhoto = false
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
+            .padding(20)
+            .background(RallyStyle.paper.ignoresSafeArea())
+            .presentationDetents([.large])
         }
-        .padding(20)
-        .background(RallyStyle.paper.ignoresSafeArea())
-        .presentationDetents([.large])
     }
 
     private func tool(_ systemImage: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
@@ -197,7 +275,7 @@ struct Ghost3DView: View {
     }
 }
 
-/// Ryu's bundled three.js character viewer, driven for painting and USDZ export.
+/// Ryu's bundled three.js character viewer, driven for building, posing, painting and USDZ export.
 private struct GhostSculptWebView: UIViewRepresentable {
     @ObservedObject var sculptor: GhostSculptor
 
@@ -235,30 +313,41 @@ private struct GhostSculptWebView: UIViewRepresentable {
         let sculptor: GhostSculptor
         weak var webView: WKWebView?
         private var ready = false
-        private var loaded = false
-        private var lastBrush: NSDictionary?
+        private var started = false
+        private var lastSettings: NSDictionary?
 
         init(sculptor: GhostSculptor) { self.sculptor = sculptor }
 
         func update() {
             guard ready, let webView else { return }
-            if !loaded, let data = sculptor.modelData {
-                loaded = true
-                Task {
-                    do {
-                        _ = try await webView.callAsyncJavaScript("await window.characterViewer.load(data, '')",
-                            arguments: ["data": data.base64EncodedString()], in: nil, contentWorld: .page)
-                    } catch { sculptor.error = "Couldn't show your 3D model." }
+            if !started {
+                if let views = sculptor.pendingViews {
+                    started = true
+                    let arguments: [String: Any] = ["views": views.map(\.viewerArguments), "options": ["faceless": sculptor.faceless]]
+                    Task {
+                        do {
+                            _ = try await webView.callAsyncJavaScript("await window.characterViewer.buildChameleon(views, options)",
+                                arguments: arguments, in: nil, contentWorld: .page)
+                        } catch { sculptor.error = "Couldn't make your chameleon." }
+                    }
+                } else if let data = sculptor.modelData {
+                    started = true
+                    Task {
+                        do {
+                            _ = try await webView.callAsyncJavaScript("await window.characterViewer.load(data, '')",
+                                arguments: ["data": data.base64EncodedString()], in: nil, contentWorld: .page)
+                        } catch { sculptor.error = "Couldn't show your 3D model." }
+                    }
                 }
             }
             guard sculptor.viewerLoaded else { return }
-            let brush = sculptor.brushArguments
-            guard lastBrush != brush as NSDictionary else { return }
-            lastBrush = brush as NSDictionary
+            let settings = sculptor.settingsArguments
+            guard lastSettings != settings as NSDictionary else { return }
+            lastSettings = settings as NSDictionary
             Task {
                 _ = try? await webView.callAsyncJavaScript(
-                    "window.characterViewer.configure({ tool: painting ? 'paint' : 'orbit', color, brush: size })",
-                    arguments: brush, in: nil, contentWorld: .page)
+                    "window.characterViewer.configure({ tool: painting ? 'paint' : 'orbit', color, brush: size, preset }, {}, 0, false, true)",
+                    arguments: settings, in: nil, contentWorld: .page)
             }
         }
 
@@ -270,8 +359,16 @@ private struct GhostSculptWebView: UIViewRepresentable {
                 update()
             case "loaded":
                 sculptor.viewerLoaded = true
-                lastBrush = nil
+                lastSettings = nil
                 update()
+            case "capabilities":
+                if let value = body["value"] as? [String: Any], value["humanoid"] as? Bool == true, let pages = value["poses"],
+                   let data = try? JSONSerialization.data(withJSONObject: pages),
+                   let poses = try? JSONDecoder().decode([[GhostSculptor.Pose]].self, from: data) {
+                    sculptor.poses = poses.flatMap { $0 }
+                }
+            case "chameleon":
+                if let value = body["value"] as? String { sculptor.receiveChameleon(value) }
             case "usdz":
                 if let value = body["value"] as? String { sculptor.receiveExport(value) }
             case "error":
@@ -290,7 +387,7 @@ private struct GhostSculptWebView: UIViewRepresentable {
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             sculptor.viewerLoaded = false
             sculptor.exporting = false
-            sculptor.error = "The 3D viewer ran out of memory. Use a flat cutout, or retake your photo."
+            sculptor.error = "The 3D viewer ran out of memory. Go back and try again."
         }
     }
 }
