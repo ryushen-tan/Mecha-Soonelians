@@ -6,12 +6,22 @@ struct LobbyView: View {
     let room: Room
     @State private var confirmingLeave = false
     @State private var copied = false
+    @State private var showsStudio = false
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Brand()
+                HStack {
+                    Brand()
+                    Spacer()
+                    Button { showsStudio = true } label: {
+                        Label("Studio", systemImage: "viewfinder")
+                            .font(RallyStyle.font(14, .semibold))
+                            .padding(12).rallyGlass()
+                    }
+                    .accessibilityIdentifier("lobbyStudioButton")
+                }
                 if store.reconnecting {
                     Label("Reconnecting…", systemImage: "wifi.exclamationmark")
                         .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
@@ -50,6 +60,16 @@ struct LobbyView: View {
             .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
         }
         .background(RallyStyle.paper.ignoresSafeArea())
+        .sheet(isPresented: $showsStudio) {
+            NavigationStack {
+                StudioView()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { showsStudio = false }
+                        }
+                    }
+            }
+        }
         .alert(store.isHost ? "End this room?" : "Heading out?", isPresented: $confirmingLeave) {
             Button(store.isHost ? "End room" : "Leave room", role: .destructive) { Task { await store.leave() } }
             Button("Cancel", role: .cancel) {}

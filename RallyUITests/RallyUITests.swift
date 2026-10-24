@@ -1,6 +1,28 @@
 import XCTest
 
 final class RallyUITests: XCTestCase {
+    @MainActor func testStudioOpensHumanDepthEditorAndPoseControls() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
+        app.launch()
+        app.buttons["studioTab"].tap()
+        app.buttons["makePlayerButton"].tap()
+        XCTAssertTrue(app.staticTexts["Find your people."].waitForExistence(timeout: 10))
+        let edit = app.buttons["playerPrimaryAction"]
+        let enabled = NSPredicate(format: "enabled == true")
+        expectation(for: enabled, evaluatedWith: edit)
+        waitForExpectations(timeout: 40)
+        app.segmentedControls.buttons["Depth"].tap()
+        XCTAssertFalse(app.staticTexts["No depth attached"].exists)
+        edit.tap()
+        XCTAssertTrue(app.staticTexts["Pose rig"].exists)
+        XCTAssertTrue(app.buttons["Wave"].exists)
+        app.buttons["Wave"].tap()
+        edit.tap()
+        XCTAssertTrue(app.alerts["Player editor"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.alerts.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Saved'")).firstMatch.exists)
+    }
+
     @MainActor func testJoinAndCreateNavigationMatchesApprovedPreview() {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing"]

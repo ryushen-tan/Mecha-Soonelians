@@ -1,0 +1,13 @@
+TUM RGB-D benchmark — freiburg3_walking_static
+Source: https://cvg.cit.tum.de/data/datasets/rgbd-dataset
+Download: https://cvg.cit.tum.de/rgbd/dataset/freiburg3/rgbd_dataset_freiburg3_walking_static.tgz
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License terms: https://creativecommons.org/licenses/by/4.0/
+Authors: J. Sturm, N. Engelhard, F. Endres, W. Burgard, D. Cremers
+Reference: A Benchmark for the Evaluation of RGB-D SLAM Systems, IROS 2012.
+
+This fixture extracts one RGB frame and its nearest depth frame from the sequence.
+The original PNG pixels are retained. Derived assets include a Float32 depth
+buffer, an 8-bit depth visualization, and person masks, cutouts and joints
+computed locally with Apple Vision. No endorsement by the authors is implied.
+The sensor is a Kinect; this is not an iPhone LiDAR photo.

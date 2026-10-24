@@ -10,7 +10,22 @@ targets:
   MechaSoonelians:
     type: application
     platform: iOS
-    sources: [MechaSoonelians]
+    sources:
+      - path: MechaSoonelians
+        excludes: [Capture/CharacterViewer]
+      - path: MechaSoonelians/Capture/CharacterViewer
+        type: folder
+        buildPhase: resources
+      - Rally/Design.swift
+      - path: TestFixtures/LiDAR/room/rgb.jpg
+        buildPhase: resources
+      - path: TestFixtures/LiDAR/room/depth-preview.png
+        buildPhase: resources
+      - path: TestFixtures/LiDAR/room/LICENSE.txt
+        buildPhase: resources
+      - path: TestFixtures/HumanDepth
+        buildPhase: resources
+        excludes: ["*.py", "*.md", "human-depth-uint16.png"]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ryushentan.MechaSoonelians
@@ -19,7 +34,10 @@ targets:
       path: MechaSoonelians/Info.plist
       properties:
         CFBundleDisplayName: Mecha Soonelians
-        NSCameraUsageDescription: The camera is used to scan the house.
+        NSCameraUsageDescription: The camera is used to scan the house and capture people with depth for player cutouts.
+        NSLocalNetworkUsageDescription: Connect to your Mac to generate 3D characters with Tripo.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         UIRequiredDeviceCapabilities: [arkit]
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

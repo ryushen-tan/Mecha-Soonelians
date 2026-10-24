@@ -1,0 +1,39 @@
+{
+  "dataset": "TUM RGB-D benchmark",
+  "sequence": "freiburg3_walking_static",
+  "source": "https://cvg.cit.tum.de/data/datasets/rgbd-dataset",
+  "archive": "https://cvg.cit.tum.de/rgbd/dataset/freiburg3/rgbd_dataset_freiburg3_walking_static.tgz",
+  "license": "CC BY 4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "attribution": "TUM RGB-D benchmark; J. Sturm, N. Engelhard, F. Endres, W. Burgard, D. Cremers (IROS 2012)",
+  "sensor": "Kinect RGB-D (not iPhone LiDAR)",
+  "synthetic": false,
+  "rgb_member": "rgbd_dataset_freiburg3_walking_static/rgb/1341846227.622081.png",
+  "depth_member": "rgbd_dataset_freiburg3_walking_static/depth/1341846227.622097.png",
+  "rgb_timestamp": 1341846227.622081,
+  "depth_timestamp": 1341846227.622097,
+  "timestamp_difference_seconds": 1.5974044799804688e-05,
+  "width": 640,
+  "height": 480,
+  "raw_png": "uint16; divide by 5000 for meters; zero means missing measurement",
+  "float_buffer": "little-endian Float32 meters, row-major, zero means missing measurement",
+  "registration": "Registered to RGB by the source dataset; nearest timestamp pairing",
+  "rgb_intrinsics": {
+    "fx": 535.4,
+    "fy": 539.2,
+    "cx": 320.1,
+    "cy": 247.6
+  },
+  "depth_range_meters": [
+    1.7130000591278076,
+    9.869999885559082
+  ],
+  "valid_fraction": 0.7167513020833334,
+  "preview": "Visualization only; nearer is brighter; zero is invalid",
+  "derived_assets": "Float32 conversion and depth visualization; cutouts and joints generated locally using Apple Vision",
+  "sha256": {
+    "human-rgb.png": "0e4a1f548b40684a376563316a954130ea6826d80acfe3f16d6267077b1060f1",
+    "human-depth-uint16.png": "c9f50aa2bd5fe0bf04e73e43f5428c2dd35a673ab09d70d5dab9a37e65bafbf1",
+    "human-depth-float32.bin": "587bc95a8f41a7e314fbeda4618a51eae5f2054ccc403797b14e8d7cb698897e"
+  }
+}

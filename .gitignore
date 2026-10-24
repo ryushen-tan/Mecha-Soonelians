@@ -10,3 +10,6 @@ artifacts/
 
 # Scans pulled off the phone are large; keep them out of git.
 scans/
+
+# Secrets
+.env

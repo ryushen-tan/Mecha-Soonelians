@@ -1,12 +1,48 @@
 # Rally
 
-This repository also contains the separate MechaSoonelians RoomPlan scanner project. Open `Rally.xcodeproj` for the lobby app; `project.yml` belongs to the scanner and `rally.yml` generates Rally.
+Open `Rally.xcodeproj` for the integrated app: lobbies, RoomPlan scanning, and the human capture/pose Studio. `rally.yml` generates Rally. The legacy `MechaSoonelians.xcodeproj` remains available; both targets compile the same capture and scanning sources and use `Rally/Design.swift` for their capture screens.
 
 A SwiftUI iOS app for creating a lobby, sharing a six-digit room code, and getting everyone ready. The native screens follow the approved HTML preview: cream surfaces, lime action buttons, illustrated avatars, and a glass Join / Create navigation bar.
 
 ## Run the app
 
-Requires Xcode 26 or later (for the glass API); supports iOS 17 and later. iOS 26 uses Liquid Glass; earlier versions use a material capsule. The generated `Rally.xcodeproj` is committed, so XcodeGen is not needed to open or run it.
+Requires Xcode 26 or later (for the glass API); supports iOS 18 and later. iOS 26 uses Liquid Glass; earlier versions use a material capsule. The generated `Rally.xcodeproj` is committed, so XcodeGen is not needed to open or run it.
+
+## Capture Studio
+
+- Open **Studio → Make a player** without connecting to a server, or open **Studio** from an active lobby. Lobby membership and polling remain active while editing.
+- The bundled, attributed TUM/Kinect RGB-depth sample includes two people. Switch between Photo, Cutout, Depth and Pose; select a person, adjust joints or try a preset, then save. Simulator uses cached sample analysis when its Vision models are unavailable.
+- **Scan person** detects people before capture. Supported LiDAR devices attach depth; ordinary photos still support cutouts and 2D joints. Import preserves embedded depth when available. Live capture and RoomPlan need physical-device verification.
+- **Scan your house** captures multiple rooms in one AR coordinate space and saves the structure, USDZ and world map. A new completed house scan replaces the previous one. This action is unavailable on unsupported hardware.
+- Saved characters appear under **Your players** with a preview and PNG sharing. Full exports are in **Files → Rally → Players**; house exports are in **Files → Rally → House**. Exports from the legacy Mecha Soonelians app remain in that app’s separate sandbox; they are not automatically migrated.
+- The original **Pose** tab remains a 2D articulated cutout; large rotations can expose gaps. **Make a 3D character** uses the separate Tripo flow below. Original depth is not reposed. Lobby upload, room placement and prompt-driven poses are not implemented.
+
+## Tripo 3D characters
+
+1. Keep `TRIPO_API_KEY=...` in the root `.env` (the existing `TRIPO_AI_API_KEY` spelling also works). Never put the key in Swift, a plist, a client token field, or Git.
+2. Run `cd server && npm run start:3d`. This starts a separate, localhost-only service on port **3001** and loads the root `.env`. Leave it running while generating. The lobby still uses port 3000.
+3. In **Studio → Make a player**, select a person, then **Make a 3D character**. The input is a padded PNG of that person’s original transparent cutout, not the full room or the distorted 2D pose.
+4. Confirm the upload/credit notice. The service uploads to Tripo v3, generates a textured 20k-face mesh, checks riggability, and requests a Mixamo-named humanoid GLB rig when compatible. If rigging fails, it keeps the unrigged mesh and explains the limitation.
+5. Drag to orbit, pinch to zoom, turn the whole character, or rotate actual skin-weighted joints on X/Y/Z. **Save 3D character** exports the posed GLB, thumbnail and editable pose. Reopen it in **Studio → 3D characters** or share the saved GLB.
+
+The original mesh, exported mesh, source cutout, attribution, pose and generation receipt are stored under **Files → Rally → Characters3D**. The source mesh remains untouched so saved poses can be reset. Generation resumes from Studio if you leave the editor or relaunch; leaving does **not** cancel the remote task or refund credits. Repeating a request uses its saved request ID, avoiding another paid submission. If submission is interrupted before a task ID is recorded, inspect Tripo rather than blindly regenerating.
+
+The Mac service keeps job metadata and models in ignored `artifacts/tripo/`. It uses at most two active jobs and ten new jobs per rolling day by default. It persists Tripo task IDs to recover polling after restart. It does not automatically retry paid task creation. Requests from browsers are rejected; model URLs come only from Tripo, are restricted to its HTTPS domains, and never receive the API key. The bundled viewer makes no CDN requests and rejects external GLB dependencies.
+
+For a physical iPhone on trusted Wi-Fi, set a separate long random `TRIPO_PROXY_TOKEN` in `.env`, start with `TRIPO_HOST=0.0.0.0`, then enter `http://<Mac Wi-Fi IP>:3001` and that proxy token in the 3D editor. The token is kept in memory only. Use HTTPS for anything beyond isolated local development. This single-user proxy is **not** a production multi-user service; add per-user authentication, quotas and private object storage before deployment.
+
+A generated back side is an AI approximation, not measured body geometry. The seated Kinect sample is useful for testing but not ideal for auto-rigging: use a standing full-body image with separated limbs for better results. Generated scale is not calibrated to RoomPlan or LiDAR. Joint controls currently use local rotations, without inverse kinematics, joint limits, or room placement.
+
+API contracts: [image-to-model](https://developers.tripo3d.ai/en/docs/generation-image-to-model/standard), [rig check](https://developers.tripo3d.ai/en/docs/animations-rig-check), [auto-rig](https://developers.tripo3d.ai/en/docs/animations-rig), [task query](https://developers.tripo3d.ai/en/docs/task-query).
+
+The local GLB viewer is bundled from pinned Three.js dependencies. To rebuild it:
+
+```sh
+npm ci --prefix Tools/CharacterViewer
+npm run build --prefix Tools/CharacterViewer
+```
+
+Its license is included in the app’s `CharacterViewer` resources. No Node dependencies or API keys are included in the iOS app. Tests use a clearly synthetic two-bone fixture, not a pretend Tripo result.
 
 1. Start the dependency-free server with Node.js 22 or later:
 
@@ -69,4 +105,4 @@ Build output and screenshots are ignored by Git. App Store signing and server ho
 
 ### Verification in this checkout
 
-The six server tests, three shared-model tests (executed on macOS), and the native API smoke test passed. The app, unit-test target, and UI-test target compiled for the Simulator SDK with asset-catalog processing excluded. Full icon processing and Simulator UI execution still require the missing iOS runtime; the runtime download was stopped before completion. After installing it, run the standard build and Xcode tests above.
+The integrated app builds for Simulator and unsigned iOS devices; the legacy scanner also builds for Simulator. Seven native unit tests, two Simulator UI tests, and twelve server tests pass. The native 3D test loads an actual skinned GLB in the bundled WebKit renderer, rotates a joint, exports it, and verifies skinning and pose persistence. Server tests cover idempotent submissions, rig failure fallback, credentials, limits and the Tripo v3 contract. A live run of the bundled human cutout returned a 65-joint rigged mesh and consumed 55 Tripo credits. Live camera depth and RoomPlan still require testing on a physical LiDAR device.

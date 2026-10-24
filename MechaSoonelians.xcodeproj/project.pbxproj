@@ -7,17 +7,67 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0185AB12EFDA0D8A1732AC6A /* Character3DModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7FFFBDBEC0B6D593AFC7A7 /* Character3DModel.swift */; };
+		145D1BF8B11BD44D49BA5FC3 /* LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 6C2D535BD41EC0F0EBED9996 /* LICENSE.txt */; };
+		189D818642C398634A49F05A /* human-depth-preview.png in Resources */ = {isa = PBXBuildFile; fileRef = 5DE0F466297AA36DE58923B8 /* human-depth-preview.png */; };
+		1F608B86606F1BD7C9BCF03D /* human-analysis.json in Resources */ = {isa = PBXBuildFile; fileRef = 8A050B6E930C000EB23AB2C7 /* human-analysis.json */; };
+		216D3DA2E0C913B9D88C727D /* PoseCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5281FE38E7FADB0605FF96B /* PoseCanvas.swift */; };
+		27BE26529E68A748B68CC577 /* human-depth-metadata.json in Resources */ = {isa = PBXBuildFile; fileRef = 3913B8DE0830AEEDA8D03755 /* human-depth-metadata.json */; };
+		32ECF808FF04508A77FD1311 /* human-1-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = E659EBB21F9FE43758369A7B /* human-1-mask.png */; };
+		331E1FE4BD86D07DD19B84F3 /* CaptureEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF79F3BBCC9CA2AC029477CB /* CaptureEditorView.swift */; };
+		4107B9CBB99AE55C1EB502A4 /* Character3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D99F9A560431B9C94F58D80E /* Character3DView.swift */; };
 		41523905A7AC596D58AD1F51 /* HouseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EE05025550A1C0ADC6A58D /* HouseStore.swift */; };
+		56780843821EFB47A198DF53 /* rgb.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 1DAD99AE1A3500130B641F6C /* rgb.jpg */; };
 		66650E709BCF023072433390 /* MechaSooneliansApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */; };
+		6767454F46983FD7EE922639 /* human-1-cutout.png in Resources */ = {isa = PBXBuildFile; fileRef = 3E4570DCDADD00D888DC06D1 /* human-1-cutout.png */; };
+		6BE465E0EC84E1FF5523ABE5 /* HumanAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F4D38EFC52020C49647B159 /* HumanAnalyzer.swift */; };
+		6D367233E6EE450CFB8FACE5 /* BodyRig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3168DEE1FE4E95A6318A1DE /* BodyRig.swift */; };
+		74E70CCFE053ED3991A0B65A /* HumanEditorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D18296BB4C1D5B457A9563D1 /* HumanEditorModel.swift */; };
+		769FF4E63D7701D98C842905 /* human-depth-float32.bin in Resources */ = {isa = PBXBuildFile; fileRef = B1D8FE898C8C0F85CD06E342 /* human-depth-float32.bin */; };
+		83BDBE8E14A828EBCB2AFA81 /* depth-preview.png in Resources */ = {isa = PBXBuildFile; fileRef = 39F6C07E00EBFC0FAB9400BB /* depth-preview.png */; };
+		917D84DC5578C69DFEB32DE6 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15CF7625006B02A6F8C92C4 /* Design.swift */; };
+		9BA4ACCBABE31BA6A17CB77B /* CharacterWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A94CD8A25738D99BA3FF7 /* CharacterWebView.swift */; };
+		B67C1B83A11790E5D686ECF3 /* PersonCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C3816AB67CB802BA0DD2DD /* PersonCameraView.swift */; };
+		B922DE10EA1C2AEE804CC1E0 /* CharacterViewer in Resources */ = {isa = PBXBuildFile; fileRef = 1F44385A370DDF7499F11D84 /* CharacterViewer */; };
+		C9B7072906BBC77C9FF367DD /* human-2-cutout.png in Resources */ = {isa = PBXBuildFile; fileRef = 35EFF5D7AD79BD5498F13036 /* human-2-cutout.png */; };
+		D3AEDA1013AA53DDAC5CC361 /* human-2-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = E981861409898200BC9CCBF6 /* human-2-mask.png */; };
 		DDA3913CE4881610A4129A29 /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E306C8758FEAB51BA780EC0 /* ScanView.swift */; };
+		E9B08F4081110F9BC2AAE35F /* CaptureImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE1EC8831CA5703DDB00CA1 /* CaptureImage.swift */; };
+		F52D814B2C79AB10F25475AC /* human-rgb.png in Resources */ = {isa = PBXBuildFile; fileRef = 0ABE41D7846B7EE0C68B2F1B /* human-rgb.png */; };
+		FB79186CB13FA6F01ACB4321 /* ATTRIBUTION.txt in Resources */ = {isa = PBXBuildFile; fileRef = DBAC0F8CF5D53ED50877620D /* ATTRIBUTION.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0ABE41D7846B7EE0C68B2F1B /* human-rgb.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-rgb.png"; sourceTree = "<group>"; };
+		1DAD99AE1A3500130B641F6C /* rgb.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = rgb.jpg; sourceTree = "<group>"; };
+		1F44385A370DDF7499F11D84 /* CharacterViewer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CharacterViewer; path = MechaSoonelians/Capture/CharacterViewer; sourceTree = SOURCE_ROOT; };
 		2E306C8758FEAB51BA780EC0 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
+		35EFF5D7AD79BD5498F13036 /* human-2-cutout.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-2-cutout.png"; sourceTree = "<group>"; };
+		3913B8DE0830AEEDA8D03755 /* human-depth-metadata.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "human-depth-metadata.json"; sourceTree = "<group>"; };
+		39F6C07E00EBFC0FAB9400BB /* depth-preview.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "depth-preview.png"; sourceTree = "<group>"; };
+		3E4570DCDADD00D888DC06D1 /* human-1-cutout.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-1-cutout.png"; sourceTree = "<group>"; };
 		4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MechaSooneliansApp.swift; sourceTree = "<group>"; };
+		51C3816AB67CB802BA0DD2DD /* PersonCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonCameraView.swift; sourceTree = "<group>"; };
 		5240FEA26661D94879BE1BB1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		5DE0F466297AA36DE58923B8 /* human-depth-preview.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-depth-preview.png"; sourceTree = "<group>"; };
+		5F8A94CD8A25738D99BA3FF7 /* CharacterWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterWebView.swift; sourceTree = "<group>"; };
+		6C2D535BD41EC0F0EBED9996 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
+		8A050B6E930C000EB23AB2C7 /* human-analysis.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "human-analysis.json"; sourceTree = "<group>"; };
+		8F4D38EFC52020C49647B159 /* HumanAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanAnalyzer.swift; sourceTree = "<group>"; };
 		92B5B5D48BC985127201AA50 /* MechaSoonelians.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MechaSoonelians.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9A7FFFBDBEC0B6D593AFC7A7 /* Character3DModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DModel.swift; sourceTree = "<group>"; };
+		B1D8FE898C8C0F85CD06E342 /* human-depth-float32.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "human-depth-float32.bin"; sourceTree = "<group>"; };
+		BBE1EC8831CA5703DDB00CA1 /* CaptureImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureImage.swift; sourceTree = "<group>"; };
+		C3168DEE1FE4E95A6318A1DE /* BodyRig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyRig.swift; sourceTree = "<group>"; };
+		D18296BB4C1D5B457A9563D1 /* HumanEditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanEditorModel.swift; sourceTree = "<group>"; };
+		D5281FE38E7FADB0605FF96B /* PoseCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseCanvas.swift; sourceTree = "<group>"; };
+		D99F9A560431B9C94F58D80E /* Character3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DView.swift; sourceTree = "<group>"; };
+		DBAC0F8CF5D53ED50877620D /* ATTRIBUTION.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ATTRIBUTION.txt; sourceTree = "<group>"; };
 		E2EE05025550A1C0ADC6A58D /* HouseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseStore.swift; sourceTree = "<group>"; };
+		E659EBB21F9FE43758369A7B /* human-1-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-1-mask.png"; sourceTree = "<group>"; };
+		E981861409898200BC9CCBF6 /* human-2-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-2-mask.png"; sourceTree = "<group>"; };
+		F15CF7625006B02A6F8C92C4 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
+		FF79F3BBCC9CA2AC029477CB /* CaptureEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -26,10 +76,28 @@
 			children = (
 				5240FEA26661D94879BE1BB1 /* Info.plist */,
 				4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */,
+				808432637F8DA2253AEBECAF /* Capture */,
 				C06A06FB25AD1918485E408E /* Scan */,
 				81A2E4F4A5D2580E080E0141 /* Shared */,
 			);
 			path = MechaSoonelians;
+			sourceTree = "<group>";
+		};
+		808432637F8DA2253AEBECAF /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				C3168DEE1FE4E95A6318A1DE /* BodyRig.swift */,
+				FF79F3BBCC9CA2AC029477CB /* CaptureEditorView.swift */,
+				BBE1EC8831CA5703DDB00CA1 /* CaptureImage.swift */,
+				9A7FFFBDBEC0B6D593AFC7A7 /* Character3DModel.swift */,
+				D99F9A560431B9C94F58D80E /* Character3DView.swift */,
+				5F8A94CD8A25738D99BA3FF7 /* CharacterWebView.swift */,
+				8F4D38EFC52020C49647B159 /* HumanAnalyzer.swift */,
+				D18296BB4C1D5B457A9563D1 /* HumanEditorModel.swift */,
+				51C3816AB67CB802BA0DD2DD /* PersonCameraView.swift */,
+				D5281FE38E7FADB0605FF96B /* PoseCanvas.swift */,
+			);
+			path = Capture;
 			sourceTree = "<group>";
 		};
 		81A2E4F4A5D2580E080E0141 /* Shared */ = {
@@ -48,10 +116,40 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		B541E82EAFE433AA371E8D5F /* Rally */ = {
+			isa = PBXGroup;
+			children = (
+				F15CF7625006B02A6F8C92C4 /* Design.swift */,
+			);
+			path = Rally;
+			sourceTree = "<group>";
+		};
+		B5CB040D0FDB148BF8B1F471 /* HumanDepth */ = {
+			isa = PBXGroup;
+			children = (
+				DBAC0F8CF5D53ED50877620D /* ATTRIBUTION.txt */,
+				3E4570DCDADD00D888DC06D1 /* human-1-cutout.png */,
+				E659EBB21F9FE43758369A7B /* human-1-mask.png */,
+				35EFF5D7AD79BD5498F13036 /* human-2-cutout.png */,
+				E981861409898200BC9CCBF6 /* human-2-mask.png */,
+				8A050B6E930C000EB23AB2C7 /* human-analysis.json */,
+				B1D8FE898C8C0F85CD06E342 /* human-depth-float32.bin */,
+				3913B8DE0830AEEDA8D03755 /* human-depth-metadata.json */,
+				5DE0F466297AA36DE58923B8 /* human-depth-preview.png */,
+				0ABE41D7846B7EE0C68B2F1B /* human-rgb.png */,
+			);
+			name = HumanDepth;
+			path = TestFixtures/HumanDepth;
+			sourceTree = "<group>";
+		};
 		B84D76F3A58D1CB82B80A272 = {
 			isa = PBXGroup;
 			children = (
+				1F44385A370DDF7499F11D84 /* CharacterViewer */,
+				B5CB040D0FDB148BF8B1F471 /* HumanDepth */,
 				70EC23C53541979FEA2D87D6 /* MechaSoonelians */,
+				B541E82EAFE433AA371E8D5F /* Rally */,
+				CE3FBB017258239B07C3C588 /* room */,
 				89583F88FF4B9E62E920B722 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -64,6 +162,17 @@
 			path = Scan;
 			sourceTree = "<group>";
 		};
+		CE3FBB017258239B07C3C588 /* room */ = {
+			isa = PBXGroup;
+			children = (
+				39F6C07E00EBFC0FAB9400BB /* depth-preview.png */,
+				6C2D535BD41EC0F0EBED9996 /* LICENSE.txt */,
+				1DAD99AE1A3500130B641F6C /* rgb.jpg */,
+			);
+			name = room;
+			path = TestFixtures/LiDAR/room;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -72,6 +181,7 @@
 			buildConfigurationList = B3DBA0370CA6682C974060D6 /* Build configuration list for PBXNativeTarget "MechaSoonelians" */;
 			buildPhases = (
 				B18BFA1C4B2AE924D28FE385 /* Sources */,
+				47902D0E9E7FE09C544BB351 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -114,13 +224,48 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		47902D0E9E7FE09C544BB351 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FB79186CB13FA6F01ACB4321 /* ATTRIBUTION.txt in Resources */,
+				B922DE10EA1C2AEE804CC1E0 /* CharacterViewer in Resources */,
+				145D1BF8B11BD44D49BA5FC3 /* LICENSE.txt in Resources */,
+				83BDBE8E14A828EBCB2AFA81 /* depth-preview.png in Resources */,
+				6767454F46983FD7EE922639 /* human-1-cutout.png in Resources */,
+				32ECF808FF04508A77FD1311 /* human-1-mask.png in Resources */,
+				C9B7072906BBC77C9FF367DD /* human-2-cutout.png in Resources */,
+				D3AEDA1013AA53DDAC5CC361 /* human-2-mask.png in Resources */,
+				1F608B86606F1BD7C9BCF03D /* human-analysis.json in Resources */,
+				769FF4E63D7701D98C842905 /* human-depth-float32.bin in Resources */,
+				27BE26529E68A748B68CC577 /* human-depth-metadata.json in Resources */,
+				189D818642C398634A49F05A /* human-depth-preview.png in Resources */,
+				F52D814B2C79AB10F25475AC /* human-rgb.png in Resources */,
+				56780843821EFB47A198DF53 /* rgb.jpg in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		B18BFA1C4B2AE924D28FE385 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6D367233E6EE450CFB8FACE5 /* BodyRig.swift in Sources */,
+				331E1FE4BD86D07DD19B84F3 /* CaptureEditorView.swift in Sources */,
+				E9B08F4081110F9BC2AAE35F /* CaptureImage.swift in Sources */,
+				0185AB12EFDA0D8A1732AC6A /* Character3DModel.swift in Sources */,
+				4107B9CBB99AE55C1EB502A4 /* Character3DView.swift in Sources */,
+				9BA4ACCBABE31BA6A17CB77B /* CharacterWebView.swift in Sources */,
+				917D84DC5578C69DFEB32DE6 /* Design.swift in Sources */,
 				41523905A7AC596D58AD1F51 /* HouseStore.swift in Sources */,
+				6BE465E0EC84E1FF5523ABE5 /* HumanAnalyzer.swift in Sources */,
+				74E70CCFE053ED3991A0B65A /* HumanEditorModel.swift in Sources */,
 				66650E709BCF023072433390 /* MechaSooneliansApp.swift in Sources */,
+				B67C1B83A11790E5D686ECF3 /* PersonCameraView.swift in Sources */,
+				216D3DA2E0C913B9D88C727D /* PoseCanvas.swift in Sources */,
 				DDA3913CE4881610A4129A29 /* ScanView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
