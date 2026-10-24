@@ -1,196 +1,148 @@
 import SwiftUI
 
-private enum EntryTab: String, CaseIterable { case join = "Join", create = "Create", studio = "Studio" }
+enum JellyEntry: Equatable {
+    case landing, code, host, join(String)
+}
 
 struct HomeView: View {
     @EnvironmentObject private var store: LobbyStore
+    @EnvironmentObject private var audio: JellyAudio
+    @Binding var entry: JellyEntry
     @Binding var invitationCode: String?
-    @State private var tab = EntryTab.join
     @State private var code = ""
-    @State private var joining = false
     @State private var settings = false
-    @State private var studioPath: [StudioRoute] = []
-    @FocusState private var codeFocused: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var focused: Field?
+    private enum Field { case code, name }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if tab != .studio || studioPath.isEmpty {
-                navigation.padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+        JellyCard {
+            switch entry {
+            case .landing: EmptyView()
+            case .code: codeCard
+            case .host: identityCard(creating: true, roomCode: nil)
+            case .join(let code): identityCard(creating: false, roomCode: code)
             }
-            if tab == .studio {
-                NavigationStack(path: $studioPath) { StudioView() }
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        if tab == .create || joining {
-                            IdentityForm(creating: tab == .create, code: code, onCancel: { joining = false })
-                        } else {
-                            joinContent
-                        }
-                        if let error = store.error {
-                            ErrorNotice(message: error)
-                            Button("Connection settings") { settings = true }
-                                .font(RallyStyle.font(14, .semibold))
-                        }
-                    }
-                    .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
-                }
-                .scrollDismissesKeyboard(.interactively)
+            if let error = store.error {
+                JellyNotice(message: error)
+                Button("Connection settings") { settings = true }
+                    .font(JellyStyle.body(13)).underline().buttonStyle(.plain)
+                    .frame(minHeight: 44)
             }
         }
-        .background(RallyStyle.paper.ignoresSafeArea())
+        .foregroundStyle(JellyStyle.ink)
         .sheet(isPresented: $settings) { ServerSettingsView() }
         .onChange(of: invitationCode, initial: true) { _, value in
-            if let value {
-                tab = .join
-                joining = false
-                code = value
-                invitationCode = nil
-            }
+            guard let value else { return }
+            code = value; entry = .code; invitationCode = nil
         }
+        .onChange(of: entry) { _, _ in focused = nil; store.error = nil }
     }
 
-    private var navigation: some View {
-        HStack(spacing: 0) {
-            ForEach(EntryTab.allCases, id: \.self) { item in
-                Button {
-                    codeFocused = false
-                    store.error = nil
-                    joining = false
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { tab = item }
-                } label: {
-                    Text(item.rawValue)
-                        .font(RallyStyle.font(14, tab == item ? .bold : .medium))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background {
-                            if tab == item {
-                                Capsule().fill(RallyStyle.surface.opacity(0.9))
-                                    .shadow(color: RallyStyle.ink.opacity(0.08), radius: 3, y: 2)
-                            }
-                        }
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .rallyHover(cornerRadius: 24)
-                .accessibilityAddTraits(tab == item ? .isSelected : [])
-                .accessibilityIdentifier(item.rawValue.lowercased() + "Tab")
-                .disabled(store.busy)
-            }
-        }
-        .padding(6).rallyGlass().frame(maxWidth: 508)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("App navigation")
-        .frame(maxWidth: .infinity)
-    }
-
-    private var joinContent: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Brand()
-            Text("A little code.\nA whole crew.")
-                .font(RallyStyle.font(43, .heavy)).tracking(-1.8)
+    private var codeCard: some View {
+        Group {
+            (Text("Mecha ") + Text("Soonelians").foregroundColor(JellyStyle.blue))
+                .font(JellyStyle.display(34)).accessibilityAddTraits(.isHeader)
+                .lineLimit(2).minimumScaleFactor(0.5)
                 .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.top, 8)
-            CrewIllustration()
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text("Got a room code?").font(RallyStyle.font(23, .bold)).tracking(-0.5)
-                    Spacer()
-                    Image(systemName: "arrow.down.left").accessibilityHidden(true)
+            Text("ENTER CODE").font(JellyStyle.body(12)).tracking(1.7).foregroundStyle(JellyStyle.muted)
+            TextField("000000", text: $code)
+                .font(JellyStyle.display(36)).tracking(4).multilineTextAlignment(.center)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .keyboardType(.numberPad).focused($focused, equals: .code)
+                .modifier(JellyField(focused: focused == .code))
+                .accessibilityLabel("Room code").accessibilityIdentifier("roomCodeInput")
+                .onChange(of: code) { old, value in
+                    code = String(value.filter { $0.isASCII && $0.isNumber }.prefix(6))
+                    if old != code { audio.key(.type) }
                 }
-                TextField("000000", text: $code)
-                    .font(.system(size: 34, weight: .semibold, design: .monospaced))
-                    .tracking(6).multilineTextAlignment(.center)
-                    .keyboardType(.numberPad).focused($codeFocused)
-                    .rallyField().accessibilityLabel("Room code")
-                    .accessibilityIdentifier("roomCodeInput")
-                    .onChange(of: code) { _, value in
-                        code = String(value.filter { $0.isASCII && $0.isNumber }.prefix(6))
-                    }
-                Button {
-                    codeFocused = false
-                    store.error = nil
-                    joining = true
-                } label: { ActionLabel(text: "Join the room") }
-                .buttonStyle(PushButtonStyle()).disabled(code.count != 6)
-                .accessibilityIdentifier("joinRoomButton")
+            Button {
+                audio.key(.enter); entry = .join(code)
+            } label: {
+                HStack { Text("Join"); Spacer(); Image(systemName: "arrow.right") }
+                    .font(JellyStyle.display(20))
             }
-            .padding(22)
-            .background(RallyStyle.surface, in: RoundedRectangle(cornerRadius: 24))
-            .overlay(RoundedRectangle(cornerRadius: 24).stroke(RallyStyle.line, lineWidth: 1))
+            .buttonStyle(JellyButtonStyle(fullWidth: true))
+            .disabled(code.count != 6).accessibilityIdentifier("joinRoomButton")
+            HStack {
+                Button("host a game") { entry = .host }
+                    .accessibilityIdentifier("createTab")
+                Spacer()
+                Button("back") { entry = .landing }
+                    .accessibilityIdentifier("backToSceneButton")
+            }
+            .font(JellyStyle.body(13)).underline().foregroundStyle(JellyStyle.muted)
+            .buttonStyle(.plain).frame(minHeight: 44)
         }
     }
-}
 
-private struct IdentityForm: View {
-    @EnvironmentObject private var store: LobbyStore
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let creating: Bool
-    let code: String
-    let onCancel: () -> Void
-    @FocusState private var nameFocused: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            if !creating {
+    private func identityCard(creating: Bool, roomCode: String?) -> some View {
+        Group {
+            Text(creating ? "Host a game" : "Join the room")
+                .font(JellyStyle.display(28)).accessibilityAddTraits(.isHeader)
+            if let roomCode {
+                Text(roomCode).font(JellyStyle.display(32)).tracking(6)
+                    .accessibilityLabel("Room code " + roomCode.map(String.init).joined(separator: " "))
+            }
+            Text("YOUR NAME").font(JellyStyle.body(12)).tracking(1).foregroundStyle(JellyStyle.muted)
+            TextField("Your nickname", text: $store.nickname)
+                .font(JellyStyle.body(18)).textContentType(.nickname)
+                .autocorrectionDisabled().submitLabel(.go).focused($focused, equals: .name)
+                .modifier(JellyField(focused: focused == .name))
+                .accessibilityLabel("Nickname").accessibilityIdentifier("nicknameInput")
+                .onChange(of: store.nickname) { _, _ in audio.key(.type) }
+                .onSubmit { if store.validName { enter(roomCode) } }
+            Text("1–20 characters").font(JellyStyle.body(12)).foregroundStyle(JellyStyle.muted)
+            Text("PICK A COLOR").font(JellyStyle.body(12)).tracking(1).foregroundStyle(JellyStyle.muted)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 2) { colorChoices }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) { colorChoices }
+            }
+            Button { enter(roomCode) } label: {
                 HStack {
-                    Button(action: onCancel) { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
-                        .accessibilityLabel("Back to join")
-                    Spacer()
-                    Button("Cancel", action: onCancel)
-                }.disabled(store.busy)
-                Text("Join room \(code.prefix(3)) \(code.suffix(3))")
-                    .font(RallyStyle.font(32, .bold)).accessibilityAddTraits(.isHeader)
-            }
-            AvatarView(index: store.avatar, size: 100)
-                .keyframeAnimator(initialValue: -5.0, trigger: store.avatar) { content, angle in
-                    content.rotationEffect(.degrees(reduceMotion ? -5 : angle), anchor: .bottom)
-                } keyframes: { _ in
-                    CubicKeyframe(-16.0, duration: 0.10)
-                    CubicKeyframe(12.0, duration: 0.14)
-                    CubicKeyframe(-10.0, duration: 0.13)
-                    CubicKeyframe(1.0, duration: 0.12)
-                    CubicKeyframe(-5.0, duration: 0.15)
-                }
-                .frame(maxWidth: .infinity).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Pick your face").font(RallyStyle.font(14, .semibold))
-                HStack(spacing: 0) {
-                    ForEach(0..<6) { index in
-                        Button { store.avatar = index } label: {
-                            AvatarView(index: index, size: 32, selected: store.avatar == index)
-                                .frame(maxWidth: .infinity, minHeight: 48)
-                        }
-                        .buttonStyle(.plain)
-                        .rallyHover(cornerRadius: 14)
-                        .accessibilityLabel(RallyStyle.avatarNames[index] + " avatar")
-                        .accessibilityAddTraits(store.avatar == index ? .isSelected : [])
-                    }
+                    Text(creating ? "Create room" : "Join room")
+                    if store.busy { ProgressView().tint(.white) }
                 }
             }
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Nickname").font(RallyStyle.font(14, .semibold))
-                TextField("Your nickname", text: $store.nickname)
-                    .font(RallyStyle.font(18, .medium)).textContentType(.nickname)
-                    .autocorrectionDisabled().submitLabel(.done).focused($nameFocused)
-                    .rallyField().accessibilityLabel("Nickname").accessibilityIdentifier("nicknameInput")
-                    .onSubmit { nameFocused = false }
-                Text("1–20 characters").font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+            .buttonStyle(JellyButtonStyle(fullWidth: true))
+            .disabled(store.busy || !store.validName).accessibilityIdentifier("confirmEntryButton")
+            HStack {
+                Button("Back") { entry = .code }.accessibilityIdentifier("backToCodeButton")
+                Spacer()
+                Button { settings = true } label: { Image(systemName: "network") }
+                    .accessibilityLabel("Connection settings")
             }
-            Button {
-                nameFocused = false
-                Task { _ = await store.enter(code: creating ? nil : code) }
-            } label: {
-                ActionLabel(text: creating ? "Create room" : "Join room", busy: store.busy)
-            }
-            .buttonStyle(PushButtonStyle()).disabled(store.busy || !store.validName)
-            .accessibilityIdentifier("confirmEntryButton")
-            .padding(.top, 6)
+            .buttonStyle(JellyButtonStyle(kind: .ghost)).disabled(store.busy)
         }
         .disabled(store.busy)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(creating ? "Create a room" : "Join a room")
+    }
+
+    private var colorChoices: some View {
+        ForEach(0..<6) { index in
+            Button { store.avatar = index; audio.key(.click) } label: {
+                Circle().fill(JellyStyle.colors[index])
+                    .frame(width: 36, height: 36)
+                    .overlay(Circle().strokeBorder(store.avatar == index ? JellyStyle.ink : .clear, lineWidth: 3))
+                    .overlay {
+                        if store.avatar == index {
+                            Image(systemName: "checkmark").font(.system(size: 13, weight: .heavy))
+                                .foregroundStyle(index == 1 ? .white : JellyStyle.ink)
+                        }
+                    }
+                    .frame(width: 44, height: 44).frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain).hoverEffect(.highlight)
+            .accessibilityLabel(JellyStyle.colorNames[index] + " avatar")
+            .accessibilityAddTraits(store.avatar == index ? .isSelected : [])
+        }
+    }
+
+    private func enter(_ code: String?) {
+        focused = nil; audio.key(.enter)
+        Task {
+            if await store.enter(code: code), code != nil, store.me?.ready == false {
+                await store.setReady()
+            }
+        }
     }
 }
 

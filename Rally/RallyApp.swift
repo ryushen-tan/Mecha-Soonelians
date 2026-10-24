@@ -20,24 +20,7 @@ struct RootView: View {
     @State private var invitationCode: String?
 
     var body: some View {
-        Group {
-            if let room = store.room {
-                LobbyView(room: room)
-            } else if store.membership != nil {
-                VStack(spacing: 24) {
-                    Brand()
-                    ProgressView().controlSize(.large)
-                    Text(store.reconnecting ? "Trying to reconnect…" : "Finding your room…")
-                        .font(RallyStyle.font(24, .bold))
-                    Text("You’ll return to your seat when the server responds.")
-                        .foregroundStyle(RallyStyle.muted).multilineTextAlignment(.center)
-                    Button("Leave this room") { Task { await store.leave() } }.disabled(store.busy)
-                }
-                .padding(32).frame(maxWidth: .infinity, maxHeight: .infinity).background(RallyStyle.paper)
-            } else {
-                HomeView(invitationCode: $invitationCode)
-            }
-        }
+        JellyExperienceView(invitationCode: $invitationCode)
         .foregroundStyle(RallyStyle.ink)
         .environment(\.gameConnection, store.membership.map { membership in
             GameConnection(server: membership.server, code: membership.code, memberID: membership.memberID,

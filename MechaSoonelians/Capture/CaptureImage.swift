@@ -32,9 +32,12 @@ struct CaptureDepth {
         }
         let valid = samples.filter { $0.isFinite && $0 > 0 }
         guard let minimum = valid.min(), let maximum = valid.max() else { return nil }
-        let pixels = samples.map { value -> UInt8 in
+        let depthRange: Float = max(maximum - minimum, 0.001)
+        let pixels: [UInt8] = samples.map { value in
             guard value.isFinite, value > 0 else { return 0 }
-            return UInt8(clamping: Int(1 + 254 * (1 - (value - minimum) / max(maximum - minimum, 0.001))))
+            let normalized: Float = (value - minimum) / depthRange
+            let intensity: Float = 1 + 254 * (1 - normalized)
+            return UInt8(clamping: Int(intensity))
         }
         guard let provider = CGDataProvider(data: Data(pixels) as CFData),
               let image = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: width,

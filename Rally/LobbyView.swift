@@ -3,164 +3,163 @@ import UIKit
 
 struct LobbyView: View {
     @EnvironmentObject private var store: LobbyStore
+    @EnvironmentObject private var audio: JellyAudio
     let room: Room
     @State private var confirmingLeave = false
     @State private var copied = false
     @State private var showsStudio = false
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+    @State private var removing: Player?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                HStack {
-                    Brand()
-                    Spacer()
-                    Button { showsStudio = true } label: {
-                        Label("Studio", systemImage: "viewfinder")
-                            .font(RallyStyle.font(14, .semibold))
-                            .padding(12).rallyGlass()
+        JellyCard {
+            HStack(alignment: .top) {
+                Text(room.started ? "Game on!" : store.isHost ? "Your room code" : "You’re in, \(store.me?.name ?? "friend")!")
+                    .font(JellyStyle.display(28)).accessibilityAddTraits(.isHeader)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Menu {
+                    Button { showsStudio = true } label: { Label("Studio", systemImage: "viewfinder") }
+                        .accessibilityIdentifier("lobbyStudioButton")
+                    ShareLink(item: "Join my room: \(room.displayCode)\nrally://join/\(room.code)") {
+                        Label("Share invite", systemImage: "square.and.arrow.up")
                     }
-                    .accessibilityIdentifier("lobbyStudioButton")
-                }
-                if store.reconnecting {
-                    Label("Reconnecting…", systemImage: "wifi.exclamationmark")
-                        .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
-                        .accessibilityIdentifier("reconnectingNotice")
-                }
-                if room.started {
-                    startedContent
-                } else {
-                    roomTicket
-                    HStack(spacing: 8) {
-                        Text("Players").font(RallyStyle.font(23, .bold)).accessibilityAddTraits(.isHeader)
-                        Text("\(room.members.count)")
-                            .font(.system(size: 12, design: .monospaced)).foregroundStyle(RallyStyle.muted)
-                            .padding(6).background(RallyStyle.line.opacity(0.35), in: Capsule())
+                    if store.isHost && !room.started {
+                        Button { Task { await store.setLocked() } } label: {
+                            Label(room.locked ? "Unlock room" : "Lock room", systemImage: room.locked ? "lock.open" : "lock")
+                        }.disabled(store.busy || store.reconnecting).accessibilityIdentifier("roomLockToggle")
                     }
-                    LazyVGrid(columns: columns, spacing: 10) {
-                        ForEach(room.members) { player in playerTile(player) }
+                    Button { audio.toggleMute() } label: {
+                        Label(audio.muted ? "Sound on" : "Sound off", systemImage: audio.muted ? "speaker.wave.2" : "speaker.slash")
                     }
-                    controls
+                } label: {
+                    Image(systemName: "ellipsis").frame(width: 44, height: 44)
+                        .background(JellyStyle.field, in: Circle())
                 }
-                if let error = store.error { ErrorNotice(message: error) }
-                Button(store.isHost ? "End room" : "Leave room") { confirmingLeave = true }
-                    .buttonStyle(PushButtonStyle(destructive: true))
-                    .disabled(store.busy).accessibilityIdentifier("leaveRoomButton")
+                .accessibilityLabel("Room options").accessibilityIdentifier("roomOptionsButton")
             }
-            .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
+            if !store.isHost && !room.started {
+                Label("Waiting for the host to start…", systemImage: "clock")
+                    .font(JellyStyle.body()).foregroundStyle(JellyStyle.success)
+            }
+            if store.isHost || room.started {
+                Text(room.code).font(JellyStyle.display(52)).tracking(5).lineLimit(1).minimumScaleFactor(0.5)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel("Room code " + room.code.map(String.init).joined(separator: " "))
+                    .accessibilityIdentifier("lobbyRoomCode")
+            } else {
+                Text("Room \(room.displayCode)").font(JellyStyle.body()).foregroundStyle(JellyStyle.muted)
+                    .accessibilityIdentifier("lobbyRoomCode")
+            }
+            HStack {
+                Text("\(room.members.count) \(room.members.count == 1 ? "player" : "players")")
+                if room.locked { Label("Locked", systemImage: "lock.fill") }
+                Spacer()
+                Button {
+                    UIPasteboard.general.string = room.code; copied = true; audio.key(.click)
+                } label: { Label(copied ? "Copied" : "Copy code", systemImage: copied ? "checkmark" : "square.on.square") }
+                    .buttonStyle(.plain).frame(minHeight: 44).accessibilityIdentifier("copyCodeButton")
+            }
+            .font(JellyStyle.body(12)).foregroundStyle(JellyStyle.muted)
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(room.members) { player in playerRow(player) }
+                }
+            }
+            .frame(height: min(CGFloat(room.members.count) * 60, 270))
+            .accessibilityIdentifier("playerList")
+            if store.reconnecting {
+                Label("Reconnecting…", systemImage: "wifi.exclamationmark")
+                    .font(JellyStyle.body(13)).foregroundStyle(JellyStyle.muted)
+                    .accessibilityIdentifier("reconnectingNotice")
+            }
+            if let error = store.error { JellyNotice(message: error) }
+            if room.started {
+                Button { showsStudio = true } label: { Label("Open Studio", systemImage: "viewfinder") }
+                    .buttonStyle(JellyButtonStyle(fullWidth: true)).accessibilityIdentifier("openStudioButton")
+                if store.isHost {
+                    Button("Back to lobby") { Task { await store.reset() } }
+                        .buttonStyle(JellyButtonStyle(kind: .ghost, fullWidth: true))
+                        .disabled(store.busy || store.reconnecting)
+                }
+            } else if store.isHost {
+                Text(room.members.count < 2 ? "Share your code to invite a friend." : room.canStart ? "Everyone is ready." : "\(room.readyCount) of \(room.members.count) ready.")
+                    .font(JellyStyle.body(13)).foregroundStyle(JellyStyle.muted)
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { roomActions }
+                VStack(spacing: 10) { roomActions }
+            }
         }
-        .background(RallyStyle.paper.ignoresSafeArea())
         .fullScreenCover(isPresented: $showsStudio) {
             NavigationStack {
-                StudioView()
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { showsStudio = false }
-                        }
-                    }
-            }
+                StudioView().toolbar {
+                    ToolbarItem(placement: .topBarTrailing) { Button("Done") { showsStudio = false } }
+                }
+            }.buttonStyle(HoverButtonStyle()).tint(RallyStyle.ink)
         }
-        .alert(store.isHost ? "End this room?" : "Heading out?", isPresented: $confirmingLeave) {
+        .onChange(of: showsStudio) { _, visible in audio.setActive(!visible) }
+        .alert(store.isHost ? "End this room?" : "Leave this room?", isPresented: $confirmingLeave) {
             Button(store.isHost ? "End room" : "Leave room", role: .destructive) { Task { await store.leave() } }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(store.isHost ? "Everyone will return to the join screen." : "You can join again with the same room code.")
         }
+        .alert("Remove \(removing?.name ?? "player")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
+            Button("Remove", role: .destructive) {
+                if let removing { Task { await store.remove(removing) } }
+                removing = nil
+            }
+            Button("Cancel", role: .cancel) { removing = nil }
+        }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("lobbyScreen")
     }
 
-    private var roomTicket: some View {
-        VStack(spacing: 14) {
-            Eyebrow(text: room.locked ? "ROOM LOCKED" : "ROOM CODE")
-            Text(room.displayCode)
-                .font(.system(size: 47, weight: .semibold, design: .monospaced)).tracking(2)
-                .minimumScaleFactor(0.7).lineLimit(1)
-                .accessibilityLabel("Room code \(room.code.map(String.init).joined(separator: " "))")
-                .accessibilityIdentifier("lobbyRoomCode")
-            Rectangle().fill(RallyStyle.limeEdge.opacity(0.7)).frame(height: 1)
-            HStack {
-                Button {
-                    UIPasteboard.general.string = room.code
-                    copied = true
-                } label: { Label(copied ? "Copied" : "Copy code", systemImage: copied ? "checkmark" : "square.on.square") }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .rallyHover()
-                Rectangle().fill(RallyStyle.limeEdge).frame(width: 1, height: 24)
-                ShareLink(item: "Join my Rally room: \(room.displayCode)\nrally://join/\(room.code)") {
-                    Label("Share invite", systemImage: "square.and.arrow.up")
-                }.frame(maxWidth: .infinity, minHeight: 44).rallyHover()
-            }
-            .font(RallyStyle.font(12, .semibold)).buttonStyle(.plain)
-        }
-        .padding(20).background(RallyStyle.lime, in: RoundedRectangle(cornerRadius: 22))
-    }
-
-    private func playerTile(_ player: Player) -> some View {
-        VStack(spacing: 8) {
-            AvatarView(index: player.avatar, size: 36).accessibilityHidden(true)
-            HStack(spacing: 3) {
-                Text(player.name).font(RallyStyle.font(14, .bold)).lineLimit(1)
-                if player.id == store.me?.id { Text("(you)").font(RallyStyle.font(10)).foregroundStyle(RallyStyle.muted) }
-            }
-            Label(player.host ? "Host" : player.ready ? "Ready to go" : "Getting ready",
-                  systemImage: player.host ? "crown" : player.ready ? "checkmark" : "clock")
-                .font(RallyStyle.font(11)).foregroundStyle(player.ready ? RallyStyle.success : RallyStyle.muted)
-        }
-        .padding(12).frame(maxWidth: .infinity, minHeight: 112)
-        .background(RallyStyle.surface, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(RallyStyle.line, lineWidth: 1))
-        .overlay(alignment: .topTrailing) {
-            if store.isHost && !player.host {
-                Button { Task { await store.remove(player) } } label: {
-                    Image(systemName: "xmark").font(.system(size: 11)).frame(width: 44, height: 44)
-                }
-                .foregroundStyle(RallyStyle.muted)
-                .buttonStyle(.plain).rallyHover().disabled(store.busy)
-                .accessibilityLabel("Remove \(player.name)")
-            }
-        }
-    }
-
-    @ViewBuilder private var controls: some View {
-        if store.isHost {
-            VStack(spacing: 18) {
-                Rectangle().fill(RallyStyle.line).frame(height: 1)
-                Toggle("Lock the room", isOn: Binding(get: { room.locked }, set: { _ in Task { await store.setLocked() } }))
-                    .font(RallyStyle.font(14, .semibold)).tint(RallyStyle.ink)
-                    .rallyHover()
-                    .disabled(store.busy || store.reconnecting).accessibilityIdentifier("roomLockToggle")
-                Button { Task { await store.start() } } label: { ActionLabel(text: "Start session", busy: store.busy) }
-                    .buttonStyle(PushButtonStyle()).disabled(!room.canStart || store.busy || store.reconnecting)
-                    .accessibilityIdentifier("startSessionButton")
-                Text(room.members.count < 2 ? "At least 2 players required." : room.canStart ? "Everyone is ready." : "\(room.readyCount) of \(room.members.count) ready.")
-                    .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
-            }
-        } else {
-            VStack(spacing: 18) {
-                Label("Waiting for the host", systemImage: "clock")
-                    .font(RallyStyle.font(14, .semibold)).frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16).background(RallyStyle.line.opacity(0.3), in: RoundedRectangle(cornerRadius: 14))
-                Button { Task { await store.setReady() } } label: {
-                    Label(store.me?.ready == true ? "Ready · tap to undo" : "I’m ready", systemImage: "checkmark")
-                }
-                .buttonStyle(PushButtonStyle(dark: store.me?.ready == true))
-                .disabled(store.busy || store.reconnecting).accessibilityIdentifier("readyButton")
-            }
-        }
-    }
-
-    private var startedContent: some View {
-        VStack(spacing: 24) {
-            AvatarView(index: store.me?.avatar ?? 0, size: 125).rotationEffect(.degrees(-7)).accessibilityHidden(true)
-            Text("Session started").font(RallyStyle.font(40, .heavy)).accessibilityAddTraits(.isHeader)
-            Text("\(room.members.count) players").foregroundStyle(RallyStyle.muted)
-            Text("Room \(room.displayCode)").font(RallyStyle.font(14, .semibold))
+    @ViewBuilder private var roomActions: some View {
+        Button(store.isHost ? "End room" : "Leave room") { confirmingLeave = true }
+            .buttonStyle(JellyButtonStyle(kind: .ghost, fullWidth: true))
+            .disabled(store.busy).accessibilityIdentifier("leaveRoomButton")
+        if !room.started {
             if store.isHost {
-                Button { Task { await store.reset() } } label: { ActionLabel(text: "Back to lobby", busy: store.busy) }
-                    .buttonStyle(PushButtonStyle()).disabled(store.busy || store.reconnecting)
+                Button { Task { await store.start() } } label: {
+                    HStack { Text("Start game"); if store.busy { ProgressView().tint(.white) } }
+                }
+                .buttonStyle(JellyButtonStyle(fullWidth: true))
+                .disabled(!room.canStart || store.busy || store.reconnecting)
+                .accessibilityIdentifier("startSessionButton")
             } else {
-                Text("Waiting for the host").font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                Button { Task { await store.setReady() } } label: {
+                    Label(store.me?.ready == true ? "Ready" : "I’m ready", systemImage: "checkmark")
+                }
+                .buttonStyle(JellyButtonStyle(kind: store.me?.ready == true ? .dark : .primary, fullWidth: true))
+                .disabled(store.busy || store.reconnecting).accessibilityIdentifier("readyButton")
+                .accessibilityHint(store.me?.ready == true ? "Tap to undo ready" : "Tell the host you are ready")
             }
-        }.frame(maxWidth: .infinity).padding(.vertical, 50)
+        }
+    }
+
+    private func playerRow(_ player: Player) -> some View {
+        HStack(spacing: 10) {
+            Circle().fill(JellyStyle.colors[min(5, max(0, player.avatar))]).frame(width: 26, height: 26).accessibilityHidden(true)
+            Text(player.name).font(JellyStyle.body(16)).lineLimit(1)
+            if player.id == store.me?.id { Text("you").font(JellyStyle.body(11)).foregroundStyle(JellyStyle.muted) }
+            Spacer(minLength: 4)
+            if player.host {
+                Text("Host").font(JellyStyle.body(11)).foregroundStyle(.white)
+                    .padding(.horizontal, 8).padding(.vertical, 4).background(JellyStyle.blue, in: Capsule())
+            } else {
+                Image(systemName: player.ready ? "checkmark.circle.fill" : "clock")
+                    .foregroundStyle(player.ready ? JellyStyle.success : JellyStyle.muted)
+                    .accessibilityLabel(player.ready ? "Ready" : "Getting ready")
+            }
+        }
+        .padding(.horizontal, 12).frame(minHeight: 52)
+        .background(JellyStyle.field, in: RoundedRectangle(cornerRadius: 12))
+        .contextMenu {
+            if store.isHost && !player.host {
+                Button("Remove \(player.name)", role: .destructive) { removing = player }.disabled(store.busy)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }

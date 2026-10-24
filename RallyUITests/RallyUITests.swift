@@ -147,25 +147,127 @@ final class RallyUITests: XCTestCase {
         XCTAssertTrue(app.alerts.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Saved'")).firstMatch.exists)
         app.alerts.buttons["OK"].tap()
         app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(app.buttons["studioTab"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["makePlayerButton"].waitForExistence(timeout: 5))
     }
 
-    @MainActor func testJoinAndCreateNavigationMatchesApprovedPreview() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-ui-testing"]
-        app.launch()
-        XCTAssertTrue(app.buttons["joinTab"].exists)
-        XCTAssertTrue(app.buttons["createTab"].exists)
+    @MainActor func testJellyNavigationAndInputValidation() {
+        let app = jellyApp()
+        XCTAssertTrue(app.buttons["studioTab"].exists)
+        XCTAssertTrue(app.buttons["playButton"].waitForExistence(timeout: 5))
+        let sound = app.buttons["soundButton"]
+        let previous = sound.value as? String
+        sound.tap()
+        XCTAssertNotEqual(sound.value as? String, previous)
+        sound.tap()
+        app.buttons["playButton"].tap()
         XCTAssertFalse(app.buttons["joinRoomButton"].isEnabled)
-        XCTAssertFalse(app.buttons["Server settings"].exists)
-        app.buttons["createTab"].tap()
+        let code = app.textFields["roomCodeInput"]
+        code.tap(); code.typeText("1234567")
+        XCTAssertEqual(code.value as? String, "123456")
+        app.buttons["joinRoomButton"].tap()
         XCTAssertTrue(app.textFields["nicknameInput"].exists)
         XCTAssertFalse(app.buttons["confirmEntryButton"].isEnabled)
+        app.buttons["backToCodeButton"].tap()
+        app.buttons["createTab"].tap()
         XCTAssertFalse(app.staticTexts["Room size"].exists)
         app.textFields["nicknameInput"].tap()
         app.textFields["nicknameInput"].typeText("Kai")
+        app.buttons["Pink avatar"].tap()
         XCTAssertTrue(app.buttons["confirmEntryButton"].isEnabled)
-        app.buttons["joinTab"].tap()
-        XCTAssertTrue(app.textFields["roomCodeInput"].exists)
+        app.buttons["backToCodeButton"].tap()
+        app.buttons["backToSceneButton"].tap()
+        XCTAssertTrue(app.buttons["playButton"].exists)
+        app.buttons["refillButton"].tap()
+        XCTAssertTrue(app.buttons["playButton"].exists)
+    }
+
+    @MainActor func testJellyHostLobbyScrollStartAndEnd() async throws {
+        try await requireServer()
+        let app = jellyApp()
+        app.buttons["playButton"].tap()
+        app.buttons["createTab"].tap()
+        app.textFields["nicknameInput"].tap()
+        app.textFields["nicknameInput"].typeText("UI Host")
+        app.buttons["confirmEntryButton"].tap()
+        let codeLabel = app.staticTexts["lobbyRoomCode"]
+        XCTAssertTrue(codeLabel.waitForExistence(timeout: 10))
+        let code = codeLabel.label.filter(\.isNumber)
+        XCTAssertEqual(code.count, 6)
+        XCTAssertFalse(app.buttons["startSessionButton"].isEnabled)
+        for index in 1...6 {
+            let guest = try await request("rooms/\(code)/join", method: "POST", body: ["name": "Guest \(index)", "avatar": index % 6])
+            _ = try await request("rooms/\(code)/me", method: "PATCH", token: guest["token"] as? String, body: ["ready": true])
+        }
+        XCTAssertTrue(app.staticTexts["7 players"].waitForExistence(timeout: 10))
+        let list = app.scrollViews["playerList"]
+        list.swipeUp()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Guest 6'")).firstMatch.isHittable)
+        capture(app, "Jelly host with seven players")
+        app.buttons["startSessionButton"].tap()
+        XCTAssertTrue(app.staticTexts["Game on!"].waitForExistence(timeout: 10))
+        app.buttons["openStudioButton"].tap()
+        XCTAssertTrue(app.buttons["makePlayerButton"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+        app.buttons["Back to lobby"].tap()
+        XCTAssertTrue(app.buttons["startSessionButton"].waitForExistence(timeout: 10))
+        app.buttons["leaveRoomButton"].tap()
+        app.alerts.buttons["End room"].tap()
+        XCTAssertTrue(app.textFields["roomCodeInput"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor func testJellyGuestJoinsRealRoomAndReceivesStart() async throws {
+        try await requireServer()
+        let host = try await request("rooms", method: "POST", body: ["name": "API Host", "avatar": 1])
+        let room = try XCTUnwrap(host["room"] as? [String: Any])
+        let code = try XCTUnwrap(room["code"] as? String)
+        let token = try XCTUnwrap(host["token"] as? String)
+        let app = jellyApp()
+        app.buttons["playButton"].tap()
+        app.textFields["roomCodeInput"].tap()
+        app.textFields["roomCodeInput"].typeText(code)
+        app.buttons["joinRoomButton"].tap()
+        app.textFields["nicknameInput"].tap()
+        app.textFields["nicknameInput"].typeText("UI Guest")
+        app.buttons["confirmEntryButton"].tap()
+        XCTAssertTrue(app.buttons["readyButton"].waitForExistence(timeout: 10))
+        let ready = NSPredicate(format: "label == 'Ready'")
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: ready, object: app.buttons["readyButton"])], timeout: 10)
+        capture(app, "Jelly guest waiting room")
+        _ = try await request("rooms/\(code)", method: "PATCH", token: token, body: ["status": "started"])
+        XCTAssertTrue(app.staticTexts["Game on!"].waitForExistence(timeout: 10))
+        app.buttons["leaveRoomButton"].tap()
+        app.alerts.buttons["Leave room"].tap()
+        XCTAssertTrue(app.textFields["roomCodeInput"].waitForExistence(timeout: 10))
+        _ = try await request("rooms/\(code)/leave", method: "POST", token: token)
+    }
+
+    @MainActor private func jellyApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing", "-jelly-still"]
+        app.launch()
+        XCTAssertTrue(app.buttons["playButton"].waitForExistence(timeout: 5))
+        return app
+    }
+
+    @MainActor private func capture(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
+
+    private func requireServer() async throws {
+        do { _ = try await request("health") }
+        catch { throw XCTSkip("Run the Rally server on localhost:3000 for lobby integration UI tests.") }
+    }
+
+    private func request(_ path: String, method: String = "GET", token: String? = nil, body: [String: Any]? = nil) async throws -> [String: Any] {
+        var request = URLRequest(url: URL(string: "http://localhost:3000/" + path)!)
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
+        if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = try XCTUnwrap(response as? HTTPURLResponse).statusCode
+        guard (200..<300).contains(status) else { throw NSError(domain: "RallyUITests", code: status) }
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 }

@@ -14,7 +14,11 @@ targets:
     type: application
     platform: iOS
     sources:
-      - Rally
+      - path: Rally
+        excludes: [JellyAssets]
+      - path: Rally/JellyAssets
+        type: folder
+        buildPhase: resources
       - path: MechaSoonelians/Capture
         excludes: [CharacterViewer]
       - path: MechaSoonelians/Capture/CharacterViewer
@@ -29,6 +33,8 @@ targets:
       path: Rally/Info.plist
       properties:
         CFBundleDisplayName: Rally
+        UIAppFonts: ["JellyAssets/fonts/Outfit[wght].ttf", "JellyAssets/fonts/Nunito[wght].ttf"]
+        NSMotionUsageDescription: Tilt your phone to move the figurines on the landing screen.
         NSCameraUsageDescription: The camera scans your house and captures people with depth for player cutouts.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
