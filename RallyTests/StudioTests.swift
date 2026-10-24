@@ -3,6 +3,15 @@ import UIKit
 @testable import Rally
 
 final class StudioTests: XCTestCase {
+    func testIncompleteCaptureWarnsBeforePaidGeneration() throws {
+        let image = try XCTUnwrap(UIGraphicsImageRenderer(size: CGSize(width: 10, height: 10)).image { _ in }.cgImage)
+        let cropped = HumanDetection(id: 1, bounds: CGRect(x: 0.2, y: 0.1, width: 0.6, height: 0.9), joints: [], cutout: image, mask: image)
+        XCTAssertNotNil(cropped.generationWarning)
+        let joints = ["leftAnkle", "rightAnkle", "leftWrist", "rightWrist"].map { BodyJoint(name: $0, point: CGPoint(x: 0.5, y: 0.5), confidence: 1) }
+        let complete = HumanDetection(id: 1, bounds: CGRect(x: 0.2, y: 0.1, width: 0.6, height: 0.8), joints: joints, cutout: image, mask: image)
+        XCTAssertNil(complete.generationWarning)
+    }
+
     func testLibraryIgnoresIncompleteAndHiddenExports() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

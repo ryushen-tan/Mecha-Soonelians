@@ -10,6 +10,7 @@
 		0185AB12EFDA0D8A1732AC6A /* Character3DModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7FFFBDBEC0B6D593AFC7A7 /* Character3DModel.swift */; };
 		0BCC1E3A100EF1B3F729DE89 /* ModelServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB756F6C6B452E359FFDAB4D /* ModelServer.swift */; };
 		145D1BF8B11BD44D49BA5FC3 /* LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 6C2D535BD41EC0F0EBED9996 /* LICENSE.txt */; };
+		15CA543F94ACF082E2CD966A /* CharacterStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72DAACAF2F70200E7F265971 /* CharacterStudioView.swift */; };
 		177218563D231CB7703D242D /* GhostCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1013AAE8F957E87D79BCB2E6 /* GhostCapture.swift */; };
 		189D818642C398634A49F05A /* human-depth-preview.png in Resources */ = {isa = PBXBuildFile; fileRef = 5DE0F466297AA36DE58923B8 /* human-depth-preview.png */; };
 		1F608B86606F1BD7C9BCF03D /* human-analysis.json in Resources */ = {isa = PBXBuildFile; fileRef = 8A050B6E930C000EB23AB2C7 /* human-analysis.json */; };
@@ -19,6 +20,7 @@
 		331E1FE4BD86D07DD19B84F3 /* CaptureEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF79F3BBCC9CA2AC029477CB /* CaptureEditorView.swift */; };
 		4107B9CBB99AE55C1EB502A4 /* Character3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D99F9A560431B9C94F58D80E /* Character3DView.swift */; };
 		41523905A7AC596D58AD1F51 /* HouseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EE05025550A1C0ADC6A58D /* HouseStore.swift */; };
+		54501E87514E43B04138E862 /* CharacterGame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98A6BD433F465C227C7C182C /* CharacterGame.swift */; };
 		56780843821EFB47A198DF53 /* rgb.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 1DAD99AE1A3500130B641F6C /* rgb.jpg */; };
 		66650E709BCF023072433390 /* MechaSooneliansApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */; };
 		6767454F46983FD7EE922639 /* human-1-cutout.png in Resources */ = {isa = PBXBuildFile; fileRef = 3E4570DCDADD00D888DC06D1 /* human-1-cutout.png */; };
@@ -32,6 +34,8 @@
 		934880E1C4BA41990B693DD7 /* ARGameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9392E082D145DE0B1F5484FA /* ARGameController.swift */; };
 		9BA4ACCBABE31BA6A17CB77B /* CharacterWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A94CD8A25738D99BA3FF7 /* CharacterWebView.swift */; };
 		A4C53F0F7411917B9C70F84E /* PaintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F51E65ADE5E00819B806A976 /* PaintView.swift */; };
+		B51DFBDCA76A6E4538E39521 /* GameRoomGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DF44A506EAC5F271D13C10D /* GameRoomGeometry.swift */; };
+		B5504EE75E860DF11D7BCC96 /* CharacterEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFC6E985A94B8064A083416 /* CharacterEditing.swift */; };
 		B67C1B83A11790E5D686ECF3 /* PersonCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C3816AB67CB802BA0DD2DD /* PersonCameraView.swift */; };
 		B922DE10EA1C2AEE804CC1E0 /* CharacterViewer in Resources */ = {isa = PBXBuildFile; fileRef = 1F44385A370DDF7499F11D84 /* CharacterViewer */; };
 		C66FBCC1C4F22EC959F33A7B /* GameSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72EA1D5DC5972D7C62DD623 /* GameSession.swift */; };
@@ -48,6 +52,7 @@
 
 /* Begin PBXFileReference section */
 		0ABE41D7846B7EE0C68B2F1B /* human-rgb.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-rgb.png"; sourceTree = "<group>"; };
+		0DF44A506EAC5F271D13C10D /* GameRoomGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameRoomGeometry.swift; sourceTree = "<group>"; };
 		1013AAE8F957E87D79BCB2E6 /* GhostCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhostCapture.swift; sourceTree = "<group>"; };
 		1DAD99AE1A3500130B641F6C /* rgb.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = rgb.jpg; sourceTree = "<group>"; };
 		1F44385A370DDF7499F11D84 /* CharacterViewer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CharacterViewer; path = MechaSoonelians/Capture/CharacterViewer; sourceTree = SOURCE_ROOT; };
@@ -58,6 +63,7 @@
 		3BDB2E1BCEB1FCFDA269353B /* Ghost3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ghost3DView.swift; sourceTree = "<group>"; };
 		3E4570DCDADD00D888DC06D1 /* human-1-cutout.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-1-cutout.png"; sourceTree = "<group>"; };
 		4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MechaSooneliansApp.swift; sourceTree = "<group>"; };
+		4EFC6E985A94B8064A083416 /* CharacterEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterEditing.swift; sourceTree = "<group>"; };
 		51C3816AB67CB802BA0DD2DD /* PersonCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonCameraView.swift; sourceTree = "<group>"; };
 		5240FEA26661D94879BE1BB1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5BE9FA0E1173D95D05C52BBA /* GameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameView.swift; sourceTree = "<group>"; };
@@ -65,11 +71,13 @@
 		5F8A94CD8A25738D99BA3FF7 /* CharacterWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterWebView.swift; sourceTree = "<group>"; };
 		6C2D535BD41EC0F0EBED9996 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
 		718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModels.swift; sourceTree = "<group>"; };
+		72DAACAF2F70200E7F265971 /* CharacterStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterStudioView.swift; sourceTree = "<group>"; };
 		8913A7AC10A5CE0BD4D9535A /* MapTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTestView.swift; sourceTree = "<group>"; };
 		8A050B6E930C000EB23AB2C7 /* human-analysis.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "human-analysis.json"; sourceTree = "<group>"; };
 		8F4D38EFC52020C49647B159 /* HumanAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanAnalyzer.swift; sourceTree = "<group>"; };
 		92B5B5D48BC985127201AA50 /* MechaSoonelians.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MechaSoonelians.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9392E082D145DE0B1F5484FA /* ARGameController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARGameController.swift; sourceTree = "<group>"; };
+		98A6BD433F465C227C7C182C /* CharacterGame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterGame.swift; sourceTree = "<group>"; };
 		9A7FFFBDBEC0B6D593AFC7A7 /* Character3DModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DModel.swift; sourceTree = "<group>"; };
 		B1D8FE898C8C0F85CD06E342 /* human-depth-float32.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "human-depth-float32.bin"; sourceTree = "<group>"; };
 		B72EA1D5DC5972D7C62DD623 /* GameSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSession.swift; sourceTree = "<group>"; };
@@ -119,6 +127,9 @@
 				BBE1EC8831CA5703DDB00CA1 /* CaptureImage.swift */,
 				9A7FFFBDBEC0B6D593AFC7A7 /* Character3DModel.swift */,
 				D99F9A560431B9C94F58D80E /* Character3DView.swift */,
+				4EFC6E985A94B8064A083416 /* CharacterEditing.swift */,
+				98A6BD433F465C227C7C182C /* CharacterGame.swift */,
+				72DAACAF2F70200E7F265971 /* CharacterStudioView.swift */,
 				5F8A94CD8A25738D99BA3FF7 /* CharacterWebView.swift */,
 				8F4D38EFC52020C49647B159 /* HumanAnalyzer.swift */,
 				D18296BB4C1D5B457A9563D1 /* HumanEditorModel.swift */,
@@ -131,6 +142,7 @@
 		81A2E4F4A5D2580E080E0141 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				0DF44A506EAC5F271D13C10D /* GameRoomGeometry.swift */,
 				E2EE05025550A1C0ADC6A58D /* HouseStore.swift */,
 			);
 			path = Shared;
@@ -302,9 +314,13 @@
 				E9B08F4081110F9BC2AAE35F /* CaptureImage.swift in Sources */,
 				0185AB12EFDA0D8A1732AC6A /* Character3DModel.swift in Sources */,
 				4107B9CBB99AE55C1EB502A4 /* Character3DView.swift in Sources */,
+				B5504EE75E860DF11D7BCC96 /* CharacterEditing.swift in Sources */,
+				54501E87514E43B04138E862 /* CharacterGame.swift in Sources */,
+				15CA543F94ACF082E2CD966A /* CharacterStudioView.swift in Sources */,
 				9BA4ACCBABE31BA6A17CB77B /* CharacterWebView.swift in Sources */,
 				917D84DC5578C69DFEB32DE6 /* Design.swift in Sources */,
 				DD2079108A4E5E81740ED31D /* GameModels.swift in Sources */,
+				B51DFBDCA76A6E4538E39521 /* GameRoomGeometry.swift in Sources */,
 				C66FBCC1C4F22EC959F33A7B /* GameSession.swift in Sources */,
 				D6FA24E44C694A306F2179CE /* GameView.swift in Sources */,
 				D546689ECAB0C3F7F1912FE9 /* Ghost3DView.swift in Sources */,

@@ -111,7 +111,7 @@ struct CaptureEditorView: View {
         .tint(RallyStyle.ink).foregroundStyle(RallyStyle.ink).preferredColorScheme(.light)
         .navigationTitle("Edit player").navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $shows3D) {
-            Character3DView(input: characterInput, attribution: model.isSample ? "TUM RGB-D fr3/walking_static. J. Sturm, N. Engelhard, F. Endres, W. Burgard, D. Cremers (IROS 2012). CC BY 4.0. https://cvg.cit.tum.de/data/datasets/rgbd-dataset" : nil)
+            Character3DView(input: characterInput, attribution: model.isSample ? "TUM RGB-D fr3/walking_static. J. Sturm, N. Engelhard, F. Endres, W. Burgard, D. Cremers (IROS 2012). CC BY 4.0. https://cvg.cit.tum.de/data/datasets/rgbd-dataset" : nil, inputWarning: model.selectedHuman?.generationWarning)
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

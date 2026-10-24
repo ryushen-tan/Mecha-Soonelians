@@ -56,7 +56,7 @@ struct StudioView: View {
                             }
                             .padding(16).background(RallyStyle.surface, in: RoundedRectangle(cornerRadius: 18))
                             .overlay(RoundedRectangle(cornerRadius: 18).stroke(RallyStyle.line))
-                        }.buttonStyle(.plain).rallyHover(cornerRadius: 18)
+                        }.buttonStyle(.plain).rallyHover(cornerRadius: 18).accessibilityIdentifier("character_\(character.id)")
                     }
                 }
                 VStack(alignment: .leading, spacing: 14) {
@@ -89,7 +89,7 @@ struct StudioView: View {
                         }
                     }
                 }
-                Text("Captures stay local unless you choose Tripo 3D generation. Generated characters return here for rotation and posing. Room placement and lobby sharing are not connected yet.")
+                Text("Captures stay local unless you choose Tripo generation or publish a disguise to your lobby. Open a 3D character to pose, paint, place clones, and play in your room.")
                     .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
             }
             .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)

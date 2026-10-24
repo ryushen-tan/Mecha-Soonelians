@@ -31,7 +31,7 @@ Invite links use `rally://join/123456`. They fill the Join screen with the code;
 - **Scan person** detects people before capture. Supported LiDAR devices attach depth; ordinary photos still support cutouts and 2D joints. Import preserves embedded depth when available. Live capture and RoomPlan need physical-device verification.
 - **Scan your house** captures multiple rooms in one AR coordinate space and saves the structure, USDZ and world map. A new completed house scan replaces the previous one. This action is unavailable on unsupported hardware.
 - Saved characters appear under **Your players** with a preview and PNG sharing. Full exports are in **Files → Rally → Players**; house exports are in **Files → Rally → House**. Exports from the legacy Mecha Soonelians app remain in that app’s separate sandbox; they are not automatically migrated.
-- The original **Pose** tab remains a 2D articulated cutout; large rotations can expose gaps. **Make a 3D character** uses the separate Tripo flow below. Original depth is not reposed. Lobby upload, room placement and prompt-driven poses are not implemented.
+- The original **Pose** tab remains a 2D articulated cutout; large rotations can expose gaps. **Make a 3D character** uses the Tripo flow below. Original depth is not reposed. The 3D editor supports painting, placement and lobby disguises; natural-language pose prompts are not implemented.
 
 ## Tripo 3D characters
 
@@ -39,7 +39,9 @@ Invite links use `rally://join/123456`. They fill the Join screen with the code;
 2. Run `cd server && npm run start:3d`. This starts a separate, localhost-only service on port **3001** and loads the root `.env`. Leave it running while generating. The lobby still uses port 3000.
 3. In **Studio → Make a player**, select a person, then **Make a 3D character**. The input is a padded PNG of that person’s original transparent cutout, not the full room or the distorted 2D pose.
 4. Confirm the upload/credit notice. The service uploads to Tripo v3, generates a textured 20k-face mesh, checks riggability, and requests a Mixamo-named humanoid GLB rig when compatible. If rigging fails, it keeps the unrigged mesh and explains the limitation.
-5. Drag to orbit, pinch to zoom, turn the whole character, or rotate actual skin-weighted joints on X/Y/Z. **Save 3D character** exports the posed GLB, thumbnail and editable pose. Reopen it in **Studio → 3D characters** or share the saved GLB.
+5. Open the eight-sector **Pose wheel**, drag toward a pose and release; tap its center for the second page (16 poses). Joint sliders use constrained bend/twist/swing offsets with smooth transitions. Drag to orbit and pinch to zoom.
+6. **Paint** directly on the skinned surface. Use the color wheel, eyedropper, brush size, opacity, erase, undo/redo, fills, metallic/roughness and shadow controls. **Place** attaches the body to scanned-room surfaces or the practice room, nudges it, changes size/form, and freezes up to two painted clones.
+7. **Save character** exports a textured, skinned GLB, thumbnail, pose, `paint.json` and `scene.json`. Reopen it in **Studio → 3D characters**. The original source mesh stays unchanged; a clone keeps its own pose, transform and paint.
 
 The original mesh, exported mesh, source cutout, attribution, pose and generation receipt are stored under **Files → Rally → Characters3D**. The source mesh remains untouched so saved poses can be reset. Generation resumes from Studio if you leave the editor or relaunch; leaving does **not** cancel the remote task or refund credits. Repeating a request uses its saved request ID, avoiding another paid submission. If submission is interrupted before a task ID is recorded, inspect Tripo rather than blindly regenerating.
 
@@ -47,7 +49,19 @@ The Mac service keeps job metadata and models in ignored `artifacts/tripo/`. It 
 
 For a physical iPhone on trusted Wi-Fi, set a separate long random `TRIPO_PROXY_TOKEN` in `.env`, start with `TRIPO_HOST=0.0.0.0`, then enter `http://<Mac Wi-Fi IP>:3001` and that proxy token in the 3D editor. The token is kept in memory only. Use HTTPS for anything beyond isolated local development. This single-user proxy is **not** a production multi-user service; add per-user authentication, quotas and private object storage before deployment.
 
-A generated back side is an AI approximation, not measured body geometry. The seated Kinect sample is useful for testing but not ideal for auto-rigging: use a standing full-body image with separated limbs for better results. Generated scale is not calibrated to RoomPlan or LiDAR. Joint controls currently use local rotations, without inverse kinematics, joint limits, or room placement.
+A generated back side is an AI approximation, not measured body geometry. The seated Kinect sample can produce fused surfaces that stretch badly; cropped feet can remain missing. The capture flow warns before using credits when it cannot verify hands/feet or detects foreshortened legs. Use a full-body standing A/T-pose with separated limbs. Pose changes preserve bone lengths; sliders constrain rotations and the editor warns about high mesh stretch, but this is not full-body IK, a self-collision solver, or a guarantee of lifelike skinning. Generated scale is not calibrated to RoomPlan or LiDAR. Rounded/blocky forms are explicit alternative disguises, not reconstructed anatomy.
+
+## Hide-and-seek mechanics
+
+The [reference-video inventory](Docs/GameplayMechanics.md) maps the observed mechanics and timestamps to the app. These are touch adaptations in Rally's cream/lime style, not a copy of the game's art or an exact reproduction of undocumented physics/scoring.
+
+- Join/create a Rally lobby and open **Studio → 3D characters → Play**. Each hider must **Publish disguise**; this explicitly shares their saved mesh, textures and clone placements with room members. Publishing is separate from saving locally. Keep the Studio editor open during play.
+- The host chooses **Basic**, **Infection**, **Double**, or **Chicken race**, preparation/hunt duration and optional 30-second whistles, then starts the round. The host is the initial hunter in Basic/Infection. The host's room geometry is shared with all clients, including door/window openings; RoomPlan objects are approximate boxes, not photo-textured surfaces.
+- Hunters wait during preparation, then tap actual rendered disguises to tag, drag to look and use arrows to walk. Camera spawning uses room floors and movement checks room triangles. Finding any clone finds its owner; Infection converts that owner into a hunter. Double tracks each hunter's unique finds; Chicken reveals one target at a time. Tags award 500 points. Visible, untagged hiders earn 10 points/second using server-side frustum/room-occlusion estimates; this rate is app-specific.
+- Paint can sample a room surface; optional own-body-through-wall rendering helps paint occluded areas. Manual whistles and configurable automatic hints work during hunts. Without a lobby, **Play → Start 60-second practice hunt** tests tags against actual local mesh triangles.
+- Disguises are authenticated, self-contained GLBs (20 MB maximum), private to the lobby, with a 256 MB combined in-memory cap. Preparation/mode visibility, host controls, tag cooldowns, clone bounds and room occlusion are checked on the server. Client triangle hits plus server bounding-box checks are prototype hit validation, not production anti-cheat. Restarting the Next.js process clears matches and published disguises.
+
+This does not implement Steam Workshop maps, Steam friends, external voice chat, or the original game's assets. It renders a virtual scanned room; physical-device AR alignment/occlusion and a multi-iPhone play session still need hardware verification.
 
 API contracts: [image-to-model](https://developers.tripo3d.ai/en/docs/generation-image-to-model/standard), [rig check](https://developers.tripo3d.ai/en/docs/animations-rig-check), [auto-rig](https://developers.tripo3d.ai/en/docs/animations-rig), [task query](https://developers.tripo3d.ai/en/docs/task-query).
 
@@ -58,7 +72,7 @@ npm ci --prefix Tools/CharacterViewer
 npm run build --prefix Tools/CharacterViewer
 ```
 
-Its license is included in the app’s `CharacterViewer` resources. No Node dependencies or API keys are included in the iOS app. Tests use a clearly synthetic two-bone fixture, not a pretend Tripo result.
+Its license is included in the app’s `CharacterViewer` resources. No Node dependencies or API keys are included in the iOS app. Deterministic tests use a clearly synthetic two-bone fixture. Additional end-to-end tests use an existing real Tripo-generated human when present and never initiate paid generation themselves.
 
 ## Room lifecycle
 
@@ -72,7 +86,7 @@ Rooms have no configured player cap. The lobby displays the current player count
 
 ## Next.js server
 
-The API lives in `server/pages/api/[...path].js`, backed by `server/lib/lobby.mjs`. Next.js rewrites keep the Swift client's existing `/health`, `/rooms`, and `/rooms/:code/...` URLs working. JSON responses, membership tokens, host permissions, validation, and uncapped room membership are unchanged. Request bodies retain the 4 KB limit; mutation limits use the socket address rather than trusting forwarded headers. Behind a proxy, clients may share that rate-limit bucket.
+The API lives in `server/pages/api/[...path].js`, backed by `server/lib/lobby.mjs` and `server/lib/game.mjs`. Next.js rewrites keep the Swift client's `/health`, `/rooms`, and `/rooms/:code/...` URLs working. Lobby JSON requests retain the 4 KB limit; game configuration accepts 256 KB and binary disguise uploads accept 20 MB. `/rooms/:code/game` handles snapshots/start/shoot/taunt/view; `/rooms/:code/disguise` publishes and `/rooms/:code/disguise/:ownerID` reads a phase-authorized mesh. Public/lobby mutation limits use the socket address rather than trusting forwarded headers; authenticated game actions use per-player budgets so hunters sharing Wi-Fi do not exhaust each other's camera-update allowance.
 
 For a production server:
 
@@ -104,6 +118,8 @@ npm run build
 npm run test:integration
 ```
 
+Viewer geometry checks: `npm test --prefix Tools/CharacterViewer`. They cover Mixamo name normalization, input-facing-direction independence, exact floor/wall contact, actual doorway triangles and floor-based hunter spawns.
+
 Run native unit and UI tests in Xcode with **Product → Test** once an iOS Simulator runtime is installed. The unit suite covers room readiness and server-address validation; the UI suite covers Join / Create navigation and form validation.
 
 The native API client can also be checked against a running server without Simulator:
@@ -125,4 +141,4 @@ Build output and screenshots are ignored by Git. App Store signing and server ho
 
 ### Verification in this checkout
 
-The integrated app builds for Simulator and unsigned iOS devices; the legacy scanner also builds for Simulator. Seven native unit tests, two Simulator UI tests, and twelve server unit tests cover the merged app. The native 3D test loads a skinned GLB in the bundled WebKit renderer, rotates a joint, exports it, and verifies skinning and pose persistence. The production Next.js integration suite checks the lobby routes and shared state. Server tests also cover idempotent Tripo submissions, rig failure fallback, credentials and limits. A live run of the bundled human cutout returned a 65-joint rigged mesh and consumed 55 Tripo credits. Live camera depth and RoomPlan still require testing on a physical LiDAR device.
+The validation suite includes native unit/UI tests, 20 server tests, four viewer geometry tests and production Next.js integration. The real-human WebKit test applies every preset, verifies world-space bone lengths, actually paints/undoes/redoes, turns front/back, freezes two clones, exports/reopens, checks texture/clone persistence and tags actual skinned triangles. The UI test selects a wheel pose, draws on the human, undoes/redoes, saves and reopens; it also guards against iOS 26's full-screen back-swipe stealing canvas gestures. `CharacterGameTests` uses two native editors to publish a real generated GLB, load it in the hunter's renderer and tag its actual triangles through Next.js. Start an isolated production server with `cd server && npx next start --hostname 127.0.0.1 --port 3099` to run that test. Tests requiring an existing generated human explicitly skip when none is installed; the native multiplayer test also skips if its isolated server is absent. Screenshots and mesh-stretch reports are written under the Simulator app's `Documents/Verification/character-gameplay` and copied to ignored `artifacts/gameplay-verification/` during verification. Live camera depth, RoomPlan/AR registration and multi-iPhone gameplay still need physical-device testing.

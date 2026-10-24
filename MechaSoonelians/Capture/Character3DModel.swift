@@ -20,6 +20,7 @@ struct CharacterAsset: Codable, Identifiable {
     var angles: [String: [Double]] = [:]
     var yaw: Double = 0
     var attribution: String?
+    var editing: CharacterEditingSettings?
 
     static var root: URL { HouseStore.documents.appendingPathComponent("Characters3D", isDirectory: true) }
     var directory: URL { Self.root.appendingPathComponent(id, isDirectory: true) }
@@ -99,6 +100,13 @@ struct CharacterFailure: LocalizedError {
 struct CharacterBone: Decodable, Identifiable {
     let id: Int
     let name: String
+    let limits: [[Double]]?
+
+    var displayName: String {
+        let shortName = name.components(separatedBy: CharacterSet(charactersIn: ":|")).last ?? name
+        return shortName.replacingOccurrences(of: "^mixamorig[0-9]*[_:]?", with: "", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression)
+    }
 }
 
 @MainActor
@@ -118,6 +126,18 @@ final class Character3DModel: ObservableObject {
     @Published var warning: String?
     @Published var error: String?
     @Published var saved = false
+    @Published var editing = CharacterEditingSettings()
+    @Published var supportsHumanoid = false
+    @Published var undoCount = 0
+    @Published var redoCount = 0
+    @Published var cloneCount = 0
+    @Published var showsWheel = false
+    @Published var roomName = "Practice room"
+    var savedPaint: [String: Any]?
+    var savedScene: [String: Any]?
+    var onShot: (([String: Any]) -> Void)?
+    var onTaunt: (() -> Void)?
+    var onExport: ((Data, [[String: Any]]) -> Void)?
     weak var webView: WKWebView?
     private var work: Task<Void, Never>?
 
@@ -126,6 +146,9 @@ final class Character3DModel: ObservableObject {
         if let asset {
             angles = asset.angles
             yaw = asset.yaw
+            editing = asset.editing ?? CharacterEditingSettings()
+            savedPaint = Self.readObject(asset.directory.appendingPathComponent("paint.json"))
+            savedScene = Self.readObject(asset.directory.appendingPathComponent("scene.json"))
             modelData = try? Data(contentsOf: asset.directory.appendingPathComponent("source.glb"))
             if let data = try? Data(contentsOf: asset.directory.appendingPathComponent("generation.json")),
                let job = try? JSONDecoder().decode(CharacterJob.self, from: data) {
@@ -188,12 +211,37 @@ final class Character3DModel: ObservableObject {
     func stopPolling() { work?.cancel() }
 
     var currentAngle: Double { angles[String(selectedBone)]?[selectedAxis] ?? 0 }
+    var angleRange: ClosedRange<Double> {
+        let limits = bones.first(where: { $0.id == selectedBone })?.limits
+        guard let limits, limits.indices.contains(selectedAxis), limits[selectedAxis].count == 2 else { return -90...90 }
+        return limits[selectedAxis][0]...max(limits[selectedAxis][0] + 0.01, limits[selectedAxis][1])
+    }
 
     func setAngle(_ angle: Double) {
         var values = angles[String(selectedBone)] ?? [0, 0, 0]
-        values[selectedAxis] = angle
+        values[selectedAxis] = min(angleRange.upperBound, max(angleRange.lowerBound, angle))
         angles[String(selectedBone)] = values
         saved = false
+    }
+
+    func selectPose(_ id: String) {
+        guard !editing.frozen else { return }
+        angles = [:]
+        editing.preset = id
+        showsWheel = false
+        saved = false
+    }
+
+    func command(_ name: String) {
+        Task {
+            do { _ = try await webView?.callAsyncJavaScript("window.characterViewer.action(name)", arguments: ["name": name], in: nil, contentWorld: .page) }
+            catch { self.error = "Could not complete the editor action." }
+        }
+    }
+
+    static func readObject(_ url: URL) -> [String: Any]? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 
     func export() {
@@ -202,13 +250,13 @@ final class Character3DModel: ObservableObject {
         error = nil
         Task {
             do {
-                _ = try await webView?.callAsyncJavaScript("window.characterViewer.pose(angles, yaw, skeleton); await window.characterViewer.exportModel()",
-                    arguments: ["angles": angles, "yaw": yaw, "skeleton": showsSkeleton], in: nil, contentWorld: .page)
+                _ = try await webView?.callAsyncJavaScript("window.characterViewer.configure(editing, angles, yaw, skeleton, true); await window.characterViewer.exportModel()",
+                    arguments: ["editing": editing.dictionary, "angles": angles, "yaw": yaw, "skeleton": showsSkeleton], in: nil, contentWorld: .page)
             } catch { exporting = false; self.error = "Could not export the 3D character." }
         }
     }
 
-    func receiveExport(model: String, thumbnail: String) {
+    func receiveExport(model: String, thumbnail: String, paint: [String: Any]? = nil, scene: [String: Any]? = nil, boxes: [[String: Any]] = []) {
         defer { exporting = false }
         do {
             guard var asset, let model = Data(base64Encoded: model), let preview = Data(base64Encoded: thumbnail) else {
@@ -216,12 +264,22 @@ final class Character3DModel: ObservableObject {
             }
             try model.write(to: asset.directory.appendingPathComponent("character.glb"), options: .atomic)
             try preview.write(to: asset.directory.appendingPathComponent("preview.png"), options: .atomic)
+            if let paint {
+                try JSONSerialization.data(withJSONObject: paint).write(to: asset.directory.appendingPathComponent("paint.json"), options: .atomic)
+                savedPaint = paint
+            }
+            if let scene {
+                try JSONSerialization.data(withJSONObject: scene).write(to: asset.directory.appendingPathComponent("scene.json"), options: .atomic)
+                savedScene = scene
+            }
             asset.angles = angles
             asset.yaw = yaw
+            asset.editing = editing
             try asset.save()
             self.asset = asset
             saved = true
             status = "Saved 3D mesh and pose. Reopen it from Studio."
+            onExport?(model, boxes)
         } catch { self.error = error.localizedDescription }
     }
 }

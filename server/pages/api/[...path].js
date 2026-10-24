@@ -5,7 +5,7 @@ import { createLobbyHandler } from '../../lib/lobby.mjs';
 const key = Symbol.for('rally.lobby');
 const handler = globalThis[key] ??= createLobbyHandler();
 
-export const config = { api: { bodyParser: false } };
+export const config = { api: { bodyParser: false, responseLimit: '20mb' } };
 
 export default function lobby(req, res) {
   return handler(req, res, `/${req.query.path.join('/')}`);

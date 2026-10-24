@@ -12,7 +12,7 @@ final class GhostSculptor: ObservableObject {
     @Published var exporting = false
     @Published var painting = true
     @Published var color = UIColor.gray
-    @Published var brushSize = 0.02
+    @Published var brushSize = 0.035
 
     weak var webView: WKWebView?
     var onExported: ((Data) -> Void)?
@@ -48,7 +48,7 @@ final class GhostSculptor: ObservableObject {
     func cancel() { work?.cancel() }
 
     func undo() {
-        Task { _ = try? await webView?.callAsyncJavaScript("window.characterViewer.undoPaint()", arguments: [:], in: nil, contentWorld: .page) }
+        Task { _ = try? await webView?.callAsyncJavaScript("window.characterViewer.action('undo')", arguments: [:], in: nil, contentWorld: .page) }
     }
 
     func export() {
@@ -148,7 +148,7 @@ struct Ghost3DView: View {
             }
             HStack {
                 Image(systemName: "paintbrush.pointed").accessibilityHidden(true)
-                Slider(value: $sculptor.brushSize, in: 0.005...0.08).tint(RallyStyle.ink)
+                Slider(value: $sculptor.brushSize, in: 0.01...0.12).tint(RallyStyle.ink)
                     .accessibilityLabel("Brush size")
             }
             if let error = sculptor.error { ErrorNotice(message: error) }
@@ -257,7 +257,7 @@ private struct GhostSculptWebView: UIViewRepresentable {
             lastBrush = brush as NSDictionary
             Task {
                 _ = try? await webView.callAsyncJavaScript(
-                    "window.characterViewer.setPainting(painting); window.characterViewer.setBrush(color, size)",
+                    "window.characterViewer.configure({ tool: painting ? 'paint' : 'orbit', color, brush: size })",
                     arguments: brush, in: nil, contentWorld: .page)
             }
         }
