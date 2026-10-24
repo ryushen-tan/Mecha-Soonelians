@@ -91,11 +91,15 @@ struct GameView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var capture: GhostCapture?
+    /// Building and painting a 3D ghost; nil means painting the flat cutout.
+    @State private var sculptor: GhostSculptor?
     @State private var isCapturing = false
     @State private var countdown: Int?
     @State private var useTimer = true
     @State private var captureError: String?
     @State private var confirmingLeave = false
+    @State private var serverAddress = ""
+    @State private var serverToken = ""
 
     private var state: GameState { session.state }
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
@@ -113,6 +117,11 @@ struct GameView: View {
                     Text("It's a big file, so this can take a minute.")
                         .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
                 }
+            } else if let capture, let sculptor {
+                Ghost3DView(capture: capture, sculptor: sculptor, onUse2D: {
+                    sculptor.cancel()
+                    self.sculptor = nil
+                })
             } else if let capture {
                 PaintView(capture: capture, onDone: { image in
                     placeGhost(capture, image: image)
@@ -157,8 +166,13 @@ struct GameView: View {
         .onChange(of: ar.isRelocalized) { session.setReady(ar.isRelocalized) }
         .onChange(of: state) { syncGhosts() }
         .onChange(of: session.ghostImages) { syncGhosts() }
+        .onChange(of: session.ghostModels) { syncGhosts() }
         .onChange(of: state.phase) {
-            if state.phase != .hiding { capture = nil }
+            if state.phase != .hiding {
+                sculptor?.cancel()
+                sculptor = nil
+                capture = nil
+            }
         }
     }
 
@@ -182,7 +196,7 @@ struct GameView: View {
         case .seeking: visible = session.amSeeking ? state.ghosts : state.ghosts.filter { $0.ownerID == session.me.id }
         case .results: visible = state.ghosts
         }
-        ar.show(visible, images: session.ghostImages)
+        ar.show(visible, images: session.ghostImages, models: session.ghostModels)
     }
 
     // MARK: Panels
@@ -310,12 +324,41 @@ struct GameView: View {
                 get: { state.seekSeconds / 60 }, set: { session.setDurations(hide: state.hideSeconds, seek: $0 * 60) }
             ), in: 1...15)
             .font(RallyStyle.font(14, .semibold))
+            modelServerSettings
             Button { session.startRound() } label: { ActionLabel(text: "Start round") }
                 .buttonStyle(PushButtonStyle())
             Text(state.players.contains { $0.role == .seeker }
                  ? "Tap a player's role to switch it."
                  : "Nobody is a seeker yet, so everyone will seek after hiding.")
                 .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+        }
+    }
+
+    private var modelServerSettings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("3D ghosts").font(RallyStyle.font(14, .semibold))
+                Spacer()
+                Text(session.modelServer.isConfigured ? "On" : "Off · flat cutouts")
+                    .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+            }
+            TextField("http://<Mac Wi-Fi IP>:3001", text: $serverAddress)
+                .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().rallyField()
+                .accessibilityLabel("3D server address")
+            SecureField("Server access token", text: $serverToken)
+                .textInputAutocapitalization(.never).autocorrectionDisabled().rallyField()
+            Button("Save 3D server") {
+                session.setModelServer(ModelServer(address: serverAddress, token: serverToken))
+            }
+            .font(RallyStyle.font(14, .semibold))
+            .disabled(ModelServer(address: serverAddress, token: serverToken) == session.modelServer)
+            Text("Run `npm run start:3d` in server/ on your Mac (TRIPO_HOST=0.0.0.0 and TRIPO_PROXY_TOKEN set). Each hider's 3D model uses Tripo credits and takes a few minutes, so give hiders 5+ minutes. Leave the address empty for flat cutouts.")
+                .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            serverAddress = session.modelServer.address
+            serverToken = session.modelServer.token
         }
     }
 
@@ -441,20 +484,46 @@ struct GameView: View {
             }
             guard let frame = ar.currentFrame else { return }
             let floorY = ar.floorHeight(for: frame)
+            let walls = ar.walls
             isCapturing = true
             defer { isCapturing = false }
             do {
-                capture = try await Task.detached { try GhostCapture.make(from: frame, floorY: floorY) }.value
+                let capture = try await Task.detached { try GhostCapture.make(from: frame, floorY: floorY, walls: walls) }.value
+                self.capture = capture
+                // With a 3D server, build a 3D ghost to paint; otherwise paint the flat cutout.
+                if session.modelServer.isConfigured, let png = capture.cutoutPNG() {
+                    let sculptor = GhostSculptor()
+                    sculptor.onExported = { [weak sculptor] usdz in
+                        guard sculptor != nil else { return }
+                        placeGhost(capture, image: capture.flatCutoutPNG() ?? Data(), model: usdz)
+                    }
+                    sculptor.generate(png: png, server: session.modelServer)
+                    self.sculptor = sculptor
+                }
             } catch {
                 captureError = error.localizedDescription
             }
         }
     }
 
-    private func placeGhost(_ capture: GhostCapture, image: Data) {
-        let ghost = Ghost(id: UUID(), ownerID: session.me.id, transform: capture.transform.floats,
-                          width: capture.width, height: capture.height, foundBy: nil)
-        session.placeGhost(ghost, image: image)
+    private func placeGhost(_ capture: GhostCapture, image: Data, model: Data? = nil) {
+        let id = UUID()
+        var modelURL: URL?
+        if let model {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("ghost-\(id.uuidString).usdz")
+            do {
+                try model.write(to: url, options: .atomic)
+                modelURL = url
+            } catch {
+                captureError = "Couldn't save your 3D ghost: \(error.localizedDescription)"
+                return
+            }
+        }
+        let ghost = Ghost(id: id, ownerID: session.me.id, transform: capture.transform.floats,
+                          floorTransform: capture.floorTransform.floats, flushBack: capture.flushBack,
+                          hasModel: modelURL != nil, width: capture.width, height: capture.height, foundBy: nil)
+        session.placeGhost(ghost, image: image, model: modelURL)
+        sculptor = nil
         self.capture = nil
     }
 }

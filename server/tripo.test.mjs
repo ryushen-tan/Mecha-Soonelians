@@ -73,6 +73,17 @@ test('keeps the generated mesh when rig-check fails without paying for rigging',
   assert.equal(calls.length, 2);
 });
 
+test('X-Rig: 0 returns the plain mesh without rig-check or rigging', async t => {
+  const { send, wait, base, calls } = await setup(t);
+  const id = randomUUID();
+  assert.equal((await send(id, { 'X-Rig': '0' })).status, 202);
+  const job = await wait(id);
+  assert.equal(job.status, 'ready');
+  assert.equal(job.rigged, false);
+  assert.deepEqual(calls.map(call => call.path), ['generation/image-to-model']);
+  assert.deepEqual(Buffer.from(await (await fetch(base + '/characters/' + id + '/model')).arrayBuffer()), glb);
+});
+
 test('requires proxy token when configured and rejects browser origins', async t => {
   const { send, calls } = await setup(t, { accessToken: 'local-test-token' });
   assert.equal((await send(randomUUID())).status, 401);

@@ -9,6 +9,9 @@ final class GameSession: NSObject, ObservableObject {
 
     @Published private(set) var state = GameState()
     @Published private(set) var ghostImages: [UUID: Data] = [:]
+    @Published private(set) var ghostModels: [UUID: URL] = [:]
+    /// The Mac that turns photos into 3D models. Empty means hiders use flat cutouts.
+    @Published private(set) var modelServer = ModelServer(address: "", token: "")
     @Published private(set) var hosts: [MCPeerID] = []
     @Published private(set) var hostAvatars: [MCPeerID: Int] = [:]
     @Published private(set) var isConnected: Bool
@@ -32,6 +35,9 @@ final class GameSession: NSObject, ObservableObject {
 
     /// Where a joining phone keeps the host's house, separate from its own scan.
     private static var joinedDir: URL { HouseStore.documents.appendingPathComponent("Joined", isDirectory: true) }
+    private static var ghostModelsDir: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("GhostModels", isDirectory: true)
+    }
 
     init(name: String, avatar: Int, isHost: Bool) {
         me = Player(id: UUID(), name: name, avatar: avatar, role: .hider, isReady: false)
@@ -44,9 +50,12 @@ final class GameSession: NSObject, ObservableObject {
         session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
         super.init()
         session.delegate = self
+        try? FileManager.default.removeItem(at: Self.ghostModelsDir)
+        try? FileManager.default.createDirectory(at: Self.ghostModelsDir, withIntermediateDirectories: true)
 
         if isHost {
             state.players = [me]
+            modelServer = ModelServer.saved
             let advertiser = MCNearbyServiceAdvertiser(peer: peerID, discoveryInfo: ["avatar": String(avatar)],
                                                        serviceType: Self.serviceType)
             advertiser.delegate = self
@@ -82,8 +91,21 @@ final class GameSession: NSObject, ObservableObject {
     // MARK: Player actions
 
     func setReady(_ ready: Bool) { send(.ready(me.id, ready)) }
-    func placeGhost(_ ghost: Ghost, image: Data) { send(.placeGhost(ghost, image)) }
     func tag(_ ghostID: UUID) { send(.tag(ghostID: ghostID, by: me.id)) }
+
+    /// The model file goes first so it's usually there by the time the ghost is.
+    func placeGhost(_ ghost: Ghost, image: Data, model: URL? = nil) {
+        if let model {
+            if isHost {
+                if let stored = storeGhostModel(ghost.id, from: model, move: false) {
+                    sendGhostModel(ghost.id, at: stored, to: session.connectedPeers)
+                }
+            } else if let hostPeer {
+                session.sendResource(at: model, withName: Self.resourceName(for: ghost.id), toPeer: hostPeer, withCompletionHandler: nil)
+            }
+        }
+        send(.placeGhost(ghost, image))
+    }
 
     // MARK: Host actions
 
@@ -91,6 +113,13 @@ final class GameSession: NSObject, ObservableObject {
         guard isHost, state.phase == .lobby, let i = state.players.firstIndex(where: { $0.id == playerID }) else { return }
         state.players[i].role = state.players[i].role == .hider ? .seeker : .hider
         broadcastState()
+    }
+
+    func setModelServer(_ server: ModelServer) {
+        guard isHost else { return }
+        modelServer = server
+        server.save()
+        broadcast(.modelServer(address: server.address, token: server.token))
     }
 
     func setDurations(hide: Int, seek: Int) {
@@ -104,6 +133,7 @@ final class GameSession: NSObject, ObservableObject {
         guard isHost, state.phase == .lobby || state.phase == .results else { return }
         state.ghosts = []
         ghostImages = [:]
+        ghostModels = [:]
         state.phase = .hiding
         state.secondsLeft = state.hideSeconds
         broadcastState()
@@ -188,7 +218,7 @@ final class GameSession: NSObject, ObservableObject {
             }
             broadcastState()
 
-        case .state, .ghostImage:
+        case .state, .ghostImage, .modelServer:
             break
         }
     }
@@ -198,22 +228,62 @@ final class GameSession: NSObject, ObservableObject {
         case .state(let newState):
             if newState.phase == .hiding && state.phase != .hiding {
                 ghostImages = [:]
+                ghostModels = [:]
             }
             state = newState
         case let .ghostImage(id, image):
             ghostImages[id] = image
+        case let .modelServer(address, token):
+            modelServer = ModelServer(address: address, token: token)
         case .hello, .ready, .placeGhost, .tag:
             break
         }
     }
 
-    /// New players get the house map and walls, plus any ghosts already placed.
+    /// New players get the house map and walls, the 3D server, plus any ghosts already placed.
     private func sendHouse(to peer: MCPeerID) {
         session.sendResource(at: HouseStore.structureURL, withName: "structure.json", toPeer: peer, withCompletionHandler: nil)
         session.sendResource(at: HouseStore.worldMapURL, withName: "worldmap.arexperience", toPeer: peer, withCompletionHandler: nil)
+        broadcast(.modelServer(address: modelServer.address, token: modelServer.token), to: [peer])
         for (id, image) in ghostImages {
             broadcast(.ghostImage(id, image), to: [peer])
         }
+        for (id, url) in ghostModels {
+            sendGhostModel(id, at: url, to: [peer])
+        }
+    }
+
+    // MARK: Ghost models
+
+    private static func resourceName(for ghostID: UUID) -> String { "ghost-\(ghostID.uuidString).usdz" }
+
+    private static func ghostID(fromResourceName name: String) -> UUID? {
+        guard name.hasPrefix("ghost-"), name.hasSuffix(".usdz") else { return nil }
+        return UUID(uuidString: String(name.dropFirst(6).dropLast(5)))
+    }
+
+    private func sendGhostModel(_ id: UUID, at url: URL, to peers: [MCPeerID]) {
+        for peer in peers {
+            session.sendResource(at: url, withName: Self.resourceName(for: id), toPeer: peer, withCompletionHandler: nil)
+        }
+    }
+
+    /// Keeps a model under a name built from its ghost's ID, never the sender's file name.
+    @discardableResult
+    private func storeGhostModel(_ id: UUID, from url: URL, move: Bool) -> URL? {
+        let destination = Self.ghostModelsDir.appendingPathComponent("\(id.uuidString).usdz")
+        try? FileManager.default.removeItem(at: destination)
+        do {
+            if move {
+                try FileManager.default.moveItem(at: url, to: destination)
+            } else {
+                try FileManager.default.copyItem(at: url, to: destination)
+            }
+        } catch {
+            return nil
+        }
+        ghostModels[id] = destination
+        return destination
     }
 
     private func receivedFile(named name: String, at url: URL) {
@@ -288,10 +358,17 @@ extension GameSession: MCSessionDelegate {
             return staged
         }
         DispatchQueue.main.async { [self] in
-            guard !isHost, peerID == hostPeer else {
-                if let staged { try? FileManager.default.removeItem(at: staged) }
+            defer { if let staged { try? FileManager.default.removeItem(at: staged) } }
+            if let id = Self.ghostID(fromResourceName: resourceName) {
+                // Hiders send 3D ghosts to the host, which passes them on to everyone else.
+                guard error == nil, let staged, isHost ? playerForPeer[peerID] != nil : peerID == hostPeer,
+                      let stored = storeGhostModel(id, from: staged, move: true) else { return }
+                if isHost {
+                    sendGhostModel(id, at: stored, to: session.connectedPeers.filter { $0 != peerID })
+                }
                 return
             }
+            guard !isHost, peerID == hostPeer else { return }
             if let error {
                 self.error = "Couldn't get the house map: \(error.localizedDescription)"
             } else if let staged {

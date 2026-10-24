@@ -136,6 +136,13 @@ export function createCharacterServer({ apiKey = process.env.TRIPO_API_KEY || pr
       });
       const meshPath = join(folder(job.id), 'mesh.glb');
       if (!existsSync(meshPath)) writeFileSync(meshPath, await api.download(generated.output?.model_url));
+      // Hide-and-seek ghosts keep the pose from the photo, so they skip rigging (faster, fewer credits).
+      if (job.rig === false) {
+        job.status = 'ready';
+        job.stage = 'ready';
+        job.progress = 100;
+        return;
+      }
       try {
         const check = await stage(job, 'checking', 'animations/rig-check', { input: job.tasks.generating });
         if (check.output?.riggable !== true || check.output?.rig_type !== 'biped') {
@@ -211,7 +218,8 @@ export function createCharacterServer({ apiKey = process.env.TRIPO_API_KEY || pr
         }
         if (active.size >= maxActive) fail(429, 'Two characters are already processing. Wait for them to finish.');
         if ([...jobs.values()].filter(job => Date.now() - job.createdAt < 86400_000).length >= maxJobsPerDay) fail(429, 'Daily development generation limit reached.');
-        const job = { id, hash, createdAt: Date.now(), status: 'working', stage: 'uploading', progress: 0, tasks: {}, results: {} };
+        const job = { id, hash, createdAt: Date.now(), status: 'working', stage: 'uploading', progress: 0, tasks: {}, results: {},
+          rig: req.headers['x-rig'] !== '0' };
         mkdirSync(folder(id), { mode: 0o700 });
         writeFileSync(join(folder(id), 'input.png'), data, { mode: 0o600 });
         persist(job);

@@ -24,7 +24,14 @@ struct Player: Codable, Identifiable, Equatable {
 struct Ghost: Codable, Identifiable, Equatable {
     let id: UUID
     let ownerID: UUID
+    /// Center of the flat cutout.
     var transform: [Float]
+    /// Where a 3D model stands: on the floor, facing +Z.
+    var floorTransform: [Float]
+    /// The 3D model's back goes against a wall at `floorTransform`.
+    var flushBack: Bool
+    /// A painted 3D model (USDZ) travels separately; until it arrives, the cutout shows.
+    var hasModel: Bool
     var width: Float
     var height: Float
     var foundBy: UUID?
@@ -35,7 +42,7 @@ struct GameState: Codable, Equatable {
     var players: [Player] = []
     var ghosts: [Ghost] = []
     var secondsLeft = 0
-    var hideSeconds = 120
+    var hideSeconds = 300
     var seekSeconds = 300
 
     func player(_ id: UUID?) -> Player? {
@@ -57,6 +64,8 @@ enum Message: Codable {
     // Host → players
     case state(GameState)
     case ghostImage(UUID, Data)
+    /// Where hiders' phones reach the Mac that makes 3D models. Sent only over the encrypted session.
+    case modelServer(address: String, token: String)
 }
 
 extension simd_float4x4 {

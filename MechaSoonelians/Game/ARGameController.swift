@@ -16,8 +16,14 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     private let houseAnchor = AnchorEntity(world: .zero)
     private var ghostEntities: [UUID: Entity] = [:]
     private var foundGhosts: Set<UUID> = []
+    /// Ghosts showing their 3D model rather than the flat cutout.
+    private var modelGhosts: Set<UUID> = []
+    private var loadingModels: Set<UUID> = []
+    private var shownGhosts: Set<UUID> = []
     private var floorY: Float?
     private var isRunning = false
+    /// The scanned walls, for putting hiders' backs against them.
+    private(set) var walls: [GhostCapture.Wall] = []
 
     override init() {
         super.init()
@@ -46,6 +52,8 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         let config = ARWorldTrackingConfiguration()
         config.initialWorldMap = map
         config.planeDetection = [.horizontal, .vertical]
+        // Lights 3D ghosts with the room's real lighting.
+        config.environmentTexturing = .automatic
         if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
             config.sceneReconstruction = .mesh
             arView.environment.sceneUnderstanding.options.insert(.occlusion)
@@ -77,25 +85,68 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
 
     // MARK: Ghosts
 
-    /// Makes the scene show exactly these ghosts.
-    func show(_ ghosts: [Ghost], images: [UUID: Data]) {
+    /// Makes the scene show exactly these ghosts: the 3D model once it has arrived, else the flat cutout.
+    func show(_ ghosts: [Ghost], images: [UUID: Data], models: [UUID: URL]) {
         let ids = Set(ghosts.map(\.id))
+        shownGhosts = ids
         for (id, entity) in ghostEntities where !ids.contains(id) {
             entity.removeFromParent()
             ghostEntities[id] = nil
             foundGhosts.remove(id)
+            modelGhosts.remove(id)
         }
         for ghost in ghosts {
+            if ghost.hasModel, !modelGhosts.contains(ghost.id), !loadingModels.contains(ghost.id), let url = models[ghost.id] {
+                loadModel(for: ghost, from: url)
+            }
             if ghostEntities[ghost.id] == nil,
                let image = images[ghost.id],
                let entity = makeGhostEntity(ghost, image: image) {
-                houseAnchor.addChild(entity)
-                ghostEntities[ghost.id] = entity
+                place(entity, for: ghost.id)
             }
             if ghost.foundBy != nil, !foundGhosts.contains(ghost.id), let entity = ghostEntities[ghost.id] {
                 foundGhosts.insert(ghost.id)
-                markFound(entity)
+                markFound(entity, height: ghost.height)
             }
+        }
+    }
+
+    private func place(_ entity: Entity, for id: UUID) {
+        ghostEntities[id]?.removeFromParent()
+        houseAnchor.addChild(entity)
+        ghostEntities[id] = entity
+    }
+
+    /// Swaps the flat cutout for the 3D model, scaled to the hider's measured height and
+    /// standing on the floor, with its back on the wall when it was hidden against one.
+    private func loadModel(for ghost: Ghost, from url: URL) {
+        guard let floor = simd_float4x4(floats: ghost.floorTransform) else { return }
+        loadingModels.insert(ghost.id)
+        Task { @MainActor in
+            defer { loadingModels.remove(ghost.id) }
+            guard let model = try? await Entity(contentsOf: url) else { return }
+            let bounds = model.visualBounds(relativeTo: nil)
+            let scale = ghost.height / max(bounds.extents.y, 0.01)
+            model.scale = SIMD3(repeating: scale)
+            // Feet on the floor, centered left-right; back on the wall (just in front of the wall's
+            // invisible blocker) or centered on the spot.
+            let back = ghost.flushBack ? -bounds.min.z * scale + 0.015 : -bounds.center.z * scale
+            model.position = SIMD3(-bounds.center.x * scale, -bounds.min.y * scale, back)
+
+            let size = bounds.extents * scale
+            let container = Entity()
+            container.name = ghost.id.uuidString
+            container.transform = Transform(matrix: floor)
+            container.addChild(model)
+            container.components.set(CollisionComponent(shapes: [
+                ShapeResource.generateBox(size: size)
+                    .offsetBy(translation: SIMD3(0, size.y / 2, ghost.flushBack ? size.z / 2 + 0.015 : 0)),
+            ]))
+            // The ghost may have left the scene (retaken photo, new round) while this loaded.
+            guard shownGhosts.contains(ghost.id) else { return }
+            modelGhosts.insert(ghost.id)
+            place(container, for: ghost.id)
+            if foundGhosts.contains(ghost.id) { markFound(container, height: ghost.height) }
         }
     }
 
@@ -124,12 +175,19 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         return ghostEntity
     }
 
-    private func markFound(_ entity: Entity) {
+    /// Tints a found cutout green; a found 3D ghost gets a green marker over its head instead.
+    private func markFound(_ entity: Entity, height: Float) {
+        var tinted = false
         for case let model as ModelEntity in entity.children {
             guard var material = model.model?.materials.first as? UnlitMaterial else { continue }
             material.color.tint = UIColor(red: 0.5, green: 1, blue: 0.5, alpha: 1)
             model.model?.materials = [material]
+            tinted = true
         }
+        guard !tinted else { return }
+        let marker = ModelEntity(mesh: .generateSphere(radius: 0.07), materials: [UnlitMaterial(color: .systemGreen)])
+        marker.position = [0, height + 0.15, 0]
+        entity.addChild(marker)
     }
 
     @objc private func tapped(_ gesture: UITapGestureRecognizer) {
@@ -150,13 +208,15 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         guard let data = try? Data(contentsOf: structureURL),
               let structure = try? JSONDecoder().decode(CapturedStructure.self, from: data) else { return }
         for wall in structure.walls {
+            // Thin, so ghosts with their backs on the wall aren't cut into.
             let box = ModelEntity(
-                mesh: .generateBox(width: wall.dimensions.x, height: wall.dimensions.y, depth: 0.1),
+                mesh: .generateBox(width: wall.dimensions.x, height: wall.dimensions.y, depth: 0.02),
                 materials: [OcclusionMaterial()]
             )
             box.transform = Transform(matrix: wall.transform)
             houseAnchor.addChild(box)
         }
+        walls = structure.walls.map { GhostCapture.Wall(transform: $0.transform, width: $0.dimensions.x) }
         floorY = structure.floors.map { $0.transform.columns.3.y }.min()
     }
 

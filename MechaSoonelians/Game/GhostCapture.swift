@@ -1,6 +1,7 @@
 import ARKit
 import CoreImage
 import RealityKit
+import UIKit
 import Vision
 
 /// A hider's photo, cut out of its background and placed where they stood in the house.
@@ -11,10 +12,20 @@ struct GhostCapture {
     let person: CGImage
     /// Where the person is in the photo, in pixels from the top-left.
     let bounds: CGRect
-    /// The ghost's pose in house coordinates: centered on the person, facing the camera.
+    /// Where a flat (2D) ghost goes in house coordinates: its center.
     let transform: simd_float4x4
+    /// Where a 3D ghost stands: on the floor, +Z facing out. With `flushBack`, the origin is on
+    /// the nearest wall and the ghost's back goes against it.
+    let floorTransform: simd_float4x4
+    let flushBack: Bool
     let width: Float
     let height: Float
+
+    /// A scanned wall: its plane is the transform's x-y plane, `width` along x.
+    struct Wall {
+        let transform: simd_float4x4
+        let width: Float
+    }
 
     enum CaptureError: LocalizedError {
         case noPerson, noPlacement
@@ -27,7 +38,7 @@ struct GhostCapture {
         }
     }
 
-    static func make(from frame: ARFrame, floorY: Float) throws -> GhostCapture {
+    static func make(from frame: ARFrame, floorY: Float, walls: [Wall]) throws -> GhostCapture {
         let orientation = uprightOrientation(of: frame.camera)
         let context = CIContext()
         let upright = CIImage(cvPixelBuffer: frame.capturedImage).oriented(orientation)
@@ -85,14 +96,76 @@ struct GhostCapture {
         guard height > 0.3, height < 3 else { throw CaptureError.noPlacement }
         let width = height * Float(bounds.width / bounds.height)
 
-        // A plane faces +Z; turn it toward where the photo was taken.
-        let yaw = atan2(toCamera.x, toCamera.z)
+        // Ghosts face +Z: toward where the photo was taken, or out from a wall right behind the person.
+        var origin = feet
+        var facing = toCamera
+        let wall = nearestWall(to: feet, from: cameraPosition, walls: walls)
+        if let wall {
+            origin = SIMD3(wall.point.x, feet.y, wall.point.z)
+            facing = wall.normal
+        }
+        let rotation = simd_quatf(angle: atan2(facing.x, facing.z), axis: up)
+        let floorTransform = Transform(rotation: rotation, translation: origin).matrix
+        // A flat ghost on a wall sits just off it so the wall doesn't hide it.
         let transform = Transform(
-            rotation: simd_quatf(angle: yaw, axis: up),
-            translation: feet + up * (height / 2)
+            rotation: rotation,
+            translation: origin + up * (height / 2) + (wall == nil ? .zero : facing * 0.02)
         ).matrix
 
-        return GhostCapture(photo: photo, person: person, bounds: bounds, transform: transform, width: width, height: height)
+        return GhostCapture(photo: photo, person: person, bounds: bounds, transform: transform,
+                            floorTransform: floorTransform, flushBack: wall != nil, width: width, height: height)
+    }
+
+    /// The person on a transparent background with some margin, the way Tripo likes its input.
+    func cutoutPNG() -> Data? {
+        let margin = max(bounds.width, bounds.height) * 0.1
+        let crop = bounds.insetBy(dx: -margin, dy: -margin)
+            .intersection(CGRect(x: 0, y: 0, width: photo.width, height: photo.height))
+        let scale = min(1, 1536 / max(crop.width, crop.height))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: crop.width * scale, height: crop.height * scale), format: format)
+            .pngData { context in
+                context.cgContext.scaleBy(x: scale, y: scale)
+                context.cgContext.translateBy(x: -crop.minX, y: -crop.minY)
+                UIImage(cgImage: person).draw(in: CGRect(x: 0, y: 0, width: photo.width, height: photo.height))
+            }
+    }
+
+    /// The unpainted person cropped to their outline, shown until a 3D ghost arrives on other phones.
+    func flatCutoutPNG() -> Data? {
+        let scale = min(1, 1024 / max(bounds.width, bounds.height))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: bounds.width * scale, height: bounds.height * scale), format: format)
+            .pngData { context in
+                context.cgContext.scaleBy(x: scale, y: scale)
+                context.cgContext.translateBy(x: -bounds.minX, y: -bounds.minY)
+                UIImage(cgImage: person).draw(in: CGRect(x: 0, y: 0, width: photo.width, height: photo.height))
+            }
+    }
+
+    /// The closest wall within a metre of the feet, if the feet are in front of it (not past its ends).
+    /// The returned normal points into the room, toward the camera.
+    private static func nearestWall(to feet: SIMD3<Float>, from camera: SIMD3<Float>, walls: [Wall]) -> (point: SIMD3<Float>, normal: SIMD3<Float>)? {
+        var best: (point: SIMD3<Float>, normal: SIMD3<Float>, distance: Float)?
+        for wall in walls {
+            let center = simd_make_float3(wall.transform.columns.3)
+            var normal = simd_make_float3(wall.transform.columns.2)
+            normal.y = 0
+            guard simd_length(normal) > 0.5 else { continue }
+            normal = simd_normalize(normal)
+            let along = simd_normalize(simd_cross(SIMD3<Float>(0, 1, 0), normal))
+            let offset = feet - center
+            let distance = abs(simd_dot(offset, normal))
+            guard distance < 1, abs(simd_dot(offset, along)) < wall.width / 2 + 0.3,
+                  distance < best?.distance ?? .infinity else { continue }
+            if simd_dot(camera - center, normal) < 0 { normal = -normal }
+            best = (feet - normal * simd_dot(offset, normal), normal, distance)
+        }
+        return best.map { ($0.point, $0.normal) }
     }
 
     /// Which way to turn the camera image so the room is upright, from the direction of gravity.

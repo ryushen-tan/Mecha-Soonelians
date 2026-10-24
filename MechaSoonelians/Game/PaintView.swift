@@ -151,7 +151,7 @@ struct PaintView: View {
     }
 
     /// Average color of a small patch of the photo, so camera noise doesn't throw it off.
-    private static func color(at point: CGPoint, in image: CGImage) -> UIColor {
+    static func color(at point: CGPoint, in image: CGImage) -> UIColor {
         let patch = 7
         var pixels = [UInt8](repeating: 0, count: patch * patch * 4)
         let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in

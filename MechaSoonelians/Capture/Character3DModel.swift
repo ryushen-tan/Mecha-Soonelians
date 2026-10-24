@@ -68,11 +68,12 @@ struct CharacterAPI {
         self.accessToken = accessToken
     }
 
-    func request(_ path: String, png: Data? = nil, id: String? = nil) async throws -> Data {
+    func request(_ path: String, png: Data? = nil, id: String? = nil, headers: [String: String] = [:]) async throws -> Data {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.timeoutInterval = 120
         request.cachePolicy = .reloadIgnoringLocalCacheData
         if !accessToken.isEmpty { request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization") }
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         if let png {
             request.httpMethod = "POST"
             request.httpBody = png
