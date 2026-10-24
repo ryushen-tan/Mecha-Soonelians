@@ -24,8 +24,11 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     private var isRunning = false
     /// The scanned walls, for putting hiders' backs against them.
     private(set) var walls: [GhostCapture.Wall] = []
-    /// The scanned walls and furniture, so chameleons don't go inside them.
+    /// The scanned walls and furniture, so chameleons don't go inside them on phones without LiDAR.
     private(set) var obstacles = RoomObstacles()
+    /// Whether the phone keeps a live LiDAR mesh of the room, which raycasts against the
+    /// `.sceneUnderstanding` collision group hit.
+    private(set) var hasSceneMesh = false
 
     override init() {
         super.init()
@@ -58,7 +61,9 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         config.environmentTexturing = .automatic
         if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
             config.sceneReconstruction = .mesh
-            arView.environment.sceneUnderstanding.options.insert(.occlusion)
+            // The live room mesh hides things behind real objects and is what chameleons stick to and bump into.
+            arView.environment.sceneUnderstanding.options.formUnion([.occlusion, .collision])
+            hasSceneMesh = true
         }
         // Real people walking past should block ghosts behind them.
         if ARWorldTrackingConfiguration.supportsFrameSemantics(.personSegmentationWithDepth) {

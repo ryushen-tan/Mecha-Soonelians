@@ -399,6 +399,7 @@ final class SprayPainter: ObservableObject {
                 gestures.onPinch = { [weak self] in self?.pinched($0, scale: $1) }
                 gestures.onTwist = { [weak self] in self?.twisted($0, rotation: $1) }
                 gestures.install(on: ar.arView)
+                if let start = locked(placement) { _ = apply(start) }
                 isReady = true
             } catch {
                 self.error = "Couldn't show your chameleon here. Cancel and try again."
@@ -505,7 +506,7 @@ final class SprayPainter: ObservableObject {
         let across = directions.right * joystick.x * 0.4 * elapsed
         let along = directions.up * joystick.y * 0.4 * elapsed
         // Straight there if it's clear, else sliding along whatever's in the way.
-        if ![across + along, across, along].contains(where: { simd_length($0) > 1e-5 && apply(placement.moved(by: $0)) }) {
+        if ![across + along, across, along].contains(where: { simd_length($0) > 1e-5 && move(to: placement.moved(by: $0)) }) {
             blocked()
         }
     }
@@ -534,32 +535,37 @@ final class SprayPainter: ObservableObject {
         rotate(by: Float((degrees - Self.degrees(of: placement)) * .pi / 180))
     }
 
-    /// Lays the chameleon flat on the floor where it is: feet at the wall and head into the room if
-    /// it was on a wall, else straight down from the furniture it was on.
+    /// Lays the chameleon flat on the real floor where it is: feet at the wall and head into the
+    /// room if it was on a wall, else straight down from the furniture it was on.
     func stickToFloor() {
-        guard isReady, let frame = ar.currentFrame else { return }
-        let floor = ar.floorHeight(for: frame)
-        let candidate: GhostPlacement
+        guard isReady else { return }
+        let size = bodySize(placement, pose: pose)
+        var base = placement.origin, head = placement.up
         if placement.onWall {
-            let base = SIMD3(placement.origin.x, floor, placement.origin.z) + placement.facing * 0.03
-            candidate = GhostPlacement(on: base, normal: [0, 1, 0], up: placement.facing, width: placement.width, height: placement.height)
-        } else {
-            guard abs(placement.origin.y - floor) > 0.02 else { return }
-            candidate = GhostPlacement(on: SIMD3(placement.origin.x, floor, placement.origin.z), normal: [0, 1, 0],
-                                       up: placement.up, width: placement.width, height: placement.height)
+            // The scan rounds off the corner where wall meets floor, so it lies a little way out.
+            base += placement.facing * 0.08
+            head = placement.facing
         }
-        if !apply(candidate) { blocked() }
+        guard let floor = realFloor(under: base + head * (size.y / 2)) ?? ar.currentFrame.map(ar.floorHeight(for:)) else { return }
+        base.y = floor
+        let candidate = GhostPlacement(on: base, normal: [0, 1, 0], up: head, width: placement.width, height: placement.height)
+        if !move(to: candidate) { blocked() }
     }
 
-    /// Sticks the chameleon flat on the closest scanned wall, upright with its feet just off the floor.
+    /// Sticks the chameleon flat on the closest real wall around it, upright, with its feet just
+    /// above whatever it was lying on (clear of the scan's rounded corner at the floor).
     func stickToWall() {
-        guard isReady, !placement.onWall, let frame = ar.currentFrame else { return }
-        guard let wall = ar.obstacles.nearestWall(to: bodyBox(placement, pose: pose).center, within: 1.5) else {
-            return flash("No scanned wall nearby. Drag it onto one.")
+        guard isReady, !placement.onWall else { return }
+        let size = bodySize(placement, pose: pose)
+        let feet = placement.origin.y + 0.06
+        var middle = placement.origin + placement.up * (size.y / 2)
+        middle.y = feet + size.y / 2
+        guard let wall = nearestRealWall(to: middle) ?? ar.obstacles.nearestWall(to: middle, within: 1.5) else {
+            return flash("No wall nearby. Drag it onto one.")
         }
-        let origin = SIMD3(wall.point.x, ar.floorHeight(for: frame) + 0.02, wall.point.z)
-        let candidate = GhostPlacement(on: origin, normal: wall.normal, up: [0, 1, 0], width: placement.width, height: placement.height)
-        if !apply(candidate) { blocked() }
+        let candidate = GhostPlacement(on: SIMD3(wall.point.x, feet, wall.point.z), normal: wall.normal, up: [0, 1, 0],
+                                       width: placement.width, height: placement.height)
+        if !move(to: candidate) { blocked() }
     }
 
     private func tapped(at point: CGPoint) {
@@ -591,7 +597,7 @@ final class SprayPainter: ObservableObject {
             let size = bodySize(placement, pose: pose)
             let candidate = GhostPlacement(on: spot.point - up * (size.y / 2), normal: spot.normal, up: up,
                                            width: placement.width, height: placement.height)
-            if !apply(candidate) { blocked() }
+            if !move(to: candidate) { blocked() }
         default:
             grab = nil
         }
@@ -642,20 +648,30 @@ final class SprayPainter: ObservableObject {
         return true
     }
 
-    /// Whether the chameleon can be there in that pose. Anything goes while it's already somewhere
-    /// it shouldn't be, so it can always be moved back out.
-    private func allowed(_ candidate: GhostPlacement, pose: Int) -> Bool {
-        fits(candidate, pose: pose) || !fits(placement, pose: self.pose)
+    /// Moves the chameleon to `candidate`, pressed flat onto the real surface there, if it can go.
+    private func move(to candidate: GhostPlacement) -> Bool {
+        guard let locked = locked(candidate) else { return false }
+        return apply(locked)
     }
 
-    /// Not inside a wall or furniture, not through the floor or ceiling, on a wall that's really
-    /// there, and lying on the floor or on top of furniture rather than in the air.
+    /// Whether the chameleon can be there in that pose. If it's already stuck in something, it may
+    /// only move somewhere no worse, so it can always get back out but never go further in.
+    private func allowed(_ candidate: GhostPlacement, pose: Int) -> Bool {
+        guard ar.hasSceneMesh else { return fits(candidate, pose: pose) || !fits(placement, pose: self.pose) }
+        let after = realOverlap(candidate, pose: pose)
+        if after == 0 { return true }
+        let before = realOverlap(placement, pose: self.pose)
+        return before > 0 && after <= before
+    }
+
     private func fits(_ placement: GhostPlacement, pose: Int) -> Bool {
         problem(with: placement, pose: pose) == nil
     }
 
-    /// What's wrong with the chameleon being there, if anything.
+    /// What's wrong with the chameleon being there, if anything: inside something in the live
+    /// room scan or, without LiDAR, the house scan's walls and furniture or out of bounds.
     private func problem(with placement: GhostPlacement, pose: Int) -> String? {
+        if ar.hasSceneMesh { return realOverlap(placement, pose: pose) > 0 ? "inside something" : nil }
         let obstacles = ar.obstacles
         let box = bodyBox(placement, pose: pose)
         if obstacles.blocks(box) { return "inside a wall or furniture" }
@@ -668,6 +684,77 @@ final class SprayPainter: ObservableObject {
         if let frame = ar.currentFrame, abs(height - ar.floorHeight(for: frame)) < 0.05 { return nil }
         guard let top = obstacles.furnitureTop(under: box.center, step: 0.06), abs(top - height) < 0.06 else { return "in the air" }
         return nil
+    }
+
+    // MARK: The real room
+
+    /// The nearest real surface along a ray, from the phone's live LiDAR mesh of the room.
+    private func realHit(from origin: SIMD3<Float>, along direction: SIMD3<Float>, length: Float) -> CollisionCastHit? {
+        ar.arView.scene.raycast(origin: origin, direction: direction, length: length, query: .nearest,
+                                mask: .sceneUnderstanding, relativeTo: nil).first
+    }
+
+    /// `candidate` pressed flat onto the real wall or floor behind it, or nil if nothing's there
+    /// (off the end of a wall, or not scanned yet). On a floor it drops down off furniture.
+    /// Without LiDAR it's left as it is.
+    private func locked(_ candidate: GhostPlacement) -> GhostPlacement? {
+        guard ar.hasSceneMesh else { return candidate }
+        let normal = candidate.facing
+        let middle = candidate.origin + candidate.up * (bodySize(candidate, pose: pose).y / 2)
+        let reach: Float = candidate.onWall ? 0.4 : 2
+        guard let hit = realHit(from: middle + normal * 0.08, along: -normal, length: reach + 0.08),
+              abs(simd_dot(simd_normalize(hit.normal), normal)) > 0.7 else { return nil }
+        return candidate.moved(by: normal * simd_dot(hit.position - middle, normal))
+    }
+
+    /// The real floor under `point`: the lowest upward-facing surface straight down.
+    private func realFloor(under point: SIMD3<Float>) -> Float? {
+        guard ar.hasSceneMesh else { return nil }
+        return ar.arView.scene.raycast(origin: point + [0, 0.2, 0], direction: [0, -1, 0], length: 3, query: .all,
+                                       mask: .sceneUnderstanding, relativeTo: nil)
+            .filter { abs(simd_normalize($0.normal).y) > 0.7 }
+            .map(\.position.y).min()
+    }
+
+    /// The closest real wall within 1.5 m of `point`, looking all the way around: where on it, level
+    /// with `point`, and the way out of it.
+    private func nearestRealWall(to point: SIMD3<Float>) -> (point: SIMD3<Float>, normal: SIMD3<Float>)? {
+        guard ar.hasSceneMesh else { return nil }
+        var best: (point: SIMD3<Float>, normal: SIMD3<Float>, distance: Float)?
+        for step in 0..<24 {
+            let angle = Float(step) * .pi / 12
+            let direction = SIMD3<Float>(sin(angle), 0, cos(angle))
+            guard let hit = realHit(from: point, along: direction, length: 1.5), hit.distance < best?.distance ?? .infinity else { continue }
+            var normal = simd_normalize(hit.normal)
+            normal.y = 0
+            guard simd_length(normal) > 0.95 else { continue }
+            normal = simd_normalize(normal)
+            if simd_dot(normal, direction) > 0 { normal = -normal }
+            best = (SIMD3(hit.position.x, point.y, hit.position.z), normal, hit.distance)
+        }
+        return best.map { ($0.point, $0.normal) }
+    }
+
+    /// How many edges and diagonals of the body's box pass through the real room. 0 means it's clear.
+    private func realOverlap(_ placement: GhostPlacement, pose: Int) -> Int {
+        guard ar.hasSceneMesh else { return 0 }
+        var box = bodyBox(placement, pose: pose)
+        // Stays clear of the surface it's stuck to, which the scan shows a little bumpy.
+        let lift: Float = 0.02
+        box.halfSize.z = max(box.halfSize.z - lift / 2, 0.01)
+        box.transform.columns.3 += SIMD4(placement.facing * (lift / 2), 0)
+        let axes = (0..<3).map { box.axis($0) * box.halfSize[$0] }
+        let corners = (0..<8).map { (i: Int) -> SIMD3<Float> in
+            box.center + axes[0] * (i & 1 == 0 ? -1 : 1) + axes[1] * (i & 2 == 0 ? -1 : 1) + axes[2] * (i & 4 == 0 ? -1 : 1)
+        }
+        var segments = [(0, 7), (1, 6), (2, 5), (3, 4)]
+        for i in 0..<8 { for bit in [1, 2, 4] where i & bit == 0 { segments.append((i, i | bit)) } }
+        let scene = ar.arView.scene
+        // Both ways, since the mesh may only be hit from its front.
+        return segments.filter { a, b in
+            !scene.raycast(from: corners[a], to: corners[b], query: .any, mask: .sceneUnderstanding, relativeTo: nil).isEmpty
+                || !scene.raycast(from: corners[b], to: corners[a], query: .any, mask: .sceneUnderstanding, relativeTo: nil).isEmpty
+        }.count
     }
 
     private func blocked() {
