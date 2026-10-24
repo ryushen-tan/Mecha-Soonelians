@@ -138,6 +138,13 @@ python3 -m http.server 4173 --bind 127.0.0.1 --directory preview
 
 Open <http://127.0.0.1:4173> in Codex's browser. This preview uses simulated in-memory data; it does not connect to the server. Join its sample room with `482916`, or create a room and use the simulation controls below it. Refreshing resets the preview. The native app uses actual server-generated codes, not a fixed sample code.
 
+## Web twin of the UI (`server/public/play`)
+
+The landing page, the lobby cards and a mock of the in-game round also exist as plain HTML under
+`server/public/play`, served by the Next server at `/play/index.html` and `/play/studio.html` and hosted on
+Vercel. They mirror the Jelly views so the UI can be tweaked in a browser first; see
+[server/public/play/README.md](server/public/play/README.md) for what each page is and what changed.
+
 ## Validation
 
 Server integration tests cover multi-client lifecycle, host permissions, token isolation, concurrent joins beyond 20 players, locking, validation, expiry, and limits:

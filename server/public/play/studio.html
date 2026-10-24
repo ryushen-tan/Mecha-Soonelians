@@ -3,486 +3,366 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Mecha Studio</title>
+<title>Mecha Game</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@800&family=Nunito:wght@600;700;800;900&display=swap">
 <style>
-  /* The in-game editor as plain HTML — a web twin of MechaSoonelians/Capture/CharacterStudioView.swift (+ CharacterEditing.swift
-     and CharacterGame.swift's panel), on a placeholder 3D stage (a mannequin in a stub room) instead of the scanned house and the
-     Tripo character. Tokens = Rally/Design.swift (RallyStyle). Every HUD piece, menu, sheet and overlay of the app is here;
-     ?state= picks a state (arrange, paint, wheel, tools, painttools, game, hider, hunter, waiting), ?dev=0 hides the state strip. */
-  /* Jelly tokens (Rally/JellyStyle.swift): the same palette and fonts as the landing page */
-  :root { --paper: #fbfbfb; --surface: #fbfbfb; --ink: #141414; --muted: #6b7080; --line: rgba(20,20,20,.14); --field: #f1f2f6; --lime: #4a63ff; --lime-edge: #2f44c7; --cyan: #4a63ff; --coral: #c0392b;
-          --success: #1f8f5f; --error: #c0392b; --stage: #e4e7ef;
+  /* The in-game UI as plain HTML, after MechaSoonelians/Game/GameView.swift (lobby → hide → seek → results) and
+     SprayPaintView.swift (the + crosshair: Pick a real color under it, hold to spray it onto the body; pose tap-cycles;
+     joystick, To floor / Against wall, turn), in the Jelly palette (Rally/JellyStyle.swift). The AR camera and the scanned
+     house are stood in for by a stub room with a white chameleon body. ?state=… picks a state, ?dev=0 hides the strip. */
+  :root { --bg: #e4e7ef; --paper: #fbfbfb; --ink: #141414; --muted: #6b7080; --field: #f1f2f6; --blue: #4a63ff; --blue-edge: #2f44c7; --success: #1f8f5f; --error: #c0392b; --line: rgba(20,20,20,.14);
           --font: "Nunito", -apple-system, "PingFang SC", system-ui, sans-serif; --display: "Outfit", "PingFang SC", system-ui, sans-serif; --mono: ui-monospace, "SF Mono", Menlo, monospace; }
-  html, body { height: 100%; margin: 0; background: var(--stage); font-weight: 700; color: var(--ink); font-family: var(--font); overflow: hidden; -webkit-font-smoothing: antialiased; }
-  button { font-family: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 700 14px var(--font); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  button { font-family: inherit; font-weight: 700; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
   button:disabled { opacity: .45; cursor: default; }
-  #stage { position: fixed; inset: 0; z-index: 0; background: var(--stage); touch-action: none; }
+  #stage { position: fixed; inset: 0; z-index: 0; background: var(--bg); touch-action: none; }
   #stage canvas { display: block; width: 100%; height: 100%; }
-  /* ---- HUD over the scene (editorScene) ---- */
-  .hud { position: fixed; left: 0; right: 0; z-index: 5; display: flex; gap: 12px; padding: 0 16px; pointer-events: none; }
-  .hud > * { pointer-events: auto; }
-  .hud.top { top: calc(10px + env(safe-area-inset-top, 0px)); align-items: flex-start; }
-  .hud.bottom { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); align-items: flex-end; justify-content: space-between; }
-  .hudicon { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--ink); background: var(--paper); display: grid; place-items: center; flex: none; padding: 0; }
-  .hudicon svg { width: 20px; height: 20px; }
-  .hudicon.lime { background: var(--lime); color: #fff; } .hudicon.coral { background: var(--coral); color: #fff; }
-  .capsule { background: var(--paper); border-radius: 999px; padding: 8px 14px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; border: 2px solid var(--ink); }
-  .capsule.paper { background: var(--paper); }
-  #modeBtn { flex-direction: column; gap: 2px; padding: 8px 14px; }
-  #modeBtn .room { font-size: 10px; font-weight: 600; color: var(--muted); }
-  #modeBtn .chev svg { width: 9px; height: 9px; }
-  .toprow { display: flex; align-items: flex-start; gap: 10px; width: 100%; }
-  .toprow .mid { flex: 1; display: flex; justify-content: center; }
-  .stack { position: fixed; left: 16px; right: 16px; top: calc(64px + env(safe-area-inset-top, 0px)); z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: none; }
-  .toast { display: none; font-size: 12px; font-weight: 800; padding: 10px 14px; border-radius: 999px; background: var(--paper); border: 2px solid var(--ink); align-items: center; gap: 6px; }
-  .toast.show { display: inline-flex; }
-  .toast svg { width: 14px; height: 14px; }
-  .notice { font-size: 12px; font-weight: 700; padding: 12px; border-radius: 16px; background: var(--paper); border: 2px solid var(--ink); display: flex; gap: 6px; align-items: flex-start; max-width: 420px; }
-  .notice.err { color: var(--error); background: var(--paper); font-weight: 700; }
-  .notice svg { width: 14px; height: 14px; flex: none; margin-top: 1px; }
-  .hint { font-size: 10px; font-weight: 800; padding: 8px 10px; border-radius: 999px; background: var(--paper); border: 2px solid var(--ink); }
-  .seg { display: inline-flex; gap: 4px; padding: 5px; border-radius: 999px; background: var(--paper); border: 2px solid var(--ink); }
-  .seg button { width: 48px; height: 48px; border-radius: 999px; border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 10px; font-weight: 800; }
-  .seg button svg { width: 17px; height: 17px; }
-  .seg button[aria-pressed="true"] { background: var(--lime); color: #fff; }
-  .painttools { display: inline-flex; align-items: center; gap: 10px; padding: 4px 12px; border-radius: 999px; background: var(--paper); border: 2px solid var(--ink); }
-  .painttools button { background: none; border: 0; height: 44px; display: grid; place-items: center; padding: 0; }
-  .painttools button svg { width: 20px; height: 20px; }
-  #colorDot { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--ink); padding: 0; }
-  .poseBtn { background: none; border: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; }
-  .poseBtn .capsule { padding: 3px 8px; font-size: 11px; font-weight: 800; }
-  .left, .right { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-  .right { align-items: flex-end; }
-  body.card .hud, body.card .stack { display: none; }
-  /* ---- menus (SwiftUI Menu) ---- */
-  .menu { position: fixed; z-index: 30; background: var(--paper); border: 2px solid var(--ink); border-radius: 16px; box-shadow: 0 12px 24px rgba(20,20,20,.2); padding: 6px; min-width: 210px; display: none; }
-  .menu.show { display: block; }
-  .menu button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: none; border: 0; padding: 11px 12px; font-size: 15px; font-weight: 600; border-radius: 10px; text-align: left; }
-  .menu button:hover { background: var(--field); }
-  .menu button svg { width: 18px; height: 18px; color: var(--muted); }
-  .menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
-  #scrim { position: fixed; inset: 0; z-index: 20; display: none; }
-  #scrim.show { display: block; }
-  #scrim.dim { background: rgba(31,41,36,.22); }
-  /* ---- sheets (.sheet presentationDetents medium/large) ---- */
-  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--paper); border: 2px solid var(--ink); border-bottom: 0; border-radius: 26px 26px 0 0; box-shadow: 0 -16px 24px rgba(20,20,20,.2); max-height: 86vh; display: none; flex-direction: column; }
-  .sheet.show { display: flex; }
-  .sheet .grab { width: 36px; height: 5px; border-radius: 3px; background: rgba(31,41,36,.25); margin: 8px auto 0; }
-  .sheet .bar { display: flex; align-items: center; justify-content: center; position: relative; padding: 10px 16px; font: 800 17px var(--display); }
-  .sheet .bar .done { position: absolute; right: 16px; background: none; border: 0; font-size: 17px; font-weight: 600; color: var(--ink); }
-  .sheet .body { overflow: auto; padding: 10px 20px calc(24px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 14px; }
-  .sheet h3 { margin: 0; font: 800 20px var(--display); }
-  .sheet .row { display: flex; align-items: center; gap: 10px; }
-  .sheet .row.between { justify-content: space-between; }
-  .sheet .muted { font-size: 12px; color: var(--muted); font-weight: 500; line-height: 1.4; }
-  .sheet .small { font-size: 13px; font-weight: 600; }
-  .sheet .label { font-size: 12px; font-weight: 600; }
-  .seg2 { display: flex; background: var(--field); border-radius: 12px; padding: 3px; border: 2px solid var(--ink); }
-  .seg2 button { flex: 1; border: 0; background: none; padding: 7px 4px; font-size: 13px; font-weight: 700; border-radius: 9px; }
-  .seg2 button[aria-pressed="true"] { background: var(--lime); color: #fff; }
-  .sheet .text { background: none; border: 0; font-size: 13px; font-weight: 800; color: var(--lime); padding: 6px 0; }
-  .sheet .text svg { width: 16px; height: 16px; vertical-align: -3px; margin-right: 4px; }
-  .sheet .icon { background: none; border: 0; padding: 4px; } .sheet .icon svg { width: 20px; height: 20px; }
-  .slider { display: flex; align-items: center; gap: 10px; }
-  .slider .label { width: 80px; flex: none; }
-  .slider input { flex: 1; accent-color: var(--ink); }
-  .slider .val { width: 38px; font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
-  .toggle { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 600; }
-  .toggle input { appearance: none; width: 51px; height: 31px; border-radius: 16px; background: rgba(20,20,20,.2); position: relative; margin: 0; transition: background .15s; }
-  .toggle input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.25); transition: left .15s; }
-  .toggle input:checked { background: var(--success); } .toggle input:checked::after { left: 22px; }
-  .pick { display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 600; }
-  .pick select { font: inherit; font-size: 14px; font-weight: 700; border: 2px solid var(--ink); background: var(--field); border-radius: 12px; padding: 6px 10px; color: var(--ink); }
-  details summary { cursor: pointer; font-size: 13px; font-weight: 700; list-style: none; display: flex; justify-content: space-between; align-items: center; }
-  details summary::after { content: "›"; font-size: 18px; transform: rotate(90deg); color: var(--muted); } details[open] summary::after { transform: rotate(-90deg); }
-  details > div { display: flex; flex-direction: column; gap: 14px; padding-top: 14px; }
-  .colorwheel { display: flex; gap: 20px; align-items: center; }
-  #hueWheel { width: 120px; height: 120px; border-radius: 50%; flex: none; touch-action: none; position: relative; background: conic-gradient(from 90deg, red, yellow, lime, cyan, blue, magenta, red); }
-  #hueWheel::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 70%); }
-  #hueShade { position: absolute; inset: 0; border-radius: 50%; background: #000; opacity: 0; }
-  #hueKnob { position: absolute; width: 15px; height: 15px; border-radius: 50%; border: 3px solid #fff; box-sizing: border-box; transform: translate(-50%, -50%); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
-  .colorwheel .side { display: flex; flex-direction: column; gap: 10px; flex: 1; }
-  .hex { font: 500 13px var(--mono); }
-  .swatches { display: flex; gap: 8px; }
-  .swatches button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--ink); padding: 0; }
-  .push { font: 800 17px var(--display); min-height: 54px; border: 2px solid var(--ink); border-radius: 16px; background: var(--lime); color: #fff; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
-  .push.coral { background: var(--coral); color: #fff; } .push.dark { background: var(--ink); color: var(--paper); }
+  .layer { position: fixed; inset: 0; z-index: 5; display: none; pointer-events: none; }
+  .layer.show { display: block; }
+  .layer > * { pointer-events: auto; }
+  /* ---- shared Jelly pieces ---- */
+  .eyebrow { font: 600 11px var(--mono); letter-spacing: 1.8px; text-transform: uppercase; color: var(--muted); }
+  .h1 { font: 800 40px/1.05 var(--display); letter-spacing: -.5px; }
+  .h2 { font: 800 23px/1.1 var(--display); }
+  .h3 { font: 800 17px var(--display); }
+  .muted { color: var(--muted); font-weight: 600; }
+  .push { font: 800 17px var(--display); min-height: 54px; width: 100%; border: 2px solid var(--ink); border-radius: 16px; background: var(--blue); color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .push.dark { background: var(--ink); color: var(--paper); } .push.danger { background: var(--error); color: #fff; } .push.ghost { background: var(--paper); color: var(--ink); }
   .push svg { width: 18px; height: 18px; }
-  .arrows { display: flex; gap: 14px; } .arrows button { background: none; border: 0; padding: 6px; } .arrows svg { width: 22px; height: 22px; }
-  .score { display: flex; justify-content: space-between; font-size: 12px; font-weight: 500; }
-  /* ---- confirmation dialog (confirmationDialog) ---- */
+  .link { background: none; border: 0; padding: 8px 0; font-size: 14px; font-weight: 800; color: var(--blue); }
+  .card { background: var(--paper); border: 2px solid var(--ink); border-radius: 26px; padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 16px 24px rgba(20,20,20,.18); }
+  svg.i { width: 18px; height: 18px; flex: none; }
+  /* ---- paper covers (lobby, Eyes closed!, Stay sneaky) ---- */
+  .cover { position: fixed; inset: 0; background: var(--bg); overflow: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 32px; box-sizing: border-box; text-align: center; }
+  .cover.top { justify-content: flex-start; text-align: left; align-items: stretch; padding: calc(16px + env(safe-area-inset-top, 0px)) 24px 24px; gap: 24px; max-width: 540px; margin: 0 auto; }
+  .brand { font: 800 30px var(--display); letter-spacing: -1px; display: flex; align-items: center; gap: 8px; }
+  .brand b { color: var(--blue); }
+  .hostbox { background: var(--blue); color: #fff; border: 2px solid var(--ink); border-radius: 22px; padding: 20px; text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  .hostbox .eyebrow { color: rgba(255,255,255,.8); }
+  .hostbox hr { width: 100%; border: 0; border-top: 1px solid rgba(255,255,255,.5); margin: 2px 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { background: var(--paper); border: 2px solid var(--ink); border-radius: 18px; padding: 12px; min-height: 132px; display: flex; flex-direction: column; align-items: center; gap: 8px; box-sizing: border-box; }
+  .tile .name { font-weight: 800; } .tile .you { font-size: 10px; color: var(--muted); }
+  .tile .state { font-size: 11px; color: var(--muted); display: flex; gap: 4px; align-items: center; } .tile .state.ok { color: var(--success); }
+  .tile .role { font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 999px; border: 0; background: rgba(74,99,255,.18); }
+  .tile .role.seeker { background: rgba(192,57,43,.2); }
+  .avatar { border-radius: 34%; position: relative; display: inline-block; flex: none; }
+  .avatar.round { border-radius: 50%; }
+  .avatar i { position: absolute; top: 38%; width: 7%; height: 14%; border-radius: 999px; background: var(--ink); } .avatar i.l { left: 32%; } .avatar i.r { right: 32%; }
+  .avatar s { position: absolute; left: 38%; right: 38%; top: 58%; height: 14%; border: 0; border-bottom: 3px solid var(--ink); border-radius: 0 0 50% 50% / 0 0 100% 100%; }
+  .ticket { font: 600 47px var(--mono); padding: 12px 28px; background: var(--blue); color: #fff; border: 2px solid var(--ink); border-radius: 22px; }
+  .stepper { display: flex; align-items: center; justify-content: space-between; font-weight: 800; }
+  .stepper .ctl { display: inline-flex; border: 2px solid var(--ink); border-radius: 10px; overflow: hidden; background: var(--field); }
+  .stepper .ctl button { width: 40px; height: 32px; border: 0; background: none; font-size: 18px; } .stepper .ctl button + button { border-left: 2px solid var(--ink); }
+  .waiting { display: flex; align-items: center; gap: 8px; padding: 16px; background: var(--field); border: 2px solid var(--ink); border-radius: 14px; font-weight: 800; }
+  /* ---- camera card (the AR view stays under it) ---- */
+  .cam { position: fixed; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: calc(10px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)); box-sizing: border-box; }
+  .cam .glass, .cam .card { pointer-events: auto; }
+  .glass { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--ink); background: var(--paper); display: grid; place-items: center; padding: 0; }
+  .glass svg { width: 16px; height: 16px; }
+  .cam .card { max-width: 540px; width: 100%; box-sizing: border-box; align-self: center; }
+  .found { font: 600 13px var(--font); color: var(--muted); }
+  .result { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; }
+  /* ---- spray paint (SprayPaintView) ---- */
+  #spray { display: none; flex-direction: column; justify-content: space-between; position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+  #spray.show { display: flex; }
+  #spray > * { pointer-events: auto; }
+  .topbar { margin: calc(8px + env(safe-area-inset-top, 0px)) 12px 0; padding: 14px; background: var(--paper); border: 2px solid var(--ink); border-radius: 18px; display: flex; gap: 10px; align-items: flex-start; }
+  .topbar .txt { flex: 1; display: flex; flex-direction: column; gap: 4px; } .topbar .hint { font-weight: 700; font-size: 14px; line-height: 1.3; }
+  .roundbtn { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--field); display: grid; place-items: center; padding: 0; flex: none; } .roundbtn svg { width: 17px; height: 17px; }
+  .posetile { width: 64px; height: 50px; border: 2px solid var(--ink); border-radius: 14px; background: var(--blue); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0; flex: none; font-size: 10px; font-weight: 800; }
+  .posetile svg { width: 20px; height: 20px; }
+  #cross { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 50px; height: 50px; pointer-events: none; z-index: 6; display: none; transition: transform .12s ease-out; }
+  #cross.show { display: block; } #cross.spraying { transform: translate(-50%, -50%) scale(.85); }
+  #cross .c1 { position: absolute; inset: 3px; border-radius: 50%; border: 5px solid #888; } #cross .c2 { position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(255,255,255,.8); }
+  #cross .plus { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 26px; font-weight: 800; text-shadow: 0 0 2px rgba(0,0,0,.7), 0 0 4px rgba(0,0,0,.5); line-height: 1; }
+  .move { display: flex; align-items: flex-end; gap: 12px; padding: 0 16px 10px; }
+  #stick { width: 104px; height: 104px; border-radius: 50%; background: rgba(251,251,251,.75); border: 2px solid var(--ink); position: relative; flex: none; touch-action: none; }
+  #stick .walk { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); color: var(--muted); } #stick .walk svg { width: 14px; height: 14px; }
+  #knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: var(--blue); border: 2px solid var(--ink); box-sizing: border-box; }
+  .move .col { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .move .row { display: flex; gap: 8px; }
+  .pill { flex: 1; min-height: 40px; border: 2px solid var(--ink); border-radius: 999px; background: rgba(251,251,251,.92); font-size: 13px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; white-space: nowrap; }
+  .pill svg { width: 15px; height: 15px; }
+  .turn { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 2px solid var(--ink); border-radius: 999px; background: rgba(251,251,251,.92); }
+  .turn svg { width: 14px; height: 14px; flex: none; } .turn input { flex: 1; accent-color: var(--ink); margin: 0; }
+  .panel { margin: 0 12px calc(8px + env(safe-area-inset-bottom, 0px)); padding: 16px; background: rgba(251,251,251,.94); border: 2px solid var(--ink); border-radius: 22px; display: flex; flex-direction: column; gap: 12px; }
+  .size { display: flex; align-items: center; gap: 10px; } .size i { border-radius: 50%; background: var(--ink); flex: none; } .size i.s { width: 6px; height: 6px; } .size i.b { width: 18px; height: 18px; } .size input { flex: 1; accent-color: var(--ink); margin: 0; }
+  .act { display: flex; align-items: center; gap: 12px; }
+  #swatch { width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--ink); background: #888; flex: none; padding: 0; }
+  #action { flex: 1; min-height: 64px; border: 2px solid var(--ink); border-radius: 18px; background: var(--paper); color: var(--ink); display: flex; align-items: center; justify-content: center; gap: 10px; font: 800 20px var(--font); touch-action: none; user-select: none; -webkit-user-select: none; }
+  #action.spray { background: var(--blue); color: #fff; } #action svg { width: 22px; height: 22px; }
+  .foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .foot .push { max-width: 200px; }
+  /* ---- color picker popover (replaces the old paint sheet: just a color) ---- */
+  #picker { position: fixed; left: 12px; right: 12px; bottom: calc(190px + env(safe-area-inset-bottom, 0px)); z-index: 30; background: var(--paper); border: 2px solid var(--ink); border-radius: 22px; padding: 16px; display: none; gap: 16px; align-items: center; box-shadow: 0 16px 24px rgba(20,20,20,.2); }
+  #picker.show { display: flex; }
+  #hue { width: 120px; height: 120px; border-radius: 50%; flex: none; position: relative; touch-action: none; background: conic-gradient(from 90deg, red, yellow, lime, cyan, blue, magenta, red); }
+  #hue::before { content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 70%); }
+  #shade { position: absolute; inset: 0; border-radius: 50%; background: #000; opacity: 0; } #hknob { position: absolute; width: 15px; height: 15px; border-radius: 50%; border: 3px solid #fff; box-sizing: border-box; transform: translate(-50%, -50%); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  #picker .side { flex: 1; display: flex; flex-direction: column; gap: 10px; } #picker .hex { font: 500 13px var(--mono); } #picker input[type=range] { accent-color: var(--ink); }
+  #picker .sw { display: flex; gap: 8px; } #picker .sw button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--ink); padding: 0; }
+  /* ---- confirm + dev ---- */
   #confirm { position: fixed; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); z-index: 60; display: none; flex-direction: column; gap: 8px; }
   #confirm.show { display: flex; }
   #confirm .group { background: var(--paper); border: 2px solid var(--ink); border-radius: 16px; overflow: hidden; }
-  #confirm .group .t { padding: 14px; text-align: center; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); }
-  #confirm .group .t b { display: block; color: var(--ink); font-size: 13px; margin-bottom: 4px; }
-  #confirm button { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 16px; font-size: 18px; font-weight: 700; color: var(--lime); }
-  #confirm button:last-child { border: 0; } #confirm button.destructive { color: var(--error); } #confirm button.cancel { font-weight: 800; color: var(--ink); }
-  /* ---- hunter waiting screen ---- */
-  #waiting { position: fixed; inset: 0; z-index: 50; background: var(--stage); display: none; place-items: center; font: 800 80px var(--display); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-  #waiting.show { display: grid; }
-  #loading { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; display: none; }
-  /* ---- dev strip: jump between states (not part of the app) ---- */
-  #dev { position: fixed; left: 50%; transform: translateX(-50%); top: calc(64px + env(safe-area-inset-top, 0px)); z-index: 4; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(31,41,36,.85); max-width: calc(100vw - 16px); overflow: auto; scrollbar-width: none; }
+  #confirm .t { padding: 14px; text-align: center; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); } #confirm .t b { display: block; color: var(--ink); margin-bottom: 4px; }
+  #confirm button { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 16px; font-size: 18px; color: var(--blue); } #confirm button:last-child { border: 0; } #confirm .destructive { color: var(--error); } #confirm .cancel { color: var(--ink); font-weight: 800; }
+  #notice { position: fixed; left: 50%; top: calc(80px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 50; background: var(--paper); border: 2px solid var(--ink); border-radius: 999px; padding: 10px 14px; font-weight: 800; font-size: 12px; display: none; max-width: calc(100vw - 32px); box-sizing: border-box; }
+  #dev { position: fixed; left: 50%; transform: translateX(-50%); top: calc(8px + env(safe-area-inset-top, 0px)); z-index: 70; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(20,20,20,.85); max-width: calc(100vw - 16px); overflow: auto; scrollbar-width: none; }
   #dev button { border: 0; background: transparent; color: #fff; font-size: 11px; font-weight: 700; padding: 6px 9px; border-radius: 999px; white-space: nowrap; }
   #dev button[aria-pressed="true"] { background: #fff; color: var(--ink); }
   #dev[hidden] { display: none; }
-  body.dev .stack { top: calc(106px + env(safe-area-inset-top, 0px)); }
+  body.dev .topbar { margin-top: calc(52px + env(safe-area-inset-top, 0px)); } body.dev .cam { padding-top: calc(52px + env(safe-area-inset-top, 0px)); } body.dev .cover.top { padding-top: calc(56px + env(safe-area-inset-top, 0px)); }
 </style>
 </head>
 <body>
 <div id="stage"></div>
 
-<!-- top toolbar (sceneToolbar) -->
-<div class="hud top"><div class="toprow">
-  <button id="closeBtn" class="hudicon" aria-label="Close editor"><svg viewBox="0 0 24 24"><use href="#i-xmark"/></svg></button>
-  <div class="mid"><button id="modeBtn" class="capsule"><span class="row1" style="display:flex;align-items:center;gap:5px"><span id="modeText">Position &amp; pose</span><span class="chev"><svg viewBox="0 0 24 24"><use href="#i-chevron"/></svg></span></span><span class="room" id="roomName">Practice room</span></button></div>
-  <button id="lockBtn" class="hudicon lime" aria-label="Lock position and paint"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg></button>
-  <button id="moreBtn" class="hudicon" aria-label="Editor options"><svg viewBox="0 0 24 24"><use href="#i-ellipsis"/></svg></button>
+<!-- lobby (GameView.lobby) -->
+<div id="lobby" class="layer"><div class="cover top">
+  <div class="brand">Mecha <b>Soonelians</b></div>
+  <div class="hostbox"><div class="eyebrow">Hosted by</div><div class="h1" id="hostName">Bohan</div><hr><div style="font-size:12px;font-weight:700;display:flex;gap:6px;align-items:center"><svg class="i" viewBox="0 0 24 24"><use href="#i-house"/></svg><span id="foundHouse">2 of 3 found the house</span></div></div>
+  <div style="display:flex;align-items:center;gap:8px"><span class="h2">Players</span><span style="font:600 12px var(--mono);color:var(--muted);background:var(--field);border-radius:999px;padding:6px 8px" id="playerCount">3</span></div>
+  <div class="grid" id="tiles"></div>
+  <div id="hostControls" style="display:flex;flex-direction:column;gap:18px">
+    <hr style="width:100%;border:0;border-top:2px solid var(--ink);margin:0">
+    <div class="stepper"><span id="hideLabel">Hide time · 5 min</span><span class="ctl"><button data-k="hide" data-d="-1" aria-label="Less hide time">−</button><button data-k="hide" data-d="1" aria-label="More hide time">+</button></span></div>
+    <div class="stepper"><span id="seekLabel">Seek time · 5 min</span><span class="ctl"><button data-k="seek" data-d="-1" aria-label="Less seek time">−</button><button data-k="seek" data-d="1" aria-label="More seek time">+</button></span></div>
+    <button class="push" id="startRound">Start round</button>
+    <div class="muted" style="font-size:12px" id="roleHint">Tap a player's role to switch it.</div>
+  </div>
+  <div id="guestWait" class="waiting" style="display:none"><svg class="i" viewBox="0 0 24 24"><use href="#i-clock"/></svg>Waiting for the host</div>
+  <button class="push danger" id="leaveLobby">End game</button>
 </div></div>
-<div class="stack">
-  <div id="savedToast" class="toast"><svg viewBox="0 0 24 24"><use href="#i-checkfill"/></svg>Character, paint and pose saved</div>
-  <div id="notice" class="notice" style="display:none"><svg viewBox="0 0 24 24"><use href="#i-info"/></svg><span></span></div>
-</div>
-<div id="loading" class="capsule">Loading character…</div>
 
-<!-- bottom controls (sceneControls) -->
-<div class="hud bottom">
-  <div class="left">
-    <div id="arrangeCtl">
-      <div class="left">
-        <div id="hintText" class="hint">Tap your person to select and drag</div>
-        <div class="seg" id="transformSeg">
-          <button data-t="translate" aria-pressed="true"><svg viewBox="0 0 24 24"><use href="#i-move"/></svg>Move</button>
-          <button data-t="rotate"><svg viewBox="0 0 24 24"><use href="#i-rotate"/></svg>Rotate</button>
-          <button data-t="scale"><svg viewBox="0 0 24 24"><use href="#i-scale"/></svg>Size</button>
-        </div>
+<!-- paper covers -->
+<div id="eyes" class="layer"><div class="cover"><div class="avatar big" data-i="1" style="width:125px;height:125px;transform:rotate(-7deg)"></div><div class="h1">Eyes closed!</div><div class="muted">Hiders are hiding.</div><div class="ticket t">4:52</div></div></div>
+<div id="sneaky" class="layer"><div class="cover"><div class="avatar big" data-i="4" style="width:125px;height:125px;transform:rotate(-7deg)"></div><div class="h1">Stay sneaky</div><div class="muted" id="sneakyText">Seekers are looking. Your ghost is still hidden.</div><div class="ticket t">3:10</div></div></div>
+
+<!-- camera cards (hide / seek / results) -->
+<div id="camHide" class="layer"><div class="cam"><div><button class="glass leave" aria-label="Leave game"><svg viewBox="0 0 24 24"><use href="#i-xmark"/></svg></button></div>
+  <div class="card">
+    <div class="eyebrow">Hide · <span class="t">4:52</span></div>
+    <div id="hideIdle"><div class="h2" id="hideTitle">Find your spot</div><div class="muted" id="hideText" style="margin-top:6px">Place your scanned 3D self, pick a pose, then paint it to blend in.</div>
+      <button class="push" id="placeBtn" style="margin-top:12px">Place my chameleon</button></div>
+    <div id="hidePlacing" style="display:none"><div class="h2">Tap where to hide</div><div class="muted" style="margin-top:6px">Tap a wall to stand with your back to it, or the floor to stand there facing you.</div><button class="link" id="cancelPlace">Cancel</button></div>
+    <button class="link hostOnly" id="seekNow" style="text-align:left">Start seeking now</button>
+  </div></div></div>
+<div id="camSeek" class="layer"><div class="cam"><div><button class="glass leave" aria-label="Leave game"><svg viewBox="0 0 24 24"><use href="#i-xmark"/></svg></button></div>
+  <div class="card"><div class="eyebrow">Seek · <span class="t">3:10</span></div><div class="h2" id="foundCount">Found 0 of 1</div><div class="muted">Tap a hider when you spot them.</div><button class="link hostOnly" id="endRound" style="text-align:left">End round</button></div></div></div>
+<div id="camResults" class="layer"><div class="cam"><div><button class="glass leave" aria-label="Leave game"><svg viewBox="0 0 24 24"><use href="#i-xmark"/></svg></button></div>
+  <div class="card"><div class="eyebrow">Results</div><div class="muted">Everyone's hiding spot is showing. Look around!</div>
+    <div class="result"><span class="avatar" data-i="4" style="width:32px;height:32px"></span><span>Kai was found by Bohan</span></div>
+    <div class="result"><span class="avatar round" data-i="2" style="width:32px;height:32px"></span><span>Ryushen was never found 🏆</span></div>
+    <div class="hostOnly" style="display:flex;flex-direction:column;gap:10px"><button class="push" id="playAgain">Play again</button><button class="push dark" id="backLobby">Back to lobby</button></div>
+    <div class="guestOnly waiting" style="display:none"><svg class="i" viewBox="0 0 24 24"><use href="#i-clock"/></svg>Waiting for the host</div></div></div></div>
+
+<!-- spray paint (SprayPaintView) -->
+<div id="spray">
+  <div class="topbar">
+    <div class="txt"><div class="eyebrow">Spray paint · <span class="t">4:52</span></div><div class="hint" id="sprayHint">Point the + at the wall behind your chameleon and tap Pick.</div></div>
+    <button class="roundbtn" id="undo" aria-label="Undo" disabled><svg viewBox="0 0 24 24"><use href="#i-undo"/></svg></button>
+    <button class="posetile" id="poseTile" aria-label="Pose"><svg viewBox="0 0 24 24"><use href="#i-figure"/></svg><span id="poseName">Original</span></button>
+  </div>
+  <div></div>
+  <div>
+    <div class="move">
+      <div id="stick" aria-label="Move your chameleon"><span class="walk"><svg viewBox="0 0 24 24"><use href="#i-walk"/></svg></span><div id="knob"></div></div>
+      <div class="col">
+        <div class="row"><button class="pill" id="toFloor"><svg viewBox="0 0 24 24"><use href="#i-floor"/></svg>To floor</button><button class="pill" id="toWall"><svg viewBox="0 0 24 24"><use href="#i-wall"/></svg>Against wall</button></div>
+        <div class="turn"><svg viewBox="0 0 24 24"><use href="#i-turn"/></svg><input type="range" id="turn" min="-180" max="180" value="0" aria-label="Turn"></div>
       </div>
     </div>
-    <div id="paintCtl" class="painttools" style="display:none">
-      <button id="colorDot" aria-label="Paint colors"></button>
-      <button id="toolBtn" aria-label="Paint tool"><svg viewBox="0 0 24 24"><use href="#i-brush"/></svg></button>
-      <button id="undoBtn" aria-label="Undo paint" disabled><svg viewBox="0 0 24 24"><use href="#i-undo"/></svg></button>
-      <button id="redoBtn" aria-label="Redo paint" disabled><svg viewBox="0 0 24 24"><use href="#i-redo"/></svg></button>
+    <div class="panel">
+      <div class="size"><i class="s"></i><input type="range" id="spread" min="0" max="1" step="0.01" value="0.35" aria-label="Spray size"><i class="b"></i></div>
+      <div class="act"><button id="swatch" aria-label="Current color"></button><div id="action" role="button"><svg viewBox="0 0 24 24"><use href="#i-dropper"/></svg><span>Pick</span></div></div>
+      <div class="foot"><button class="link" id="cancelSpray" style="color:var(--ink)">Cancel</button><button class="push dark" id="hideHere">Hide here</button></div>
     </div>
   </div>
-  <div class="right">
-    <button id="poseBtn" class="poseBtn" aria-label="Next pose"><span class="hudicon lime"><svg viewBox="0 0 24 24"><use href="#i-figure"/></svg></span><span class="capsule" id="poseName">Pose</span></button>
-    <button id="ejectBtn" class="poseBtn" aria-label="Emergency eject" style="display:none"><span class="hudicon coral"><svg viewBox="0 0 24 24"><use href="#i-eject"/></svg></span><span class="capsule">Eject</span></button>
-  </div>
 </div>
+<div id="cross"><div class="c1"></div><div class="c2"></div><div class="plus">+</div></div>
+<div id="picker"><div id="hue"><div id="shade"></div><div id="hknob"></div></div><div class="side"><div class="hex" id="hex">#888888</div><div style="font-size:12px">Brightness</div><input type="range" id="bright" min="0" max="1" step="0.01" value="0.53"><div class="sw" id="sw"></div></div></div>
 
-<!-- menus -->
-<div id="scrim"></div>
-<div id="modeMenu" class="menu"><button data-mode="arrange">Position &amp; pose<svg viewBox="0 0 24 24"><use href="#i-move"/></svg></button><button data-mode="paint">Paint<svg viewBox="0 0 24 24"><use href="#i-brush"/></svg></button></div>
-<div id="moreMenu" class="menu">
-  <button data-act="tools">More tools<svg viewBox="0 0 24 24"><use href="#i-sliders"/></svg></button>
-  <button data-act="frame">Frame character<svg viewBox="0 0 24 24"><use href="#i-viewfinder"/></svg></button>
-  <button data-act="game">Game controls<svg viewBox="0 0 24 24"><use href="#i-gamepad"/></svg></button>
-  <hr><button data-act="share">Share saved<svg viewBox="0 0 24 24"><use href="#i-share"/></svg></button>
-</div>
-<div id="toolMenu" class="menu"><button data-tool="paint">Brush<svg viewBox="0 0 24 24"><use href="#i-brush"/></svg></button><button data-tool="sample">Sample<svg viewBox="0 0 24 24"><use href="#i-dropper"/></svg></button><button data-tool="erase">Erase<svg viewBox="0 0 24 24"><use href="#i-eraser"/></svg></button><button data-tool="orbit">Orbit<svg viewBox="0 0 24 24"><use href="#i-rotate"/></svg></button></div>
-
-<!-- sheets -->
-<div id="sheetTools" class="sheet"><div class="grab"></div><div class="bar">Position &amp; pose<button class="done">Done</button></div><div class="body">
-  <div class="small"><svg viewBox="0 0 24 24" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px"><use href="#i-room"/></svg><span class="roomName">Practice room</span></div>
-  <div class="row"><button class="text" data-act="attach"><svg viewBox="0 0 24 24"><use href="#i-hand"/></svg>Attach to surface</button><button class="text" data-act="floor">To floor</button><button class="text" data-act="wall">Against wall</button></div>
-  <div class="slider"><span class="label">Body size</span><input type="range" id="sizeSlider" min="0.15" max="1.5" step="0.01" value="1"><span class="val" id="sizeVal">1.00</span></div>
-  <div class="slider"><span class="label">Turn</span><input type="range" id="turnSlider" min="-180" max="180" step="1" value="0"><span class="val" id="turnVal">0.00</span></div>
-  <div class="muted" id="placeHint">Tap your person to select it, then drag to move. Use Rotate for X/Y/Z rotation rings and Size for uniform resizing. Surfaces stay solid. Drag the background to orbit; pinch to zoom.</div>
-  <details><summary>Body form &amp; clones</summary><div>
-    <div class="seg2" id="formSeg"><button aria-pressed="true">Your mesh</button><button>Rounded</button><button>Blocky</button></div>
-    <div class="row"><button class="text" id="cloneBtn"><svg viewBox="0 0 24 24"><use href="#i-people"/></svg>Clone 0/2</button><button class="text" id="clearClones" disabled>Clear clones</button></div>
-    <div class="muted">A clone keeps the current paint and pose. In a round, finding any clone also finds its owner.</div>
-  </div></details>
-  <div class="toggle"><span style="font-size:12px">Advanced joints</span><input type="checkbox" id="jointsToggle"></div>
-  <div id="joints" style="display:none;flex-direction:column;gap:14px">
-    <div class="pick"><span>Joint</span><select><option>Left shoulder</option><option>Right shoulder</option><option>Left elbow</option><option>Right elbow</option><option>Left hip</option><option>Right hip</option><option>Left knee</option><option>Right knee</option><option>Spine</option><option>Neck</option></select></div>
-    <div class="seg2"><button aria-pressed="true">Bend</button><button>Twist</button><button>Swing</button></div>
-    <div class="slider"><input type="range" min="-90" max="90" value="0" style="flex:1"><span class="val" style="width:40px;font-size:13px">0°</span></div>
-    <button class="text">Reset pose</button>
-  </div>
-</div></div>
-
-<div id="sheetPaint" class="sheet"><div class="grab"></div><div class="bar">Paint tools<button class="done">Done</button></div><div class="body">
-  <div class="row between"><h3>Paint your disguise</h3><span class="row"><button class="icon" data-act="undo" aria-label="Undo paint"><svg viewBox="0 0 24 24"><use href="#i-undo"/></svg></button><button class="icon" data-act="redo" aria-label="Redo paint"><svg viewBox="0 0 24 24"><use href="#i-redo"/></svg></button></span></div>
-  <div class="seg2" id="toolSeg"><button data-tool="paint" aria-pressed="true">Brush</button><button data-tool="sample">Sample</button><button data-tool="erase">Erase</button><button data-tool="orbit">Orbit</button></div>
-  <div class="row between small"><span><svg viewBox="0 0 24 24" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px"><use href="#i-room"/></svg><span class="roomName">Practice room</span></span><span class="row"><button class="icon" data-act="zoomOut" aria-label="Zoom out"><svg viewBox="0 0 24 24"><use href="#i-zoomout"/></svg></button><button class="icon" data-act="zoomIn" aria-label="Zoom in"><svg viewBox="0 0 24 24"><use href="#i-zoomin"/></svg></button><button class="text" data-act="frame">Frame body</button></span></div>
-  <div class="colorwheel">
-    <div id="hueWheel"><div id="hueShade"></div><div id="hueKnob"></div></div>
-    <div class="side">
-      <div class="hex" id="hexText">#D4ED5E</div>
-      <div class="label">Brightness</div>
-      <input type="range" id="brightSlider" min="0" max="1" step="0.01" value="1" style="accent-color:var(--ink)">
-      <div class="swatches" id="swatches"></div>
-    </div>
-  </div>
-  <div class="slider"><span class="label">Brush size</span><input type="range" id="brushSlider" min="0.005" max="0.15" step="0.001" value="0.035"><span class="val" id="brushVal">0.04</span></div>
-  <div class="slider"><span class="label">Opacity</span><input type="range" id="opacitySlider" min="0.1" max="1" step="0.01" value="1"><span class="val" id="opacityVal">1.00</span></div>
-  <div class="row"><button class="text" data-act="fill">Fill</button><button class="text" data-act="white">White base</button><button class="text" data-act="original">Original colors</button></div>
-  <div class="slider"><span class="label">Metallic</span><input type="range" id="metalSlider" min="0" max="1" step="0.01" value="0"><span class="val" id="metalVal">0.00</span></div>
-  <div class="slider"><span class="label">Roughness</span><input type="range" id="roughSlider" min="0.05" max="1" step="0.01" value="0.8"><span class="val" id="roughVal">0.80</span></div>
-  <div class="toggle"><span>Cast shadow</span><input type="checkbox" id="shadowToggle" checked></div>
-  <div class="toggle"><span>See own body through walls</span><input type="checkbox" id="xrayToggle"></div>
-  <div class="muted">Pinch to zoom closer for finer detail. Two fingers pan without painting. Sample the background to match its color. Orbit changes only your view; switch to Position &amp; pose to move your body.</div>
-</div></div>
-
-<div id="sheetGame" class="sheet"><div class="grab"></div><div class="bar">Game controls<button class="done">Done</button></div><div class="body" style="font-size:13px;font-weight:600">
-  <h3 id="gameRoom">Room 355552</h3>
-  <div id="ejectBlock" style="display:none;flex-direction:column;gap:8px">
-    <button class="push coral" id="ejectPush"><svg viewBox="0 0 24 24"><use href="#i-eject"/></svg>Emergency eject · 1 use</button>
-    <div class="muted">Random spot. Same paint, pose and size. You could land in plain sight. No preview or undo; your clones move with you.</div>
-  </div>
-  <div class="row between" id="phaseRow"><span id="phaseText">Lobby · Hider</span><span id="remainText">0s</span></div>
-  <div id="scores" style="display:flex;flex-direction:column;gap:6px"></div>
-  <div class="muted" id="gameMsg">Publish a disguise, then let the host start a round.</div>
-  <button class="text" id="publishBtn"><svg viewBox="0 0 24 24"><use href="#i-share"/></svg>Publish disguise</button>
-  <div id="hostBlock" style="display:flex;flex-direction:column;gap:14px">
-    <div class="pick"><span>Game mode</span><select id="modeSel"><option value="basic">Basic</option><option value="infection">Infection</option><option value="double">Double</option><option value="chicken">Chicken race</option></select></div>
-    <div class="seg2" id="prepSeg"><button>30s prep</button><button aria-pressed="true">60s prep</button><button>120s prep</button></div>
-    <div class="seg2" id="huntSeg"><button>60s hunt</button><button aria-pressed="true">180s hunt</button><button>300s hunt</button></div>
-    <div class="toggle"><span style="font-size:12px">Automatic whistle every 30s</span><input type="checkbox" checked></div>
-    <button class="text" id="startRound">Start round</button>
-    <div class="muted">Starting shares this room's layout with lobby members. Publish only captures you have permission to share.</div>
-  </div>
-  <div id="huntBlock" class="row" style="display:none"><button class="text" id="huntTag">Hunt / tag</button><button class="text" id="whistle">Whistle</button></div>
-  <div class="arrows"><button aria-label="Walk left"><svg viewBox="0 0 24 24"><use href="#i-left"/></svg></button><button aria-label="Walk forward"><svg viewBox="0 0 24 24"><use href="#i-up"/></svg></button><button aria-label="Walk backward"><svg viewBox="0 0 24 24"><use href="#i-down"/></svg></button><button aria-label="Walk right"><svg viewBox="0 0 24 24"><use href="#i-right"/></svg></button></div>
-</div></div>
-
-<!-- close confirmation -->
-<div id="confirm"><div class="group"><div class="t"><b>Save your disguise before leaving?</b>Unsaved paint, pose and position changes will be lost.</div><button data-c="save">Save and close</button><button data-c="keep">Keep editing</button><button class="destructive" data-c="close">Close without saving</button></div><div class="group"><button class="cancel" data-c="keep">Cancel</button></div></div>
-
-<!-- hunter waiting -->
-<div id="waiting" aria-label="Hiding time remaining"><span id="waitClock">1:00</span></div>
-
-<!-- dev strip -->
+<div id="confirm"><div class="group"><div class="t"><b id="confirmTitle">End this game?</b><span id="confirmText">Everyone will be disconnected.</span></div><button class="destructive" id="confirmYes">End game</button></div><div class="group"><button class="cancel" id="confirmNo">Cancel</button></div></div>
+<div id="notice"></div>
 <div id="dev" role="tablist" aria-label="States"></div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <g id="i-xmark" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></g>
-  <g id="i-chevron" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"/></g>
-  <g id="i-lock" fill="currentColor"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3h-2V7a2 2 0 0 0-4 0v3z"/></g>
+  <g id="i-xmark" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></g>
+  <g id="i-house" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></g>
+  <g id="i-clock" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g>
+  <g id="i-crown" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M3 18h18l-1-10-5 4-3-6-3 6-5-4z"/></g>
   <g id="i-check" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></g>
-  <g id="i-checkfill"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M8 12l3 3 5-6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></g>
-  <g id="i-hourglass" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12M6 21h12M8 3v4l4 5-4 5v4M16 3v4l-4 5 4 5v4"/></g>
-  <g id="i-ellipsis" fill="currentColor"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></g>
-  <g id="i-move" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></g>
-  <g id="i-rotate" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/><ellipse cx="12" cy="12" rx="3" ry="8" transform="rotate(30 12 12)"/></g>
-  <g id="i-scale" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20L20 4M4 20v-6M4 20h6M20 4v6M20 4h-6"/></g>
-  <g id="i-figure" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.5" r="2.2"/><path d="M12 7v7M12 14l-4 7M12 14l4 7M12 8L4 6M12 8l8-2"/></g>
-  <g id="i-brush" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-9 9H5v-6z"/><path d="M13 5l6 6"/></g>
-  <g id="i-dropper" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l4 4M12 8l-7 7v4h4l7-7M16 4l1-1a2 2 0 0 1 3 3l-1 1"/></g>
-  <g id="i-eraser" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20l-4-4 10-10 6 6-8 8zM13 6l6 6M4 20h16"/></g>
   <g id="i-undo" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7L4 12l5 5M4 12h10a5 5 0 0 1 0 10h-3"/></g>
-  <g id="i-redo" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7l5 5-5 5M20 12H10a5 5 0 0 0 0 10h3"/></g>
-  <g id="i-eject" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></g>
-  <g id="i-sliders" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="#fff"/><circle cx="15" cy="12" r="2" fill="#fff"/><circle cx="8" cy="17" r="2" fill="#fff"/></g>
-  <g id="i-viewfinder" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><circle cx="12" cy="12" r="3"/></g>
-  <g id="i-gamepad" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="11" rx="5"/><path d="M8 11v3M6.5 12.5h3M16 11h.01M18 13h.01"/></g>
-  <g id="i-share" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 7l4-4 4 4M5 12v8h14v-8"/></g>
-  <g id="i-info" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></g>
-  <g id="i-room" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 12h9M12 12v9"/></g>
-  <g id="i-hand" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V5a1.5 1.5 0 0 1 3 0v6M12 10V7a1.5 1.5 0 0 1 3 0v4M15 11V9a1.5 1.5 0 0 1 3 0v6a6 6 0 0 1-6 6h-1a5 5 0 0 1-4-2l-3-4a1.5 1.5 0 0 1 2.4-1.8L9 14"/></g>
-  <g id="i-people" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15 20a5 5 0 0 1 6-4.5"/></g>
-  <g id="i-zoomin" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20M8 10.5h5M10.5 8v5"/></g>
-  <g id="i-zoomout" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20M8 10.5h5"/></g>
-  <g id="i-left" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></g>
-  <g id="i-right" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></g>
-  <g id="i-up" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></g>
-  <g id="i-down" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></g>
+  <g id="i-figure" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.5" r="2.2"/><path d="M12 7v7M12 14l-4 7M12 14l4 7M12 8L4 6M12 8l8-2"/></g>
+  <g id="i-walk" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M11 8l-3 5 3 2v6M11 8l4 2 2 4M11 8l-1 4"/></g>
+  <g id="i-floor" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M4 20h16"/></g>
+  <g id="i-wall" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="10" height="18" rx="2"/><path d="M16 12h5M18 9l3 3-3 3"/></g>
+  <g id="i-turn" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></g>
+  <g id="i-dropper" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l4 4M12 8l-7 7v4h4l7-7M16 4l1-1a2 2 0 0 1 3 3l-1 1"/></g>
+  <g id="i-brush" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-9 9H5v-6z"/><path d="M13 5l6 6"/></g>
 </defs></svg>
 
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 const params = new URLSearchParams(location.search);
-// ================================================================ state (Character3DModel.editing + CharacterStudioView @State)
-const S = { mode: 'arrange', hunt: null, transform: 'translate', tool: 'paint', color: '#d4ed5e', brush: 0.035, opacity: 1, metallic: 0, roughness: 0.8, shadows: true, xray: false,
-  scale: 1, yaw: 0, preset: 'original', selected: false, saved: false, wheel: false, wheelPage: 0, sheet: null, menu: null, undo: [], redo: [], clones: 0, remaining: 87, hsb: { h: 0.2, s: 0.7, b: 1 }, room: 'Practice room', code: '355552', isHost: true };
+const AVATAR = ['#c6ff4a', '#4a63ff', '#ff7d8a', '#ffb86b', '#7df0b3', '#d58cff'];
+// ================================================================ state (GameSession / GameState)
+const S = { phase: 'lobby', isHost: true, role: 'hider', hideMin: 5, seekMin: 5, secondsLeft: 292, placed: false, placing: false, spraying: false, aimingAtBody: false, color: '#888888', hasColor: false, spread: 0.35, pose: 0, turn: 0, strokes: [], hsb: { h: 0, s: 0, b: .53 }, found: 0,
+  players: [{ name: 'Bohan', avatar: 1, role: 'seeker', ready: true, me: true }, { name: 'Kai', avatar: 4, role: 'hider', ready: true }, { name: 'Ryushen', avatar: 2, role: 'hider', ready: false }] };
+const POSE_NAMES = ['Original', 'Stand', 'Crouch', 'Sit', 'Star', 'Reach', 'Curl up', 'Lie flat', 'Kneel', 'Side lie', 'Lean', 'Backbend', 'Hands up', 'One leg', 'Tuck', 'T-pose'];
 
-// ================================================================ placeholder stage: a stub room + a white mannequin (stands in for the scanned house and the Tripo character)
+// ================================================================ stub room + white chameleon body (stands in for the AR camera, the scanned house and ChameleonBody)
 const stage = $('#stage');
 const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; stage.appendChild(renderer.domElement);
-const scene = new THREE.Scene(); scene.background = new THREE.Color(0xf0f0e7);
-const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 50); camera.position.set(1.6, 1.7, 3.4);
-const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 0.9, 0); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 0.6; controls.maxDistance = 8;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xe4e7ef);
+const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 50); camera.position.set(0.4, 1.5, 3.2);
+const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(0, 1.0, -0.5); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 0.5; controls.maxDistance = 7; controls.enablePan = false;
 scene.add(new THREE.HemisphereLight(0xffffff, 0xc8c8bc, 0.9));
-const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(3, 6, 2); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.camera.left = sun.shadow.camera.bottom = -5; sun.shadow.camera.right = sun.shadow.camera.top = 5; scene.add(sun);
-const matWall = new THREE.MeshStandardMaterial({ color: 0xe6e5da, roughness: 0.95 }), matFloor = new THREE.MeshStandardMaterial({ color: 0xdddcd0, roughness: 0.95 }), matFurn = new THREE.MeshStandardMaterial({ color: 0xcfd6c4, roughness: 0.9 });
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), matFloor); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-const grid = new THREE.GridHelper(6, 12, 0xc9cbbf, 0xd9dbcf); grid.position.y = 0.002; scene.add(grid);
-const box = (w, h, d, x, y, z, m = matFurn) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.castShadow = b.receiveShadow = true; scene.add(b); return b; };
-box(6, 2.6, 0.1, 0, 1.3, -3, matWall); box(0.1, 2.6, 6, -3, 1.3, 0, matWall);
-box(1.8, 0.45, 0.9, -1.4, 0.225, -2.4); box(1.8, 0.4, 0.2, -1.4, 0.65, -2.8); box(0.9, 0.5, 0.9, 1.6, 0.25, -2.2);  // sofa + table
-const surfaces = [floor, ...scene.children.filter(o => o.isMesh && o !== floor && o.geometry.type === 'BoxGeometry')];
-// ---- mannequin: head, torso, 2 arms (upper/lower), 2 legs (thigh/shin) — posed by the same presets the wheel shows
-const skin = new THREE.MeshStandardMaterial({ color: 0xf4f4ee, roughness: 0.8, metalness: 0 });
-const man = new THREE.Group(); scene.add(man);
+const sun = new THREE.DirectionalLight(0xffffff, 1.3); sun.position.set(3, 6, 2); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.camera.left = sun.shadow.camera.bottom = -5; sun.shadow.camera.right = sun.shadow.camera.top = 5; scene.add(sun);
+const M = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.95 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), M(0xd9d6c8)); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; floor.userData.kind = 'floor'; scene.add(floor);
+const box = (w, h, d, x, y, z, c, kind = 'furniture') => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(c)); b.position.set(x, y, z); b.castShadow = b.receiveShadow = true; b.userData.kind = kind; scene.add(b); return b; };
+box(6, 2.6, 0.1, 0, 1.3, -3, 0xe9e4d6, 'wall'); box(0.1, 2.6, 6, -3, 1.3, 0, 0xcfd9e3, 'wall');          // beige back wall, pale blue side wall
+box(1.8, 0.45, 0.9, -1.4, 0.225, -2.4, 0xc96f5c); box(1.8, 0.4, 0.2, -1.4, 0.65, -2.8, 0xb9604e);       // terracotta sofa
+box(0.9, 0.5, 0.9, 1.6, 0.25, -2.2, 0x5c6b8f); const rug = new THREE.Mesh(new THREE.CircleGeometry(1, 32), M(0x7fa37a)); rug.rotation.x = -Math.PI / 2; rug.position.set(0.6, 0.004, -0.6); rug.receiveShadow = true; rug.userData.kind = 'floor'; scene.add(rug);   // slate table, green rug
+const roomMeshes = scene.children.filter(o => o.isMesh);
+const skin = new THREE.MeshStandardMaterial({ color: 0xf4f4ee, roughness: 0.8 });
+const man = new THREE.Group(); man.visible = false; scene.add(man);
 const part = (parent, r, len, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, Math.max(0.01, len - 2 * r), 4, 12), skin); m.position.y = -len / 2; m.castShadow = m.receiveShadow = true; m.userData.body = true; g.add(m); parent.add(g); return g; };
 const hips = new THREE.Group(); hips.position.y = 0.95; man.add(hips);
-const torso = part(hips, 0.14, 0.55, 0, 0.55, 0); torso.children[0].position.y = -0.275;
-const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 18, 14), skin); head.position.set(0, 0.17, 0); head.castShadow = true; head.userData.body = true; torso.add(head);
-const uArmL = part(torso, 0.055, 0.3, -0.2, -0.03, 0), lArmL = part(uArmL, 0.05, 0.28, 0, -0.3, 0), uArmR = part(torso, 0.055, 0.3, 0.2, -0.03, 0), lArmR = part(uArmR, 0.05, 0.28, 0, -0.3, 0);
-const thighL = part(hips, 0.075, 0.45, -0.1, 0, 0), shinL = part(thighL, 0.065, 0.45, 0, -0.45, 0), thighR = part(hips, 0.075, 0.45, 0.1, 0, 0), shinR = part(thighR, 0.065, 0.45, 0, -0.45, 0);
+const torso = part(hips, 0.15, 0.55, 0, 0.55, 0); const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 18, 14), skin); head.position.set(0, 0.17, 0); head.castShadow = true; head.userData.body = true; torso.add(head);
+const uArmL = part(torso, 0.06, 0.3, -0.21, -0.03, 0), lArmL = part(uArmL, 0.055, 0.28, 0, -0.3, 0), uArmR = part(torso, 0.06, 0.3, 0.21, -0.03, 0), lArmR = part(uArmR, 0.055, 0.28, 0, -0.3, 0);
+const thighL = part(hips, 0.08, 0.45, -0.1, 0, 0), shinL = part(thighL, 0.07, 0.45, 0, -0.45, 0), thighR = part(hips, 0.08, 0.45, 0.1, 0, 0), shinR = part(thighR, 0.07, 0.45, 0, -0.45, 0);
 const bodyMeshes = []; man.traverse(o => { if (o.userData.body) bodyMeshes.push(o); });
-const paintLayer = new THREE.Group(); man.add(paintLayer);   // paint = spray blobs that travel with the body
-const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.46, 48), new THREE.MeshBasicMaterial({ color: 0xd4ed5e, side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.003; ring.visible = false; man.add(ring);
-// poses: [torso, uArmL, lArmL, uArmR, lArmR, thighL, shinL, thighR, shinR] in degrees, z = sideways (front view), x = forward; { z: [...], x: [...] }
-const D = Math.PI / 180;
-const POSES = {
-  original: { z: [0, 10, 5, -10, -5, 3, 0, -3, 0] }, stand: { z: [0, 12, 8, -12, -8, 4, 0, -4, 0] }, crouch: { z: [0, 20, 30, -20, -30, 6, 0, -6, 0], x: [25, -70, -40, -70, -40, -90, 110, -90, 110], y: 0.5 },
-  sit: { z: [0, 15, 20, -15, -20, 5, 0, -5, 0], x: [5, -40, -30, -40, -30, -90, 90, -90, 90], y: 0.5 }, star: { z: [0, 150, 0, -150, 0, 35, 0, -35, 0] }, reach: { z: [0, 170, 5, -170, -5, 4, 0, -4, 0] },
-  curl: { z: [0, 30, 60, -30, -60, 15, 0, -15, 0], x: [60, -80, -60, -80, -60, -120, 120, -120, 120], y: 0.3 }, prone: { x: [-90, -160, 0, -160, 0, -5, 0, -5, 0], y: 0.15 },
-  kneel: { x: [0, -20, -40, -20, -40, -90, 90, -90, 90], y: 0.5 }, side: { z: [90, 0, 0, 0, 0, 0, 0, 0, 0], x: [0, -60, -60, -60, -60, -40, 60, -40, 60], y: 0.2 }, lean: { z: [20, 40, 20, -10, -10, 5, 0, -25, 0] },
-  backbend: { x: [-40, -150, 0, -150, 0, 20, -30, 20, -30] }, handsUp: { z: [0, 160, 20, -160, -20, 5, 0, -5, 0] }, balance: { z: [0, 90, 0, -90, 0, 5, 0, -70, 0] }, tuck: { x: [30, -90, -90, -90, -90, -120, 130, -120, 130], y: 0.35 }, tpose: { z: [0, 90, 0, -90, 0, 5, 0, -5, 0] }
-};
-const PARTS = [torso, uArmL, lArmL, uArmR, lArmR, thighL, shinL, thighR, shinR];
-function applyPose(id) { const p = POSES[id] || POSES.original; PARTS.forEach((g, i) => { g.rotation.set((p.x?.[i] || 0) * D, 0, (p.z?.[i] || 0) * D); }); hips.position.y = p.y ?? 0.95; S.preset = id; }
-applyPose('original');
-const PAGES = [[['original', 'Original'], ['stand', 'Stand'], ['crouch', 'Crouch'], ['sit', 'Sit'], ['star', 'Star'], ['reach', 'Reach'], ['curl', 'Curl up'], ['prone', 'Lie flat']],
-  [['kneel', 'Kneel'], ['side', 'Side lie'], ['lean', 'Lean'], ['backbend', 'Backbend'], ['handsUp', 'Hands up'], ['balance', 'One leg'], ['tuck', 'Tuck'], ['tpose', 'T-pose']]];
-
+const paint = new THREE.Group(); man.add(paint);
+const D = Math.PI / 180, PARTS = [torso, uArmL, lArmL, uArmR, lArmR, thighL, shinL, thighR, shinR];
+const POSES = [{ z: [0, 10, 5, -10, -5, 3, 0, -3, 0] }, { z: [0, 12, 8, -12, -8, 4, 0, -4, 0] }, { z: [0, 20, 30, -20, -30, 6, 0, -6, 0], x: [25, -70, -40, -70, -40, -90, 110, -90, 110], y: .5 }, { z: [0, 15, 20, -15, -20, 5, 0, -5, 0], x: [5, -40, -30, -40, -30, -90, 90, -90, 90], y: .5 },
+  { z: [0, 150, 0, -150, 0, 35, 0, -35, 0] }, { z: [0, 170, 5, -170, -5, 4, 0, -4, 0] }, { z: [0, 30, 60, -30, -60, 15, 0, -15, 0], x: [60, -80, -60, -80, -60, -120, 120, -120, 120], y: .3 }, { x: [-90, -160, 0, -160, 0, -5, 0, -5, 0], y: .15 },
+  { x: [0, -20, -40, -20, -40, -90, 90, -90, 90], y: .5 }, { z: [90, 0, 0, 0, 0, 0, 0, 0, 0], x: [0, -60, -60, -60, -60, -40, 60, -40, 60], y: .2 }, { z: [20, 40, 20, -10, -10, 5, 0, -25, 0] }, { x: [-40, -150, 0, -150, 0, 20, -30, 20, -30] },
+  { z: [0, 160, 20, -160, -20, 5, 0, -5, 0] }, { z: [0, 90, 0, -90, 0, 5, 0, -70, 0] }, { x: [30, -90, -90, -90, -90, -120, 130, -120, 130], y: .35 }, { z: [0, 90, 0, -90, 0, 5, 0, -5, 0] }];
+function applyPose(i) { const p = POSES[i]; PARTS.forEach((g, k) => g.rotation.set((p.x?.[k] || 0) * D, 0, (p.z?.[k] || 0) * D)); hips.position.y = p.y ?? 0.95; S.pose = i; $('#poseName').textContent = POSE_NAMES[i]; }
+applyPose(0);
 function fit() { const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 fit(); addEventListener('resize', fit); if (window.ResizeObserver) new ResizeObserver(fit).observe(stage);
-function frame() { requestAnimationFrame(frame); controls.update(); renderer.render(scene, camera); } frame();
-function frameCharacter() { controls.target.set(man.position.x, 0.9 * S.scale, man.position.z); camera.position.set(man.position.x + 1.2, 1.5, man.position.z + 2.2); }
+const ray = new THREE.Raycaster(), centerNdc = new THREE.Vector2(0, 0), ndc = new THREE.Vector2();
+function castAt(ev, objects) { const r = renderer.domElement.getBoundingClientRect(); ndc.set((ev.clientX - r.left) / r.width * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera); return ray.intersectObjects(objects, false)[0] || null; }
+function aim() { ray.setFromCamera(centerNdc, camera); return { body: ray.intersectObjects(bodyMeshes, false)[0] || null, room: ray.intersectObjects(roomMeshes, false)[0] || null }; }
+// ---- the + : what it points at decides Pick vs spray (SprayPainter.tick)
+let last = performance.now(), stick = { x: 0, y: 0 };
+function frame(now) { requestAnimationFrame(frame); const dt = Math.min(0.1, (now - last) / 1000); last = now; controls.update();
+  if (S.phase === 'hiding' && S.placed && $('#spray').classList.contains('show')) {
+    const a = aim(); const onBody = !!a.body; if (onBody !== S.aimingAtBody) { S.aimingAtBody = onBody; paintSpray(); }
+    if (S.spraying && a.body) sprayAt(a.body);
+    if (Math.hypot(stick.x, stick.y) > 0.05) { const f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; f.normalize(); const r = new THREE.Vector3().crossVectors(f, new THREE.Vector3(0, 1, 0)); man.position.addScaledVector(r, stick.x * 0.6 * dt).addScaledVector(f, stick.y * 0.6 * dt); man.position.x = THREE.MathUtils.clamp(man.position.x, -2.7, 2.7); man.position.z = THREE.MathUtils.clamp(man.position.z, -2.7, 2.7); man.position.y = Math.abs(Math.sin(now / 90)) * 0.03; }
+    else man.position.y = 0;
+  }
+  renderer.render(scene, camera); }
+requestAnimationFrame(frame);
+let stroke = null;
+function sprayAt(hit) { const lp = man.worldToLocal(hit.point.clone()); const r = 0.03 + S.spread * 0.12; for (let i = 0; i < 3; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(r * (0.4 + Math.random() * 0.6), 8, 6), new THREE.MeshStandardMaterial({ color: S.color, roughness: 0.9 })); b.position.copy(lp).add(new THREE.Vector3((Math.random() - .5) * r, (Math.random() - .5) * r, (Math.random() - .5) * r)); paint.add(b); stroke.push(b); } }
+function pickColor() { const a = aim(); const src = a.body ? (paint.children.length ? paint.children[paint.children.length - 1].material.color : skin.color) : a.room ? a.room.object.material.color : new THREE.Color(0xe4e7ef); setColor('#' + src.getHexString()); S.hasColor = true; notice('Picked ' + S.color.toUpperCase()); paintSpray(); }
 
-// ---- pointer: arrange = tap/drag the mannequin (move / rotate / size); paint = brush, sample, erase on the body; otherwise orbit
-const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-let drag = null, pointers = 0;
-function cast(ev, objects) { const r = renderer.domElement.getBoundingClientRect(); ndc.set((ev.clientX - r.left) / r.width * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera); return ray.intersectObjects(objects, false)[0] || null; }
-renderer.domElement.addEventListener('pointerdown', (ev) => {
-  pointers++; if (pointers > 1 || S.hunt === 'waiting') { drag = null; controls.enabled = true; return; }
-  const hit = cast(ev, bodyMeshes);
-  if (S.hunt === 'hunter') { if (hit) { S.remaining = S.remaining; notice('Disguise found! +500'); } else notice('No disguise hit.'); return; }
-  if (S.mode === 'arrange' && !S.hunt) {
-    if (hit) { S.selected = true; ring.visible = true; controls.enabled = false; const p = new THREE.Vector3(); ray.ray.intersectPlane(floorPlane, p); drag = { kind: S.transform, start: p, x: ev.clientX, y: ev.clientY, yaw: S.yaw, scale: S.scale, pos: man.position.clone() }; }
-    else { S.selected = false; ring.visible = false; }
-    paintHud();
-  } else if (S.mode === 'paint' && !S.hunt && S.tool !== 'orbit' && hit) { controls.enabled = false; drag = { kind: S.tool, stroke: [] }; paintAt(hit); }
-});
-renderer.domElement.addEventListener('pointermove', (ev) => {
-  if (!drag || pointers > 1) return;
-  if (drag.kind === 'translate') { const p = new THREE.Vector3(); cast(ev, []); if (ray.ray.intersectPlane(floorPlane, p)) { man.position.x = THREE.MathUtils.clamp(drag.pos.x + p.x - drag.start.x, -2.6, 2.6); man.position.z = THREE.MathUtils.clamp(drag.pos.z + p.z - drag.start.z, -2.4, 2.6); } }
-  else if (drag.kind === 'rotate') { S.yaw = ((drag.yaw + (ev.clientX - drag.x) * 0.8 + 540) % 360) - 180; man.rotation.y = S.yaw * D; syncSliders(); }
-  else if (drag.kind === 'scale') { S.scale = THREE.MathUtils.clamp(drag.scale - (ev.clientY - drag.y) * 0.004, 0.15, 1.5); man.scale.setScalar(S.scale); syncSliders(); }
-  else { const hit = cast(ev, bodyMeshes); if (hit) paintAt(hit); }
-});
-const release = () => { pointers = Math.max(0, pointers - 1); if (drag && drag.stroke && drag.stroke.length) { S.undo.push(drag.stroke); S.redo.length = 0; } drag = null; controls.enabled = true; paintHud(); };
-renderer.domElement.addEventListener('pointerup', release); renderer.domElement.addEventListener('pointercancel', release); renderer.domElement.addEventListener('pointerleave', () => { if (pointers) release(); });
-function paintAt(hit) {
-  if (S.tool === 'sample') { const near = paintLayer.children.find(b => b.position.distanceTo(man.worldToLocal(hit.point.clone())) < 0.08); setColor(near ? '#' + near.material.color.getHexString() : '#f4f4ee'); S.tool = 'paint'; paintHud(); drag = null; controls.enabled = true; return; }
-  if (S.tool === 'erase') { const lp = man.worldToLocal(hit.point.clone()); const gone = paintLayer.children.filter(b => b.position.distanceTo(lp) < S.brush * 2 + 0.03); for (const g of gone) { paintLayer.remove(g); drag.stroke.push({ remove: g }); } return; }
-  const lp = man.worldToLocal(hit.point.clone()); if (drag.stroke.length && drag.stroke[drag.stroke.length - 1].add?.position.distanceTo(lp) < S.brush * 0.5) return;
-  const blob = new THREE.Mesh(new THREE.SphereGeometry(S.brush * 0.55 + 0.012, 10, 8), new THREE.MeshStandardMaterial({ color: S.color, transparent: S.opacity < 1, opacity: S.opacity, metalness: S.metallic, roughness: S.roughness }));
-  blob.position.copy(lp); blob.scale.multiplyScalar(1 / S.scale); blob.castShadow = S.shadows; paintLayer.add(blob); drag.stroke.push({ add: blob });
-}
-function undo() { const s = S.undo.pop(); if (!s) return; for (const op of s) { if (op.add) paintLayer.remove(op.add); if (op.remove) paintLayer.add(op.remove); } S.redo.push(s); paintHud(); }
-function redo() { const s = S.redo.pop(); if (!s) return; for (const op of s) { if (op.add) paintLayer.add(op.add); if (op.remove) paintLayer.remove(op.remove); } S.undo.push(s); paintHud(); }
-
-// ================================================================ HUD wiring (sceneToolbar / sceneControls)
+// ================================================================ UI
 const show = (el, on) => { el.style.display = on ? '' : 'none'; };
-function paintHud() {
-  const locked = !!S.hunt;
-  $('#modeText').textContent = S.hunt ? `${S.remaining}s · Hunt` : S.mode === 'arrange' ? 'Position & pose' : 'Paint · locked';
-  $('#modeBtn .chev').style.display = locked ? 'none' : ''; $('#modeBtn').disabled = locked; $$('.roomName, #roomName').forEach(e => e.textContent = S.room);
-  show($('#lockBtn'), !locked); $('#lockBtn').innerHTML = `<svg viewBox="0 0 24 24"><use href="#${S.mode === 'arrange' ? 'i-lock' : 'i-check'}"/></svg>`; $('#lockBtn').setAttribute('aria-label', S.mode === 'arrange' ? 'Lock position and paint' : 'Save disguise');
-  show($('#arrangeCtl'), S.mode === 'arrange' && !locked); show($('#paintCtl'), S.mode === 'paint' && !locked);
-  show($('#poseBtn'), S.mode === 'arrange' && !locked); show($('#ejectBtn'), locked && S.hunt === 'hider');
-  $('#hintText').textContent = S.selected ? ({ rotate: 'Drag the X / Y / Z rings to rotate', scale: 'Drag a size handle · or drag your person up/down' }[S.transform] || 'Drag your person or the arrows · pinch to zoom') : 'Tap your person to select and drag';
-  $$('#transformSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === S.transform)));
-  $('#colorDot').style.background = S.color; $('#toolBtn').innerHTML = `<svg viewBox="0 0 24 24"><use href="#${{ sample: 'i-dropper', erase: 'i-eraser', orbit: 'i-rotate' }[S.tool] || 'i-brush'}"/></svg>`;
-  $('#undoBtn').disabled = !S.undo.length; $('#redoBtn').disabled = !S.redo.length; $$('#sheetPaint [data-act=undo]').forEach(b => b.disabled = !S.undo.length); $$('#sheetPaint [data-act=redo]').forEach(b => b.disabled = !S.redo.length);
-  $$('#toolSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === S.tool)));
-  $('#savedToast').classList.toggle('show', S.saved);
-  $('#ejectBtn .capsule').textContent = S.ejectUsed ? 'Used' : 'Eject'; $('#ejectBtn').disabled = !!S.ejectUsed;
-  $('#waiting').classList.toggle('show', S.hunt === 'waiting');
-  $('#scrim').classList.toggle('show', !!S.menu);
-  $$('.sheet').forEach(s => s.classList.toggle('show', s.id === { tools: 'sheetTools', paint: 'sheetPaint', game: 'sheetGame' }[S.sheet]));
-  $$('.menu').forEach(m => m.classList.toggle('show', m.id === S.menu));
-  document.body.classList.toggle('card', !!S.sheet);
-  // game sheet
-  $('#gameRoom').textContent = S.code ? `Room ${S.code}` : 'Solo practice';
-  show($('#ejectBlock'), S.hunt === 'hider'); show($('#hostBlock'), S.isHost && !S.hunt); show($('#huntBlock'), !!S.hunt && S.hunt !== 'waiting');
-  $('#phaseText').textContent = S.hunt ? (S.hunt === 'waiting' ? 'Preparation · Hunter' : `Hunting · ${S.hunt === 'hider' ? 'Hider' : 'Hunter'}`) : 'Lobby · Hider'; $('#remainText').textContent = `${S.hunt ? S.remaining : 0}s`;
-  $('#scores').innerHTML = [['Bohan', 0, false], ['Kai', 500, false], ['Ryushen', 0, true]].map(([n, p, f]) => `<div class="score"><span>${n}</span><span>${f ? 'Found · ' + p : p}</span></div>`).join('');
-  $('#gameMsg').textContent = S.hunt === 'hunter' ? 'Tap a suspicious disguise to tag it. Drag to look; use the arrows to walk.' : S.hunt === 'waiting' ? 'Wait while the hiders prepare their disguises.' : S.hunt === 'hider' ? 'Stay still. Hunters are looking.' : 'Publish a disguise, then let the host start a round.';
-  $('#publishBtn').disabled = S.mode !== 'paint' || !!S.hunt; $('#ejectPush').innerHTML = `<svg viewBox="0 0 24 24"><use href="#i-eject"/></svg>${S.ejectUsed ? 'Eject used this round' : 'Emergency eject · 1 use'}`; $('#ejectPush').disabled = !!S.ejectUsed;
+function avatarHTML(i, size) { return `<span class="avatar${i % 2 ? ' round' : ''}" style="width:${size}px;height:${size}px;background:${AVATAR[i]}"><i class="l"></i><i class="r"></i><s></s></span>`; }
+$$('.avatar.big, .result .avatar').forEach(a => { const i = +a.dataset.i; a.style.background = AVATAR[i]; a.innerHTML = '<i class="l"></i><i class="r"></i><s></s>'; });
+function timeLeft() { return `${Math.floor(S.secondsLeft / 60)}:${String(S.secondsLeft % 60).padStart(2, '0')}`; }
+function renderLobby() {
+  const host = S.players[0]; $('#hostName').textContent = host.name; $('#foundHouse').textContent = `${S.players.filter(p => p.ready).length} of ${S.players.length} found the house`; $('#playerCount').textContent = S.players.length;
+  $('#tiles').innerHTML = S.players.map((p, i) => `<div class="tile">${avatarHTML(p.avatar, 36)}<div><span class="name">${p.name}</span>${p.me ? ' <span class="you">(you)</span>' : ''}</div><div class="state${p.ready ? ' ok' : ''}"><svg class="i" style="width:12px;height:12px" viewBox="0 0 24 24"><use href="#${i === 0 ? 'i-crown' : p.ready ? 'i-check' : 'i-clock'}"/></svg>${p.ready ? 'Found the house' : 'Finding the house'}</div><button class="role${p.role === 'seeker' ? ' seeker' : ''}" data-i="${i}" ${S.isHost ? '' : 'disabled'}>${p.role === 'seeker' ? '🔍 Seeker' : '🫥 Hider'}</button></div>`).join('');
+  $$('#tiles .role').forEach(b => b.addEventListener('click', () => { const p = S.players[+b.dataset.i]; p.role = p.role === 'seeker' ? 'hider' : 'seeker'; renderLobby(); }));
+  $('#hideLabel').textContent = `Hide time · ${S.hideMin} min`; $('#seekLabel').textContent = `Seek time · ${S.seekMin} min`;
+  $('#roleHint').textContent = S.players.some(p => p.role === 'seeker') ? "Tap a player's role to switch it." : 'Nobody is a seeker yet, so everyone will seek after hiding.';
+  show($('#hostControls'), S.isHost); show($('#guestWait'), !S.isHost); $('#leaveLobby').textContent = S.isHost ? 'End game' : 'Leave game';
+}
+function render() {
+  const me = S.players.find(p => p.me); const seeking = me.role === 'seeker' || !S.players.some(p => p.role === 'seeker');
+  $$('.layer').forEach(l => l.classList.remove('show')); $('#spray').classList.remove('show'); $('#cross').classList.remove('show'); $('#picker').classList.remove('show'); man.visible = false;
+  $$('.hostOnly').forEach(e => show(e, S.isHost)); $$('.guestOnly').forEach(e => show(e, !S.isHost)); $$('.t').forEach(e => e.textContent = timeLeft());
+  if (S.phase === 'lobby') { renderLobby(); $('#lobby').classList.add('show'); }
+  else if (S.phase === 'hiding') {
+    if (me.role === 'seeker' && S.players.some(p => p.role === 'seeker')) $('#eyes').classList.add('show');
+    else if (S.placed && $('#spray').dataset.open === '1') { man.visible = true; $('#spray').classList.add('show'); $('#cross').classList.add('show'); paintSpray(); }
+    else { $('#camHide').classList.add('show'); man.visible = S.placed; show($('#hideIdle'), !S.placing); show($('#hidePlacing'), S.placing);
+      $('#hideTitle').textContent = S.placed ? 'Hidden ✅' : 'Find your spot'; $('#hideText').textContent = S.placed ? 'You can walk around now. Redo it any time before hiding ends.' : 'Place your scanned 3D self, pick a pose, then paint it to blend in.'; $('#placeBtn').textContent = S.placed ? 'Hide somewhere else' : 'Place my chameleon'; }
+  } else if (S.phase === 'seeking') {
+    man.visible = true; if (seeking) { $('#camSeek').classList.add('show'); $('#foundCount').textContent = `Found ${S.found} of 1`; } else { $('#sneaky').classList.add('show'); $('#sneakyText').textContent = S.found ? "You've been found!" : 'Seekers are looking. Your ghost is still hidden.'; }
+  } else { man.visible = true; $('#camResults').classList.add('show'); }
   $$('#dev button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === currentState())));
 }
-function currentState() { return S.hunt ? (S.hunt === 'waiting' ? 'waiting' : S.hunt) : S.sheet === 'tools' ? 'tools' : S.sheet === 'paint' ? 'painttools' : S.sheet === 'game' ? 'game' : S.mode; }
-function notice(text, err = false) { const n = $('#notice'); n.querySelector('span').textContent = text; n.className = 'notice' + (err ? ' err' : ''); n.style.display = ''; clearTimeout(notice.t); notice.t = setTimeout(() => { n.style.display = 'none'; }, 2600); }
-function setMode(m) { if (S.hunt) return; S.mode = m; S.sheet = null; S.wheel = false; if (m === 'paint') { S.selected = false; ring.visible = false; S.tool = 'paint'; frameCharacter(); } S.saved = false; paintHud(); }
-function openMenu(id, anchor) { S.menu = id; paintHud(); const m = $('#' + id), r = anchor.getBoundingClientRect(); m.style.top = (r.bottom + 6) + 'px'; m.style.left = Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.left + r.width / 2 - m.offsetWidth / 2)) + 'px'; }
-$('#scrim').addEventListener('pointerdown', () => { S.menu = null; S.wheel = false; paintHud(); });
-$('#modeBtn').addEventListener('click', (e) => openMenu('modeMenu', e.currentTarget));
-$('#moreBtn').addEventListener('click', (e) => openMenu('moreMenu', e.currentTarget));
-$('#toolBtn').addEventListener('click', (e) => openMenu('toolMenu', e.currentTarget));
-$$('#modeMenu button').forEach(b => b.addEventListener('click', () => { S.menu = null; setMode(b.dataset.mode); }));
-$$('#toolMenu button').forEach(b => b.addEventListener('click', () => { S.menu = null; S.tool = b.dataset.tool; paintHud(); }));
-$$('#moreMenu button').forEach(b => b.addEventListener('click', () => { S.menu = null; const a = b.dataset.act; if (a === 'tools') S.sheet = S.mode === 'arrange' ? 'tools' : 'paint'; else if (a === 'game') S.sheet = 'game'; else if (a === 'frame') frameCharacter(); else notice('Shares character.glb'); S.wheel = false; paintHud(); }));
-$('#lockBtn').addEventListener('click', () => { if (S.mode === 'arrange') setMode('paint'); else { $('#lockBtn').innerHTML = '<svg viewBox="0 0 24 24"><use href="#i-hourglass"/></svg>'; setTimeout(() => { S.saved = true; paintHud(); setTimeout(() => { S.saved = false; paintHud(); }, 2500); }, 700); } });
-$('#closeBtn').addEventListener('click', () => { if (S.saved || S.hunt) notice('Closes the editor'); else $('#confirm').classList.add('show'); });
-$$('#confirm button').forEach(b => b.addEventListener('click', () => { $('#confirm').classList.remove('show'); if (b.dataset.c === 'save') { S.saved = true; paintHud(); } if (b.dataset.c === 'close') notice('Closed without saving'); }));
-$$('#transformSeg button').forEach(b => b.addEventListener('click', () => { S.transform = b.dataset.t; S.tool = 'orbit'; paintHud(); }));
-$('#undoBtn').addEventListener('click', undo); $('#redoBtn').addEventListener('click', redo);
-$('#colorDot').addEventListener('click', () => { S.sheet = 'paint'; paintHud(); });
-$('#poseBtn').addEventListener('click', nextPose);
-$('#ejectBtn').addEventListener('click', () => { S.ejectUsed = true; man.position.set((Math.random() - 0.5) * 4, 0, (Math.random() - 0.5) * 4); notice('Ejected! Same disguise, random new spot. No take-backs.'); paintHud(); });
-$('#ejectPush').addEventListener('click', () => $('#ejectBtn').click());
-$$('.sheet .done').forEach(b => b.addEventListener('click', () => { S.sheet = null; paintHud(); }));
-$$('.sheet [data-act]').forEach(b => b.addEventListener('click', () => { const a = b.dataset.act;
-  if (a === 'undo') undo(); else if (a === 'redo') redo(); else if (a === 'zoomIn') controls.dollyIn?.(1.2) ?? (camera.position.lerp(controls.target, 0.15)); else if (a === 'zoomOut') camera.position.sub(controls.target).multiplyScalar(1.2).add(controls.target);
-  else if (a === 'frame') frameCharacter(); else if (a === 'fill') { fillAll(S.color); } else if (a === 'white') { fillAll('#f4f4ee'); } else if (a === 'original') { paintLayer.clear(); S.undo.length = S.redo.length = 0; paintHud(); }
-  else if (a === 'floor') { man.position.y = 0; notice('Placed on the floor'); } else if (a === 'wall') { man.position.set(0, 0, -2.55); S.yaw = 0; man.rotation.y = 0; syncSliders(); frameCharacter(); } else if (a === 'attach') { $('#placeHint').textContent = 'Tap a floor, wall or object. Your whole body must fit without overlapping furniture.'; }
-}));
-function fillAll(hex) { const s = []; bodyMeshes.forEach(m => { for (let i = 0; i < 14; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshStandardMaterial({ color: hex, metalness: S.metallic, roughness: S.roughness })); const p = new THREE.Vector3((Math.random() - .5) * .2, (Math.random() - .5) * .4, (Math.random() - .5) * .2); m.localToWorld(p); b.position.copy(man.worldToLocal(p)); paintLayer.add(b); s.push({ add: b }); } }); S.undo.push(s); S.redo.length = 0; paintHud(); }
-$$('#toolSeg button').forEach(b => b.addEventListener('click', () => { S.tool = b.dataset.tool; paintHud(); }));
-$$('#formSeg button, #prepSeg button, #huntSeg button, #joints .seg2 button').forEach(b => b.addEventListener('click', () => { [...b.parentElement.children].forEach(x => x.setAttribute('aria-pressed', String(x === b))); }));
-$('#jointsToggle').addEventListener('change', (e) => { $('#joints').style.display = e.target.checked ? 'flex' : 'none'; });
-$('#cloneBtn').addEventListener('click', () => { if (S.clones < 2) { S.clones++; const c = man.clone(); c.position.x += 0.9 * S.clones; scene.add(c); c.userData.clone = true; } $('#cloneBtn').innerHTML = `<svg viewBox="0 0 24 24"><use href="#i-people"/></svg>Clone ${S.clones}/2`; $('#cloneBtn').disabled = S.clones >= 2; $('#clearClones').disabled = !S.clones; });
-$('#clearClones').addEventListener('click', () => { scene.children.filter(o => o.userData.clone).forEach(o => scene.remove(o)); S.clones = 0; $('#cloneBtn').click; $('#cloneBtn').innerHTML = `<svg viewBox="0 0 24 24"><use href="#i-people"/></svg>Clone 0/2`; $('#cloneBtn').disabled = false; $('#clearClones').disabled = true; });
-$('#startRound').addEventListener('click', () => setState('hider'));
-$('#huntTag').addEventListener('click', () => { S.hunt = 'hunter'; S.sheet = null; paintHud(); });
-$('#whistle').addEventListener('click', () => notice('A hider whistled nearby.'));
-$('#publishBtn').addEventListener('click', () => { $('#gameMsg').textContent = 'Saving and publishing your disguise…'; setTimeout(() => { $('#gameMsg').textContent = 'Disguise published to this room.'; }, 900); });
-// sliders
-const bind = (id, key, out, fmt = (v) => v.toFixed(2), after) => { const el = $('#' + id); el.addEventListener('input', () => { S[key] = +el.value; $('#' + out).textContent = fmt(S[key]); after?.(); }); };
-bind('sizeSlider', 'scale', 'sizeVal', undefined, () => man.scale.setScalar(S.scale)); bind('turnSlider', 'yaw', 'turnVal', undefined, () => { man.rotation.y = S.yaw * D; });
-bind('brushSlider', 'brush', 'brushVal'); bind('opacitySlider', 'opacity', 'opacityVal'); bind('metalSlider', 'metallic', 'metalVal', undefined, () => paintLayer.children.forEach(b => { b.material.metalness = S.metallic; })); bind('roughSlider', 'roughness', 'roughVal', undefined, () => paintLayer.children.forEach(b => { b.material.roughness = S.roughness; }));
-$('#shadowToggle').addEventListener('change', (e) => { S.shadows = e.target.checked; paintLayer.children.forEach(b => { b.castShadow = S.shadows; }); }); $('#xrayToggle').addEventListener('change', (e) => { S.xray = e.target.checked; });
-function syncSliders() { $('#sizeSlider').value = S.scale; $('#sizeVal').textContent = S.scale.toFixed(2); $('#turnSlider').value = S.yaw; $('#turnVal').textContent = S.yaw.toFixed(2); }
-// ---- color wheel (PaintColorWheel): hue by angle, saturation by radius, brightness slider, hex readout, 5 swatches
-const hueWheel = $('#hueWheel'), knob = $('#hueKnob');
+function paintSpray() {
+  const act = $('#action'); act.classList.toggle('spray', S.aimingAtBody || S.spraying);
+  act.innerHTML = `<svg viewBox="0 0 24 24"><use href="#${S.aimingAtBody || S.spraying ? 'i-brush' : 'i-dropper'}"/></svg><span>${S.spraying ? 'Spraying…' : S.aimingAtBody ? 'Hold to spray' : 'Pick'}</span>`;
+  $('#swatch').style.background = S.color; $('#cross .c1').style.borderColor = S.color; $('#cross').classList.toggle('spraying', S.spraying);
+  $('#undo').disabled = !S.strokes.length;
+  $('#sprayHint').textContent = !S.hasColor ? 'Point the + at the wall behind your chameleon and tap Pick.' : S.spraying ? 'Move the phone to spray. Step closer for detail, back for big areas.' : S.aimingAtBody ? 'Hold to spray. Point at the wall again for a new color.' : 'Point the + at your chameleon to spray, or tap Pick for a new color.';
+}
+function notice(t) { const n = $('#notice'); n.textContent = t; n.style.display = 'block'; clearTimeout(notice.t); notice.t = setTimeout(() => { n.style.display = 'none'; }, 2200); }
+// ---- lobby
+$$('.stepper .ctl button').forEach(b => b.addEventListener('click', () => { const k = b.dataset.k === 'hide' ? 'hideMin' : 'seekMin', max = b.dataset.k === 'hide' ? 10 : 15; S[k] = Math.min(max, Math.max(1, S[k] + +b.dataset.d)); renderLobby(); }));
+$('#startRound').addEventListener('click', () => { S.secondsLeft = S.hideMin * 60; S.placed = false; S.placing = false; S.phase = 'hiding'; render(); });
+const confirmLeave = () => { $('#confirmTitle').textContent = S.isHost ? 'End this game?' : 'Heading out?'; $('#confirmText').textContent = S.isHost ? 'Everyone will be disconnected.' : 'You can join again from Games nearby.'; $('#confirmYes').textContent = S.isHost ? 'End game' : 'Leave game'; $('#confirm').classList.add('show'); };
+$('#leaveLobby').addEventListener('click', confirmLeave); $$('.leave').forEach(b => b.addEventListener('click', confirmLeave));
+$('#confirmYes').addEventListener('click', () => { $('#confirm').classList.remove('show'); notice(S.isHost ? 'Game ended' : 'Left the game'); }); $('#confirmNo').addEventListener('click', () => $('#confirm').classList.remove('show'));
+// ---- hiding: place → spray
+$('#placeBtn').addEventListener('click', () => { S.placing = true; render(); notice('Tap a wall or the floor in the room'); });
+$('#cancelPlace').addEventListener('click', () => { S.placing = false; render(); });
+renderer.domElement.addEventListener('pointerdown', (ev) => {
+  if (S.phase === 'hiding' && S.placing) { const hit = castAt(ev, roomMeshes); if (!hit) return; if (hit.object.userData.kind === 'wall') { man.position.set(hit.point.x, 0, Math.max(-2.55, hit.point.z) + (hit.object.position.z < -2 ? 0.4 : 0)); if (hit.object.position.x < -2) man.position.x = -2.55; S.turn = hit.object.position.x < -2 ? -90 : 0; } else { man.position.set(hit.point.x, 0, hit.point.z); const d = new THREE.Vector3().subVectors(camera.position, man.position); S.turn = Math.round(Math.atan2(d.x, d.z) / D); }
+    man.rotation.y = S.turn * D; $('#turn').value = S.turn; S.placing = false; S.placed = true; $('#spray').dataset.open = '1'; S.strokes.length = 0; paint.clear(); S.hasColor = false; render(); return; }
+  if (S.phase === 'seeking') { const hit = castAt(ev, bodyMeshes); if (hit && !S.found) { S.found = 1; notice('Found Kai! 🎉'); render(); } }
+});
+$('#poseTile').addEventListener('click', () => applyPose((S.pose + 1) % POSES.length));
+$('#undo').addEventListener('click', () => { const s = S.strokes.pop(); if (s) for (const b of s) paint.remove(b); paintSpray(); });
+$('#toFloor').addEventListener('click', () => { man.position.z = Math.min(man.position.z, -1.0); notice('On the floor'); });
+$('#toWall').addEventListener('click', () => { man.position.set(man.position.x, 0, -2.55); S.turn = 0; man.rotation.y = 0; $('#turn').value = 0; notice('Back against the wall'); });
+$('#turn').addEventListener('input', (e) => { S.turn = +e.target.value; man.rotation.y = S.turn * D; });
+$('#spread').addEventListener('input', (e) => { S.spread = +e.target.value; });
+const action = $('#action');
+action.addEventListener('pointerdown', (e) => { action.setPointerCapture(e.pointerId); if (S.aimingAtBody) { S.spraying = true; stroke = []; } else pickColor(); paintSpray(); });
+const stopSpray = () => { if (S.spraying) { S.spraying = false; if (stroke && stroke.length) S.strokes.push(stroke); stroke = null; paintSpray(); } };
+action.addEventListener('pointerup', stopSpray); action.addEventListener('pointercancel', stopSpray); action.addEventListener('lostpointercapture', stopSpray);
+$('#cancelSpray').addEventListener('click', () => { $('#spray').dataset.open = ''; S.placed = false; render(); });
+$('#hideHere').addEventListener('click', () => { $('#spray').dataset.open = ''; render(); notice('Hidden here. Paint and pose travel with your ghost.'); });
+$('#seekNow').addEventListener('click', () => { S.phase = 'seeking'; S.secondsLeft = S.seekMin * 60; S.found = 0; render(); });
+$('#endRound').addEventListener('click', () => { S.phase = 'results'; render(); });
+$('#playAgain').addEventListener('click', () => { S.phase = 'hiding'; S.secondsLeft = S.hideMin * 60; S.placed = false; S.found = 0; render(); });
+$('#backLobby').addEventListener('click', () => { S.phase = 'lobby'; render(); });
+// ---- joystick (Joystick)
+const stickEl = $('#stick'), knob = $('#knob');
+const moveStick = (e) => { const r = stickEl.getBoundingClientRect(), R = r.width / 2; let x = e.clientX - r.left - R, y = e.clientY - r.top - R; const len = Math.max(1, Math.hypot(x, y)), k = Math.min(1, R / len); x *= k; y *= k; knob.style.transform = `translate(${x}px, ${y}px)`; stick = { x: x / R, y: -y / R }; };
+stickEl.addEventListener('pointerdown', (e) => { stickEl.setPointerCapture(e.pointerId); moveStick(e); }); stickEl.addEventListener('pointermove', (e) => { if (e.buttons & 1) moveStick(e); });
+const dropStick = () => { knob.style.transform = ''; stick = { x: 0, y: 0 }; }; stickEl.addEventListener('pointerup', dropStick); stickEl.addEventListener('pointercancel', dropStick); stickEl.addEventListener('lostpointercapture', dropStick);
+// ---- color picker (tap the swatch): hue by angle, saturation by radius, brightness slider, swatches
+$('#swatch').addEventListener('click', () => $('#picker').classList.toggle('show'));
 function hsbToHex(h, s, b) { const c = new THREE.Color().setHSL(h, 1, 0.5); const r = (x) => Math.round(((1 - s) + s * x) * b * 255); return '#' + [r(c.r), r(c.g), r(c.b)].map(v => v.toString(16).padStart(2, '0')).join(''); }
-function setColor(hex) { S.color = hex; const c = new THREE.Color(hex); const hsl = {}; c.getHSL(hsl); const max = Math.max(c.r, c.g, c.b), min = Math.min(c.r, c.g, c.b); S.hsb = { h: hsl.h, s: max ? (max - min) / max : 0, b: max }; paintWheel(); paintHud(); }
-function paintWheel() { const { h, s, b } = S.hsb; const R = 60; knob.style.left = (R + Math.cos(h * 2 * Math.PI) * s * R) + 'px'; knob.style.top = (R + Math.sin(h * 2 * Math.PI) * s * R) + 'px'; knob.style.background = S.color; $('#hueShade').style.opacity = 1 - b; $('#brightSlider').value = b; $('#hexText').textContent = S.color.toUpperCase(); }
-hueWheel.addEventListener('pointerdown', (e) => { hueWheel.setPointerCapture(e.pointerId); pickHue(e); }); hueWheel.addEventListener('pointermove', (e) => { if (e.buttons & 1) pickHue(e); });
-function pickHue(e) { const r = hueWheel.getBoundingClientRect(), x = e.clientX - r.left - 60, y = e.clientY - r.top - 60; S.hsb.h = ((Math.atan2(y, x) / (2 * Math.PI)) + 1) % 1; S.hsb.s = Math.min(1, Math.hypot(x, y) / 60); S.color = hsbToHex(S.hsb.h, S.hsb.s, S.hsb.b); paintWheel(); paintHud(); }
-$('#brightSlider').addEventListener('input', (e) => { S.hsb.b = +e.target.value; S.color = hsbToHex(S.hsb.h, S.hsb.s, S.hsb.b); paintWheel(); paintHud(); });
-['#ffffff', '#252c27', '#d4ed5e', '#a8d6eb', '#f79678'].forEach(c => { const b = document.createElement('button'); b.style.background = c; b.setAttribute('aria-label', 'Paint ' + c); b.addEventListener('click', () => setColor(c)); $('#swatches').append(b); });
-setColor('#d4ed5e');
-// ---- Pose button: one tap = the next pose, wrapping back to the first (replaces the app's PoseWheel)
-const POSE_ORDER = PAGES.flat();
-function nextPose() { const i = POSE_ORDER.findIndex(([id]) => id === S.preset); const [id, name] = POSE_ORDER[(i + 1) % POSE_ORDER.length]; applyPose(id); S.saved = false; $('#poseName').textContent = name; paintHud(); }
-$('#poseName').textContent = 'Original';
-// ---- states (dev strip + ?state=)
-const STATES = [['arrange', 'Position & pose'], ['paint', 'Paint'], ['tools', 'Tools sheet'], ['painttools', 'Paint tools'], ['game', 'Game controls'], ['hider', 'Hunt · hider'], ['hunter', 'Hunt · hunter'], ['waiting', 'Hunter waiting']];
-function setState(s) { S.hunt = null; S.sheet = null; S.wheel = false; S.menu = null; S.ejectUsed = false; S.selected = false; ring.visible = false;
-  if (s === 'paint' || s === 'painttools') S.mode = 'paint'; else if (s === 'arrange' || s === 'tools') S.mode = 'arrange';
-  if (s === 'tools') S.sheet = 'tools'; if (s === 'painttools') S.sheet = 'paint'; if (s === 'game') S.sheet = 'game';
-  if (s === 'hider' || s === 'hunter' || s === 'waiting') { S.hunt = s; S.mode = 'paint'; S.remaining = 87; }
-  if (s === 'hunter') { camera.position.set(-1.5, 1.5, 2.8); controls.target.set(0.5, 1, -1); }
-  paintHud(); }
+function setColor(hex) { S.color = hex; const c = new THREE.Color(hex); const hsl = {}; c.getHSL(hsl); const max = Math.max(c.r, c.g, c.b), min = Math.min(c.r, c.g, c.b); S.hsb = { h: hsl.h, s: max ? (max - min) / max : 0, b: max }; paintPicker(); }
+function paintPicker() { const { h, s, b } = S.hsb; $('#hknob').style.left = (60 + Math.cos(h * 2 * Math.PI) * s * 60) + 'px'; $('#hknob').style.top = (60 + Math.sin(h * 2 * Math.PI) * s * 60) + 'px'; $('#hknob').style.background = S.color; $('#shade').style.opacity = 1 - b; $('#bright').value = b; $('#hex').textContent = S.color.toUpperCase(); $('#swatch').style.background = S.color; $('#cross .c1').style.borderColor = S.color; }
+const hue = $('#hue'); const pickHue = (e) => { const r = hue.getBoundingClientRect(), x = e.clientX - r.left - 60, y = e.clientY - r.top - 60; S.hsb.h = ((Math.atan2(y, x) / (2 * Math.PI)) + 1) % 1; S.hsb.s = Math.min(1, Math.hypot(x, y) / 60); S.color = hsbToHex(S.hsb.h, S.hsb.s, S.hsb.b); S.hasColor = true; paintPicker(); paintSpray(); };
+hue.addEventListener('pointerdown', (e) => { hue.setPointerCapture(e.pointerId); pickHue(e); }); hue.addEventListener('pointermove', (e) => { if (e.buttons & 1) pickHue(e); });
+$('#bright').addEventListener('input', (e) => { S.hsb.b = +e.target.value; S.color = hsbToHex(S.hsb.h, S.hsb.s, S.hsb.b); S.hasColor = true; paintPicker(); paintSpray(); });
+['#ffffff', '#141414', '#c96f5c', '#cfd9e3', '#7fa37a'].forEach(c => { const b = document.createElement('button'); b.style.background = c; b.setAttribute('aria-label', 'Paint ' + c); b.addEventListener('click', () => { setColor(c); S.hasColor = true; paintSpray(); }); $('#sw').append(b); });
+document.addEventListener('pointerdown', (e) => { if ($('#picker').classList.contains('show') && !e.target.closest('#picker, #swatch')) $('#picker').classList.remove('show'); }, true);
+setColor('#888888');
+// ---- states
+const STATES = [['lobby-host', 'Lobby · host'], ['lobby-guest', 'Lobby · guest'], ['hide', 'Hide · find your spot'], ['place', 'Hide · tap where'], ['spray', 'Spray paint'], ['eyes', 'Hide · seeker waits'], ['seek', 'Seek · seeker'], ['sneaky', 'Seek · hider'], ['results', 'Results']];
+function currentState() { if (S.phase === 'lobby') return S.isHost ? 'lobby-host' : 'lobby-guest'; const me = S.players.find(p => p.me); if (S.phase === 'hiding') return me.role === 'seeker' ? 'eyes' : S.placed && $('#spray').dataset.open === '1' ? 'spray' : S.placing ? 'place' : 'hide'; if (S.phase === 'seeking') return me.role === 'seeker' ? 'seek' : 'sneaky'; return 'results'; }
+function setState(s) { const me = S.players.find(p => p.me); S.isHost = s !== 'lobby-guest'; S.placing = false; S.placed = false; $('#spray').dataset.open = ''; S.found = 0; me.role = (s === 'eyes' || s === 'seek') ? 'seeker' : 'hider'; S.players[1].role = me.role === 'seeker' ? 'hider' : 'seeker';
+  if (s.startsWith('lobby')) S.phase = 'lobby'; else if (['hide', 'place', 'spray', 'eyes'].includes(s)) { S.phase = 'hiding'; S.secondsLeft = 292; } else if (s === 'seek' || s === 'sneaky') { S.phase = 'seeking'; S.secondsLeft = 190; } else S.phase = 'results';
+  if (s === 'place') S.placing = true;
+  if (s === 'spray' || s === 'seek' || s === 'sneaky' || s === 'results') { man.position.set(-0.3, 0, -2.55); S.turn = 0; man.rotation.y = 0; S.placed = true; if (s === 'spray') { $('#spray').dataset.open = '1'; S.hasColor = false; paint.clear(); S.strokes.length = 0; } }
+  if (s === 'seek' || s === 'results') { camera.position.set(1.4, 1.6, 1.2); controls.target.set(-0.3, 1, -2.4); }
+  render(); }
 for (const [id, name] of STATES) { const b = document.createElement('button'); b.dataset.state = id; b.textContent = name; b.addEventListener('click', () => { history.replaceState(null, '', '?state=' + id + (params.get('dev') === '0' ? '&dev=0' : '')); setState(id); }); $('#dev').append(b); }
 if (params.get('dev') === '0') $('#dev').hidden = true; else document.body.classList.add('dev');
-setInterval(() => { if (S.hunt && S.remaining > 0) { S.remaining--; $('#waitClock').textContent = `${Math.floor(S.remaining / 60)}:${String(S.remaining % 60).padStart(2, '0')}`; $('#modeText').textContent = `${S.remaining}s · Hunt`; $('#remainText').textContent = `${S.remaining}s`; } }, 1000);
-setState(params.get('state') || 'arrange');
-window.__studio = { S, setState, man, scene };
+setInterval(() => { if (S.phase !== 'lobby' && S.phase !== 'results' && S.secondsLeft > 0) { S.secondsLeft--; $$('.t').forEach(e => e.textContent = timeLeft()); } }, 1000);
+setState(params.get('state') || 'lobby-host');
+window.__game = { S, setState, man, controls, camera };
 </script>
 </body>
 </html>
