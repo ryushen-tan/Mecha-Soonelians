@@ -111,7 +111,7 @@ test('basic mode protects the prep phase and a clone hit finds its owner once', 
   const gameRoom = room();
   startGame(gameRoom, { ...config('basic'), preparationSeconds: 2 }, 1000);
   const hunter = gameRoom.members[0], first = gameRoom.members[1];
-  assert.deepEqual(snapshotGame(gameRoom, hunter, 1000).visible.map(item => item.id), ['hunter']);
+  assert.deepEqual(snapshotGame(gameRoom, hunter, 1000).visible, []);
   assert.equal(snapshotGame(gameRoom, first, 1000).visible.length, 2);
   assert.throws(() => shoot(gameRoom, hunter, ray(2), 1000), /Hunters/);
   assert.equal(shoot(gameRoom, hunter, ray(2), 3000).targetID, 'first');
@@ -121,6 +121,31 @@ test('basic mode protects the prep phase and a clone hit finds its owner once', 
   assert.equal(gameRoom.game.scores.hunter, 500);
   assert.equal(snapshotGame(gameRoom, hunter, 64000).winner, 'hiders');
   assert.doesNotThrow(() => acceptDisguise(gameRoom, first, disguise()), 'Found players can publish a new disguise after the round finishes.');
+});
+
+test('only hiding players can reposition disguises during preparation', () => {
+  for (const mode of ['basic', 'infection']) {
+    const gameRoom = room(), hunter = gameRoom.members[0], hider = gameRoom.members[1];
+    startGame(gameRoom, { ...config(mode), preparationSeconds: 2 }, 1000);
+    const original = gameRoom.disguises.get(hunter.id);
+    assert.equal(snapshotGame(gameRoom, hunter, 1000).remaining, 2);
+    assert.deepEqual(snapshotGame(gameRoom, hunter, 2999).visible, []);
+    assert.throws(() => acceptDisguise(gameRoom, hunter, disguise([box(1)])), /Hunters must wait/);
+    assert.equal(gameRoom.disguises.get(hunter.id), original);
+    assert.doesNotThrow(() => acceptDisguise(gameRoom, hider, disguise([box(1)])));
+    const hunting = snapshotGame(gameRoom, hunter, 3000);
+    assert.equal(hunting.phase, 'hunting');
+    assert.equal(hunting.remaining, 60);
+    assert.ok(hunting.visible.some(player => player.id === hider.id));
+  }
+  for (const mode of ['double', 'chicken']) {
+    const gameRoom = room();
+    startGame(gameRoom, { ...config(mode), preparationSeconds: 2 }, 1000);
+    for (const member of gameRoom.members) {
+      assert.equal(snapshotGame(gameRoom, member, 1000).role, 'dual');
+      assert.doesNotThrow(() => acceptDisguise(gameRoom, member, disguise([box(1)])));
+    }
+  }
 });
 
 test('infection converts a found hider into a hunter and hides teammate geometry', () => {

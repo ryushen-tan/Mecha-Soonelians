@@ -58,6 +58,7 @@ function obstacleDistance(origin, direction, surface) {
 }
 
 export function acceptDisguise(room, member, data) {
+  if (room.game?.phase === 'preparation' && room.game.roles[member.id] === 'hunter') fail(403, 'Hunters must wait during the hiding phase.');
   if (data.length < 20 || data.length > 20 * 1024 * 1024 || data.toString('ascii', 0, 4) !== 'glTF' || data.readUInt32LE(4) !== 2 || data.readUInt32LE(8) !== data.length) fail(400, 'Send a GLB 2.0 disguise smaller than 20 MB.');
   let json;
   try { json = JSON.parse(data.subarray(20, 20 + data.readUInt32LE(12))); } catch { fail(400, 'The disguise GLB is invalid.'); }
@@ -181,8 +182,10 @@ export function visibleOwners(room, member, time) {
   advanceGame(room, time);
   const game = room.game;
   if (!game || game.phase === 'finished') return [...(room.disguises?.keys() ?? [])];
-  if (game.phase === 'preparation') return game.mode === 'basic' && game.roles[member.id] === 'hider'
-    ? game.targets : [member.id];
+  if (game.phase === 'preparation') {
+    if (game.roles[member.id] === 'hunter') return [];
+    return game.mode === 'basic' && game.roles[member.id] === 'hider' ? game.targets : [member.id];
+  }
   if (game.mode === 'chicken') return [member.id, game.targets[game.targetIndex]].filter(Boolean);
   if (game.mode === 'infection' && game.roles[member.id] === 'hider') return [member.id];
   return game.targets.filter(id => !game.found[id]);

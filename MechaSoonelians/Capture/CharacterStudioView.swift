@@ -8,6 +8,7 @@ private enum CharacterEditorPanel: String, Identifiable {
 
 struct CharacterStudioView: View {
     @ObservedObject var model: Character3DModel
+    var gameSession = false
     @Environment(\.gameConnection) private var connection
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
@@ -19,45 +20,26 @@ struct CharacterStudioView: View {
     @State private var wheelPage = 0
     @State private var highlightedPose: String?
     private var hunting: Bool { game.snapshot?.phase == "hunting" && ["hunter", "dual"].contains(game.snapshot?.role ?? "") }
-    private var roundLocked: Bool { game.snapshot?.phase == "hunting" }
+    private var waitingToHunt: Bool { game.snapshot?.isWaitingToHunt == true }
+    private var concealsScene: Bool { waitingToHunt || (gameSession && game.snapshot == nil) }
+    private var roundLocked: Bool { game.snapshot?.phase == "hunting" || waitingToHunt }
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                CharacterWebView(model: model)
-                    .accessibilityIdentifier("characterCanvas")
-                    .ignoresSafeArea()
-                VStack(spacing: 12) {
-                    sceneToolbar
-                    if model.saved {
-                        Label("Character, paint and pose saved", systemImage: "checkmark.circle.fill")
-                            .font(RallyStyle.font(12, .semibold)).padding(10)
-                            .background(RallyStyle.paper.opacity(0.94), in: Capsule())
-                    }
-                    if let error = model.error {
-                        ErrorNotice(message: error).padding(12).background(RallyStyle.paper, in: RoundedRectangle(cornerRadius: 16))
-                    } else if let warning = model.warning {
-                        Label(warning, systemImage: "info.circle")
-                            .font(RallyStyle.font(12)).lineLimit(4).padding(12)
-                            .background(RallyStyle.paper.opacity(0.94), in: RoundedRectangle(cornerRadius: 16))
-                            .allowsHitTesting(false)
-                    }
-                    Spacer()
-                    if !model.showsWheel && panel == nil { sceneControls }
+                editorScene(geometry: geometry)
+                    .opacity(concealsScene ? 0 : 1)
+                    .allowsHitTesting(!concealsScene)
+                    .accessibilityHidden(concealsScene)
+                if concealsScene {
+                    JellyStyle.background.ignoresSafeArea()
+                    Text(game.snapshot.map { String(format: "%d:%02d", $0.remaining / 60, $0.remaining % 60) } ?? "–:––")
+                        .font(JellyStyle.display(80))
+                        .monospacedDigit()
+                        .accessibilityLabel("Hiding time remaining")
+                        .accessibilityValue(game.snapshot.map { "\($0.remaining) seconds" } ?? "Connecting")
+                        .accessibilityIdentifier("hunterHidingCountdown")
                 }
-                .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 18)
-                if model.showsWheel && mode == .arrange && !roundLocked {
-                    RallyStyle.ink.opacity(0.22).ignoresSafeArea().onTapGesture { model.showsWheel = false }
-                    VStack(spacing: 18) {
-                        Text("Choose a pose").font(RallyStyle.font(17, .bold))
-                            .padding(.horizontal, 18).padding(.vertical, 10).background(RallyStyle.paper, in: Capsule())
-                        PoseWheel(page: $wheelPage, highlighted: $highlightedPose, current: model.editing.preset) { model.selectPose($0) }
-                            .frame(width: min(340, geometry.size.width - 32), height: min(340, geometry.size.width - 32))
-                        Text("Tap a pose · tap outside to close").font(RallyStyle.font(12, .semibold))
-                            .padding(10).background(RallyStyle.paper, in: Capsule())
-                    }
-                }
-                if !model.viewerLoaded { ProgressView("Loading character…").padding(16).background(RallyStyle.paper, in: Capsule()) }
             }
         }
         .background(RallyStyle.paper.ignoresSafeArea())
@@ -98,6 +80,13 @@ struct CharacterStudioView: View {
         .onChange(of: scenePhase) { _, value in if value != .active { model.command("endTransform") } }
         .onChange(of: connection) { _, value in game.connect(value, editor: model) }
         .onChange(of: model.error) { _, value in if value != nil { closesAfterSave = false; game.exportFailed() } }
+        .onChange(of: concealsScene) { _, concealed in
+            if concealed {
+                panel = nil; confirmsClose = false; model.showsWheel = false
+                model.command("endTransform")
+                model.webView?.resignFirstResponder()
+            }
+        }
         .onChange(of: game.snapshot?.phase) { _, value in
             if value == "hunting" {
                 panel = nil; model.editing.room = true; model.showsWheel = false
@@ -136,6 +125,45 @@ struct CharacterStudioView: View {
         .onChange(of: model.yaw) { _, _ in model.saved = false }
         .onChange(of: model.angles) { _, _ in model.saved = false }
         .onChange(of: model.showsWheel) { _, value in if (roundLocked || mode == .paint) && value { model.showsWheel = false } }
+    }
+
+    private func editorScene(geometry: GeometryProxy) -> some View {
+        ZStack {
+            CharacterWebView(model: model)
+                .accessibilityIdentifier("characterCanvas")
+                .ignoresSafeArea()
+            VStack(spacing: 12) {
+                sceneToolbar
+                if model.saved {
+                    Label("Character, paint and pose saved", systemImage: "checkmark.circle.fill")
+                        .font(RallyStyle.font(12, .semibold)).padding(10)
+                        .background(RallyStyle.paper.opacity(0.94), in: Capsule())
+                }
+                if let error = model.error {
+                    ErrorNotice(message: error).padding(12).background(RallyStyle.paper, in: RoundedRectangle(cornerRadius: 16))
+                } else if let warning = model.warning {
+                    Label(warning, systemImage: "info.circle")
+                        .font(RallyStyle.font(12)).lineLimit(4).padding(12)
+                        .background(RallyStyle.paper.opacity(0.94), in: RoundedRectangle(cornerRadius: 16))
+                        .allowsHitTesting(false)
+                }
+                Spacer()
+                if !model.showsWheel && panel == nil { sceneControls }
+            }
+            .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 18)
+            if model.showsWheel && mode == .arrange && !roundLocked {
+                RallyStyle.ink.opacity(0.22).ignoresSafeArea().onTapGesture { model.showsWheel = false }
+                VStack(spacing: 18) {
+                    Text("Choose a pose").font(RallyStyle.font(17, .bold))
+                        .padding(.horizontal, 18).padding(.vertical, 10).background(RallyStyle.paper, in: Capsule())
+                    PoseWheel(page: $wheelPage, highlighted: $highlightedPose, current: model.editing.preset) { model.selectPose($0) }
+                        .frame(width: min(340, geometry.size.width - 32), height: min(340, geometry.size.width - 32))
+                    Text("Tap a pose · tap outside to close").font(RallyStyle.font(12, .semibold))
+                        .padding(10).background(RallyStyle.paper, in: Capsule())
+                }
+            }
+            if !model.viewerLoaded { ProgressView("Loading character…").padding(16).background(RallyStyle.paper, in: Capsule()) }
+        }
     }
 
     private var sceneToolbar: some View {
