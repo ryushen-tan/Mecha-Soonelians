@@ -12,5 +12,5 @@ artifacts/
 # Scans pulled off the phone are large; keep them out of git.
 scans/
 
-# Secrets
-.env
+# Unrelated local media (car-chase renders); kept on disk, not in git.
+video/
