@@ -120,34 +120,58 @@ export function bakeOnto(character, views, { faceless = true } = {}) {
       centerX: view.centerX ?? 0.5
     };
     Object.assign(sample, depthBuffer(surface, sample, frame));
+    // Average brightness of the person, to even out frames that came out lighter or darker.
+    let sum = 0, count = 0;
+    for (let index = 0; index < sample.pixels.length; index += 16) {
+      if (sample.pixels[index + 3] < 128) continue;
+      sum += 0.299 * sample.pixels[index] + 0.587 * sample.pixels[index + 1] + 0.114 * sample.pixels[index + 2];
+      count++;
+    }
+    sample.brightness = count ? sum / count : 128;
     return sample;
   });
+  const meanBrightness = samples.reduce((total, view) => total + view.brightness, 0) / Math.max(samples.length, 1);
+  for (const view of samples) view.gain = THREE.MathUtils.clamp(meanBrightness / Math.max(view.brightness, 1), 0.8, 1.25);
+
+  // What one view sees at a point: [r, g, b, weight], or null.
+  const look = (view, point, normal, checkDepth) => {
+    // The source surface's winding isn't consistent, so judge by how square-on it is either way;
+    // the depth buffer decides what is really in front.
+    const facing = Math.abs(normal.dot(view.toCamera));
+    if (facing < 0.15) return null;
+    const across = point.dot(view.right), toward = point.dot(view.toCamera);
+    const cellX = Math.floor((across - frame.left) / frame.size * DEPTH_SIZE), cellY = Math.floor((frame.top - point.y) / frame.size * DEPTH_SIZE);
+    if (cellX < 0 || cellY < 0 || cellX >= DEPTH_SIZE || cellY >= DEPTH_SIZE) return null;
+    // Hidden behind another part of the body from this side.
+    if (checkDepth && toward < view.depth[cellY * DEPTH_SIZE + cellX] - height * 0.02) return null;
+    // Orthographic: head-to-feet of the body spans the crop's height.
+    const scale = view.height / height;
+    const px = Math.round(view.centerX * view.width + across * scale);
+    const py = Math.round((maxY - point.y) * scale);
+    if (px < 0 || py < 0 || px >= view.width || py >= view.height) return null;
+    const index = (py * view.width + px) * 4;
+    if (view.pixels[index + 3] < 128) return null;
+    return [view.pixels[index] * view.gain, view.pixels[index + 1] * view.gain, view.pixels[index + 2] * view.gain, facing ** 4];
+  };
+
+  const blend = looks => {
+    let total = 0;
+    const mean = [0, 0, 0];
+    for (const [r, g, b, w] of looks) { mean[0] += r * w; mean[1] += g * w; mean[2] += b * w; total += w; }
+    return total ? [mean[0] / total, mean[1] / total, mean[2] / total] : null;
+  };
 
   const colorAt = (point, normal) => {
     if (faceless && point.y > neckY && point.z > headCenterZ) return null;
-    let red = 0, green = 0, blue = 0, total = 0;
-    for (const view of samples) {
-      // The source surface's winding isn't consistent, so judge by how square-on it is either way;
-      // the depth buffer below decides what is really in front.
-      const facing = Math.abs(normal.dot(view.toCamera));
-      if (facing < 0.15) continue;
-      const across = point.dot(view.right), toward = point.dot(view.toCamera);
-      const cellX = Math.floor((across - frame.left) / frame.size * DEPTH_SIZE), cellY = Math.floor((frame.top - point.y) / frame.size * DEPTH_SIZE);
-      if (cellX < 0 || cellY < 0 || cellX >= DEPTH_SIZE || cellY >= DEPTH_SIZE) continue;
-      // Hidden behind another part of the body from this side.
-      if (toward < view.depth[cellY * DEPTH_SIZE + cellX] - height * 0.02) continue;
-      // Orthographic: head-to-feet of the body spans the crop's height.
-      const scale = view.height / height;
-      const px = Math.round(view.centerX * view.width + across * scale);
-      const py = Math.round((maxY - point.y) * scale);
-      if (px < 0 || py < 0 || px >= view.width || py >= view.height) continue;
-      const index = (py * view.width + px) * 4;
-      if (view.pixels[index + 3] < 128) continue;
-      const weight = facing ** 3;
-      red += view.pixels[index] * weight; green += view.pixels[index + 1] * weight; blue += view.pixels[index + 2] * weight;
-      total += weight;
-    }
-    return total ? [red / total, green / total, blue / total] : null;
+    let looks = samples.map(view => look(view, point, normal, true)).filter(Boolean);
+    // Nothing clearly saw this spot (armpits, between the legs): take the best guess anyway.
+    if (!looks.length) looks = samples.map(view => look(view, point, normal, false)).filter(Boolean);
+    const mean = blend(looks);
+    if (!mean || looks.length < 3) return mean;
+    // Drop colors the other frames disagree with (blur, a hand passing in front).
+    const agreeing = looks.filter(([r, g, b]) => Math.hypot(r - mean[0], g - mean[1], b - mean[2]) < 60);
+    const kept = agreeing.reduce((sum, item) => sum + item[3], 0) / looks.reduce((sum, item) => sum + item[3], 0);
+    return kept > 0.4 ? blend(agreeing) : mean;
   };
 
   const canvas = document.createElement('canvas');

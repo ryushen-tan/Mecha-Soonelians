@@ -30,19 +30,23 @@ struct ChameleonView {
     var viewerArguments: [String: Any] { ["image": png.base64EncodedString(), "yaw": yaw, "centerX": centerX] }
 }
 
-/// Front-camera turnaround: the player props the phone up, stands back, and turns a little to
-/// their right at each beep while it takes eight shots.
+/// Front-camera turnaround: the player props the phone up and walks back; once they're fully in
+/// view it locks the camera's exposure and colors, and records them spinning slowly once to their
+/// right. It stops when their face comes back around, then keeps the clearest frame every 15°.
 final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     enum Stage: Equatable {
         case framing
         case countdown(Int)
-        case shooting(Int)
+        case spinning(Double)
         case processing
         case done
         case failed(String)
     }
 
-    static let shots = 8
+    /// Frames kept from the spin, one per this many degrees.
+    static let step = 15.0
+    private static let frameInterval = 0.2
+    private static let longestSpin = 16.0
 
     @Published private(set) var stage = Stage.framing
     @Published private(set) var fullBodyInView = false
@@ -52,8 +56,19 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
     private let queue = DispatchQueue(label: "chameleon.camera")
     private let lock = NSLock()
     private var latest: CVPixelBuffer?
+    private var camera: AVCaptureDevice?
     private let speech = AVSpeechSynthesizer()
     private var framingTask: Task<Void, Never>?
+
+    /// One recorded frame and what the face detector saw in it.
+    private struct Frame {
+        let time: Double
+        let jpeg: Data
+        /// Face turn in degrees (unsigned), when a face is visible.
+        let faceYaw: Double?
+        /// Face center across the frame, 0–1, when visible.
+        let faceX: Double?
+    }
 
     func start() {
         stage = .framing
@@ -62,13 +77,14 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
         queue.async { [self] in
             guard session.inputs.isEmpty else { session.startRunning(); return }
             session.beginConfiguration()
-            session.sessionPreset = .hd1280x720
-            guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
-                  let input = try? AVCaptureDeviceInput(device: camera), session.canAddInput(input) else {
+            session.sessionPreset = .hd1920x1080
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
+                  let input = try? AVCaptureDeviceInput(device: device), session.canAddInput(input) else {
                 session.commitConfiguration()
                 DispatchQueue.main.async { self.stage = .failed("Couldn't open the front camera.") }
                 return
             }
+            camera = device
             session.addInput(input)
             let output = AVCaptureVideoDataOutput()
             output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
@@ -103,6 +119,7 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
 
     func stop() {
         framingTask?.cancel()
+        setCameraLocked(false)
         queue.async { self.session.stopRunning() }
     }
 
@@ -113,18 +130,29 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
         lock.unlock()
     }
 
-    private func latestImage() -> CGImage? {
+    private func latestImage(scale: CGFloat = 1) -> CGImage? {
         lock.lock()
         let buffer = latest
         lock.unlock()
         guard let buffer else { return nil }
-        let image = CIImage(cvPixelBuffer: buffer)
+        var image = CIImage(cvPixelBuffer: buffer)
+        if scale != 1 { image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale)) }
         return CIContext().createCGImage(image, from: image.extent)
+    }
+
+    /// Exposure and white balance stay put during the spin, so every frame has the same colors.
+    private func setCameraLocked(_ locked: Bool) {
+        guard let camera, (try? camera.lockForConfiguration()) != nil else { return }
+        let exposure: AVCaptureDevice.ExposureMode = locked ? .locked : .continuousAutoExposure
+        let whiteBalance: AVCaptureDevice.WhiteBalanceMode = locked ? .locked : .continuousAutoWhiteBalance
+        if camera.isExposureModeSupported(exposure) { camera.exposureMode = exposure }
+        if camera.isWhiteBalanceModeSupported(whiteBalance) { camera.whiteBalanceMode = whiteBalance }
+        camera.unlockForConfiguration()
     }
 
     /// The whole body has to be in the frame with a little room at the top and bottom.
     private func checkFraming() async -> Bool {
-        guard let image = latestImage() else { return false }
+        guard let image = latestImage(scale: 0.5) else { return false }
         return await Task.detached {
             let request = VNGeneratePersonSegmentationRequest()
             request.qualityLevel = .fast
@@ -141,42 +169,116 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
         guard stage == .framing else { return }
         framingTask?.cancel()
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: .duckOthers)
-        say("Got you. Arms out a little. Starting in five.")
+        setCameraLocked(true)
+        say("Got you. Hold your arms out a little. When you hear the beep, spin slowly to your right, all the way around.")
         for second in stride(from: 5, through: 1, by: -1) {
             stage = .countdown(second)
             try? await Task.sleep(for: .seconds(1))
         }
-        var shots: [CGImage] = []
-        for shot in 0..<Self.shots {
-            stage = .shooting(shot)
-            if shot > 0 {
-                say("Turn")
-                try? await Task.sleep(for: .seconds(2.6))
+        AudioServicesPlaySystemSound(1113)
+
+        // Record until the face has gone around the back and come back to the front.
+        var frames: [Frame] = []
+        let started = Date()
+        var faceGoneSince: Double?
+        var wentAround = false
+        while true {
+            let time = Date().timeIntervalSince(started)
+            stage = .spinning(time)
+            if let image = latestImage(scale: 2.0 / 3.0) {
+                let face = await Task.detached { Self.face(in: image) }.value
+                if let jpeg = UIImage(cgImage: image).jpegData(compressionQuality: 0.85) {
+                    frames.append(Frame(time: time, jpeg: jpeg, faceYaw: face?.yaw, faceX: face?.x))
+                }
+                if face == nil {
+                    faceGoneSince = faceGoneSince ?? time
+                    if time - faceGoneSince! > 1.2 { wentAround = true }
+                } else {
+                    faceGoneSince = nil
+                    if wentAround, let yaw = face?.yaw, yaw < 20, time > 4 { break }
+                }
             }
-            AudioServicesPlaySystemSound(1108)
-            if let image = latestImage() { shots.append(image) }
-            try? await Task.sleep(for: .milliseconds(300))
+            if time > Self.longestSpin { break }
+            try? await Task.sleep(for: .seconds(Self.frameInterval))
         }
-        say("Done!")
+        AudioServicesPlaySystemSound(1114)
+        say("Got it!")
         stage = .processing
         stop()
-        views = await Task.detached { Self.process(shots) }.value
-        stage = views.count >= 4 ? .done : .failed("Couldn't see you in enough shots. Make sure your whole body is in view.")
+        views = await Task.detached { Self.process(frames, wentAround: wentAround) }.value
+        stage = views.count >= 8 ? .done : .failed("Couldn't follow your spin. Spin slowly, keep your whole body in view, and try again.")
     }
 
     private func say(_ text: String) {
         let utterance = AVSpeechUtterance(string: text)
-        utterance.rate = 0.55
+        utterance.rate = 0.52
         speech.speak(utterance)
     }
 
-    /// Cuts the person out of each shot and finds their hips. Shot i is i × 45° into the turn.
-    private static func process(_ shots: [CGImage]) -> [ChameleonView] {
-        shots.enumerated().compactMap { index, photo in
-            guard let (person, bounds) = try? GhostCapture.cutOut(photo),
+    /// The most prominent face's turn (unsigned degrees) and center across the frame.
+    private static func face(in image: CGImage) -> (yaw: Double, x: Double)? {
+        let request = VNDetectFaceRectanglesRequest()
+        request.revision = VNDetectFaceRectanglesRequestRevision3
+        guard (try? VNImageRequestHandler(cgImage: image).perform([request])) != nil,
+              let face = request.results?.max(by: { $0.boundingBox.width < $1.boundingBox.width }) else { return nil }
+        let yaw = abs((face.yaw?.doubleValue ?? 0) * 180 / .pi)
+        return (yaw, Double(face.boundingBox.midX))
+    }
+
+    /// How far round each frame is. The face pins down the front half: at the start its turn grows
+    /// from 0° to about 90°, and at the end it shrinks back from about 270° to 360°. Between those,
+    /// while the back is to the camera, the spin is assumed steady.
+    private static func yaws(for frames: [Frame], wentAround: Bool) -> [Double] {
+        guard let last = frames.last, last.time > 0 else { return frames.map { _ in 0 } }
+        guard wentAround,
+              let firstGone = frames.firstIndex(where: { $0.faceYaw == nil }),
+              let back = frames[firstGone...].firstIndex(where: { $0.faceYaw != nil }) else {
+            return frames.map { 360 * $0.time / last.time }
+        }
+        var anchors: [(time: Double, yaw: Double)] = [(frames[0].time, 0)]
+        var lastYaw = 0.0
+        for frame in frames[..<firstGone] {
+            guard let yaw = frame.faceYaw, yaw > lastYaw else { continue }
+            lastYaw = min(yaw, 85)
+            anchors.append((frame.time, lastYaw))
+        }
+        var tail: [(time: Double, yaw: Double)] = []
+        var nextYaw = 360.0
+        for frame in frames[back...].reversed() {
+            guard let yaw = frame.faceYaw, 360 - yaw < nextYaw else { continue }
+            nextYaw = max(360 - yaw, 275)
+            tail.insert((frame.time, nextYaw), at: 0)
+        }
+        anchors += tail
+        if anchors.last!.time < last.time { anchors.append((last.time, 360)) }
+        return frames.map { frame in
+            guard let after = anchors.firstIndex(where: { $0.time >= frame.time }) else { return 360 }
+            if after == 0 { return anchors[0].yaw }
+            let a = anchors[after - 1], b = anchors[after]
+            let t = b.time > a.time ? (frame.time - a.time) / (b.time - a.time) : 0
+            return a.yaw + (b.yaw - a.yaw) * t
+        }
+    }
+
+    /// Keeps the frame nearest each 15° step, cuts the person out and finds their hips.
+    private static func process(_ frames: [Frame], wentAround: Bool) -> [ChameleonView] {
+        guard !frames.isEmpty else { return [] }
+        // They were told to turn right; if the face drifted the other way, they turned left.
+        var yaws = yaws(for: frames, wentAround: wentAround)
+        let early = frames.prefix(while: { $0.time < 1.2 }).compactMap(\.faceX)
+        if let first = early.first, let lastX = early.last, lastX - first > 0.03 {
+            // Turning right swings the face toward the camera's left (smaller x). It went right instead.
+            yaws = yaws.map { $0 == 0 ? 0 : 360 - $0 }
+        }
+        var views: [ChameleonView] = []
+        for target in stride(from: 0.0, to: 360, by: step) {
+            guard let best = yaws.indices.min(by: { angleGap(yaws[$0], target) < angleGap(yaws[$1], target) }),
+                  angleGap(yaws[best], target) < step,
+                  let photo = UIImage(data: frames[best].jpeg)?.cgImage,
+                  let (person, bounds) = try? GhostCapture.cutOut(photo),
                   bounds.height > CGFloat(photo.height) * 0.3,
                   let crop = person.cropping(to: bounds),
-                  let png = UIImage(cgImage: crop).pngData() else { return nil }
+                  let png = UIImage(cgImage: crop).pngData() else { continue }
             var centerX = 0.5
             let pose = VNDetectHumanBodyPoseRequest()
             if (try? VNImageRequestHandler(cgImage: photo).perform([pose])) != nil,
@@ -184,8 +286,14 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
                 let x = root.location.x * CGFloat(photo.width)
                 centerX = min(max(Double((x - bounds.minX) / bounds.width), 0.2), 0.8)
             }
-            return ChameleonView(png: png, yaw: Double(index) * 360 / Double(shots.count), centerX: centerX)
+            views.append(ChameleonView(png: png, yaw: yaws[best].truncatingRemainder(dividingBy: 360), centerX: centerX))
         }
+        return views
+    }
+
+    private static func angleGap(_ a: Double, _ b: Double) -> Double {
+        let gap = abs(a - b).truncatingRemainder(dividingBy: 360)
+        return min(gap, 360 - gap)
     }
 
     /// Bounding box of person pixels in a segmentation mask, in mask pixels from the top-left.
