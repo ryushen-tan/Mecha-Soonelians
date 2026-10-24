@@ -9,9 +9,9 @@ final class RallyUITests: XCTestCase {
             XCTAssertTrue(app.buttons["importCharacterSetupButton"].exists)
             XCTAssertFalse(app.buttons["studioTab"].exists)
             XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'API credits'")).firstMatch.exists)
-            app.buttons["3D server"].tap()
-            XCTAssertTrue(app.textFields["3D server address"].exists)
-            XCTAssertTrue(app.secureTextFields["3D server access token"].exists)
+            // The 3D server is always the hosted service; there is nothing to configure.
+            XCTAssertFalse(app.buttons["3D server"].exists)
+            XCTAssertFalse(app.textFields["3D server address"].exists)
             let attachment = XCTAttachment(screenshot: app.screenshot())
             attachment.name = "One-time scan and auto-rig setup"
             attachment.lifetime = .keepAlways

@@ -6,8 +6,6 @@ struct Character3DView: View {
     let attribution: String?
     let inputWarning: String?
     @StateObject private var model: Character3DModel
-    @AppStorage("tripoServer") private var serverAddress = HostedCharacterService.address
-    @State private var accessToken = CharacterServiceSettings.saved.token
     @State private var confirmsUpload = false
 
     init(input: Data? = nil, attribution: String? = nil, inputWarning: String? = nil, asset: CharacterAsset? = nil) {
@@ -40,12 +38,11 @@ struct Character3DView: View {
                         }
                         if model.busy {
                             HStack { ProgressView(); Text(model.status).font(RallyStyle.font(16, .semibold)) }
-                            Text("You can leave this page. Generation keeps running on your Mac; resume from Studio → 3D characters. Closing this screen does not cancel Tripo or refund credits.")
+                            Text("You can leave this page. Generation keeps running on the 3D server; resume from Studio → 3D characters. Closing this screen does not cancel Tripo or refund credits.")
                                 .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
                         } else {
-                            connectionFields
                             Button {
-                                if model.asset == nil { confirmsUpload = true } else { model.resume(token: accessToken) }
+                                if model.asset == nil { confirmsUpload = true } else { model.resume() }
                             } label: {
                                 ActionLabel(text: model.asset == nil ? "Generate + auto-rig" : "Resume generation")
                             }
@@ -72,7 +69,7 @@ struct Character3DView: View {
         .navigationTitle("3D character").navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Send this cutout to Tripo?", isPresented: $confirmsUpload, titleVisibility: .visible) {
             Button("Upload and use Tripo credits") {
-                if let input { model.generate(png: input, address: serverAddress, token: accessToken, attribution: attribution) }
+                if let input { model.generate(png: input, attribution: attribution) }
             }
         } message: {
             Text("This sends the selected person’s cutout to Tripo for one mesh generation and, if compatible, one auto-rig. Only upload images you have permission to use. Your API key stays on the server.")
@@ -80,23 +77,6 @@ struct Character3DView: View {
         .onDisappear { model.stopPolling() }
         .onChange(of: model.yaw) { _, _ in model.saved = false }
         .onChange(of: model.angles) { _, _ in model.saved = false }
-    }
-
-    private var connectionFields: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("3D server").font(RallyStyle.font(14, .semibold))
-            if let asset = model.asset {
-                Text(asset.server).font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
-            } else {
-                TextField(HostedCharacterService.address, text: $serverAddress)
-                    .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().rallyField()
-                    .accessibilityLabel("3D server address")
-            }
-            SecureField("Server access token", text: $accessToken)
-                .textInputAutocapitalization(.never).autocorrectionDisabled().rallyField()
-            Text("Uses the hosted server by default. For a local one, run npm run start:3d in server/ and use your Mac’s Wi-Fi address on iPhone. This token is TRIPO_PROXY_TOKEN, never TRIPO_API_KEY.")
-                .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
-        }
     }
 
 }
@@ -130,7 +110,6 @@ struct CharacterSetupView: View {
     var onComplete: () -> Void
     @StateObject private var human = HumanEditorModel()
     @StateObject private var model: Character3DModel
-    @State private var service = CharacterServiceSettings.saved
     @State private var photo: PhotosPickerItem?
     @State private var showsCamera = false
     @State private var preparing = false
@@ -138,7 +117,6 @@ struct CharacterSetupView: View {
     @State private var message: String?
     @State private var confirmsRetake = false
     @State private var allowsNewCapture = false
-    @State private var showsConnection = false
     @Environment(\.scenePhase) private var scenePhase
 
     init(onComplete: @escaping () -> Void) {
@@ -182,7 +160,6 @@ struct CharacterSetupView: View {
                 if !working {
                     if model.asset != nil && !allowsNewCapture {
                         if model.modelData == nil {
-                            connectionFields
                             Button { resume() } label: { ActionLabel(text: "Resume my character") }
                                 .buttonStyle(PushButtonStyle()).accessibilityIdentifier("resumeCharacterSetupButton")
                         } else if model.asset?.rigged == true {
@@ -193,7 +170,6 @@ struct CharacterSetupView: View {
                         }
                         Button("Retake my scan") { confirmsRetake = true }.font(RallyStyle.font(14, .semibold))
                     } else {
-                        connectionFields
                         if human.humans.count > 1 {
                             Text("More than one person found. Which one is you?").font(RallyStyle.font(15, .semibold))
                             HStack {
@@ -207,7 +183,6 @@ struct CharacterSetupView: View {
                         Text("Your cutout is uploaded to Tripo automatically after capture. Generation and rigging use your API credits.")
                             .font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
                         Button {
-                            guard configureService() else { return }
                             showsCamera = true
                         } label: { ActionLabel(text: "Scan & create my 3D self") }
                             .buttonStyle(PushButtonStyle()).accessibilityIdentifier("scanCharacterSetupButton")
@@ -262,28 +237,7 @@ struct CharacterSetupView: View {
         } message: { Text("Your old model is kept in Studio. A new capture starts a new paid Tripo job; the previous job is not cancelled or refunded.") }
     }
 
-    private var connectionFields: some View {
-        DisclosureGroup("3D server", isExpanded: $showsConnection) {
-            VStack(alignment: .leading, spacing: 10) {
-                TextField("https://your-3d-server", text: $service.address)
-                    .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().rallyField()
-                    .accessibilityLabel("3D server address")
-                SecureField("Server access token", text: $service.token)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled().rallyField()
-                    .accessibilityLabel("3D server access token")
-                Text("Run npm run start:3d in server/. On iPhone use your Mac’s Wi-Fi address, not localhost. Enter TRIPO_PROXY_TOKEN here, never your Tripo API key.")
-                    .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
-            }.padding(.top, 12)
-        }.font(RallyStyle.font(14, .semibold))
-    }
-
-    private func configureService() -> Bool {
-        do { try service.save(); message = nil; return true }
-        catch { showsConnection = true; message = error.localizedDescription; return false }
-    }
-
     private func receive(_ data: Data) async {
-        guard configureService() else { return }
         importing = true
         defer { importing = false }
         do {
@@ -296,16 +250,14 @@ struct CharacterSetupView: View {
     }
 
     private func generate() {
-        guard configureService(), human.selectedHuman?.generationWarning == nil, let png = human.make3DCutout() else { return }
+        guard human.selectedHuman?.generationWarning == nil, let png = human.make3DCutout() else { return }
         allowsNewCapture = false
-        model.generate(png: png, address: service.address, token: service.token, attribution: nil, asProfile: true)
+        model.generate(png: png, attribution: nil, asProfile: true)
     }
 
     private func resume() {
-        guard let asset = model.asset else { return }
-        service.address = asset.server
-        guard configureService() else { return }
-        model.resume(token: service.token)
+        guard model.asset != nil else { return }
+        model.resume()
     }
 
     private func prepare() async {

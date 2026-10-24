@@ -67,7 +67,8 @@ enum Message: Codable {
     // Host → players
     case state(GameState)
     case ghostImage(UUID, Data)
-    /// Where hiders' phones reach the Mac that makes 3D models. Sent only over the encrypted session.
+    /// The 3D server, for players on older builds that still read it. Sent only over the encrypted
+    /// session; current builds ignore it and always use the hosted server.
     case modelServer(address: String, token: String)
 }
 

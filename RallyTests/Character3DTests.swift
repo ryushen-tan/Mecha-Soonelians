@@ -4,7 +4,8 @@ import WebKit
 @testable import Rally
 
 private final class CharacterSetupMockProtocol: URLProtocol {
-    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "character-setup-test.invalid" }
+    // Generation always goes to the hosted service; this session answers for it without a network.
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == URL(string: HostedCharacterService.address)?.host }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func stopLoading() {}
 
@@ -14,7 +15,7 @@ private final class CharacterSetupMockProtocol: URLProtocol {
             let data: Data
             if request.httpMethod == "POST" {
                 XCTAssertEqual(request.value(forHTTPHeaderField: "X-Rig"), "1")
-                XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer proxy-test-token")
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer \(HostedCharacterService.token)")
                 let id = try XCTUnwrap(request.value(forHTTPHeaderField: "X-Request-ID"))
                 data = try JSONSerialization.data(withJSONObject: ["id": id, "status": "ready", "stage": "ready", "progress": 100, "rigged": true, "credits": 0])
             } else {
@@ -39,7 +40,7 @@ final class Character3DTests: XCTestCase {
         let previous = UserDefaults.standard.string(forKey: CharacterProfile.preferenceKey)
         let model = Character3DModel(session: session)
         let png = try XCTUnwrap(UIGraphicsImageRenderer(size: CGSize(width: 10, height: 20)).image { _ in }.pngData())
-        model.generate(png: png, address: "https://character-setup-test.invalid", token: "proxy-test-token", attribution: nil, asProfile: true)
+        model.generate(png: png, attribution: nil, asProfile: true)
         let asset = try XCTUnwrap(model.asset)
         defer {
             UserDefaults.standard.set(previous, forKey: CharacterProfile.preferenceKey)

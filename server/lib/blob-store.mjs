@@ -38,9 +38,10 @@ export function createBlobStore() {
       const token = await issueSignedToken({ pathname, operations: ['get'], validUntil: Date.now() + 15 * 60_000 });
       return (await presignUrl(token, { operation: 'get', pathname, access })).presignedUrl;
     },
-    // One empty marker per generation, named by creation time, backs the daily limit.
+    // One tiny marker per generation, named by creation time, backs the daily limit.
+    // Vercel Blob rejects empty bodies, so the marker holds a single byte.
     async count(id, createdAt) {
-      await put(`${COUNTED}${createdAt}-${id}`, '', { access, contentType: 'text/plain' });
+      await put(`${COUNTED}${createdAt}-${id}`, '1', { access, contentType: 'text/plain' });
     },
     async countSince(time) {
       const recent = [];

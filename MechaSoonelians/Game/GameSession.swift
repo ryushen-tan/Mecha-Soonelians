@@ -10,8 +10,6 @@ final class GameSession: NSObject, ObservableObject {
     @Published private(set) var state = GameState()
     @Published private(set) var ghostImages: [UUID: Data] = [:]
     @Published private(set) var ghostModels: [UUID: URL] = [:]
-    /// The Mac that turns photos into 3D models. Empty means hiders use flat cutouts.
-    @Published private(set) var modelServer = ModelServer(address: "", token: "")
     @Published private(set) var hosts: [MCPeerID] = []
     @Published private(set) var hostAvatars: [MCPeerID: Int] = [:]
     @Published private(set) var isConnected: Bool
@@ -58,7 +56,6 @@ final class GameSession: NSObject, ObservableObject {
 
         if isHost {
             state.players = [me]
-            modelServer = ModelServer.saved
             let advertiser = MCNearbyServiceAdvertiser(peer: peerID, discoveryInfo: ["avatar": String(avatar)],
                                                        serviceType: Self.serviceType)
             advertiser.delegate = self
@@ -117,13 +114,6 @@ final class GameSession: NSObject, ObservableObject {
         guard isHost, state.phase == .lobby, let i = state.players.firstIndex(where: { $0.id == playerID }) else { return }
         state.players[i].role = state.players[i].role == .hider ? .seeker : .hider
         broadcastState()
-    }
-
-    func setModelServer(_ server: ModelServer) {
-        guard isHost else { return }
-        modelServer = server
-        server.save()
-        broadcast(.modelServer(address: server.address, token: server.token))
     }
 
     func setDurations(hide: Int, seek: Int) {
@@ -242,8 +232,8 @@ final class GameSession: NSObject, ObservableObject {
             state = newState
         case let .ghostImage(id, image):
             ghostImages[id] = image
-        case let .modelServer(address, token):
-            modelServer = ModelServer(address: address, token: token)
+        case .modelServer:
+            break // Every phone uses the hosted 3D server; a host can't redirect players.
         case .hello, .ready, .placeGhost, .tag:
             break
         }
@@ -253,7 +243,8 @@ final class GameSession: NSObject, ObservableObject {
     private func sendHouse(to peer: MCPeerID) {
         session.sendResource(at: HouseStore.structureURL, withName: "structure.json", toPeer: peer, withCompletionHandler: nil)
         session.sendResource(at: HouseStore.worldMapURL, withName: "worldmap.arexperience", toPeer: peer, withCompletionHandler: nil)
-        broadcast(.modelServer(address: modelServer.address, token: modelServer.token), to: [peer])
+        // Players on older builds read the 3D server from the host; send them the hosted one.
+        broadcast(.modelServer(address: HostedCharacterService.address, token: HostedCharacterService.token), to: [peer])
         for (id, image) in ghostImages {
             broadcast(.ghostImage(id, image), to: [peer])
         }

@@ -176,28 +176,27 @@ final class Character3DModel: ObservableObject {
         }
     }
 
-    func generate(png: Data, address: String, token: String, attribution: String?, asProfile: Bool = false) {
+    func generate(png: Data, attribution: String?, asProfile: Bool = false) {
         guard !busy, asset == nil else { return }
         do {
-            _ = try CharacterAPI(address: address, accessToken: token)
-            let asset = CharacterAsset(id: UUID().uuidString, createdAt: Date(), server: address, attribution: attribution)
+            let asset = CharacterAsset(id: UUID().uuidString, createdAt: Date(), server: HostedCharacterService.address, attribution: attribution)
             try asset.save()
             try png.write(to: asset.directory.appendingPathComponent("input.png"), options: .atomic)
             if let attribution { try Data(attribution.utf8).write(to: asset.directory.appendingPathComponent("ATTRIBUTION.txt")) }
             self.asset = asset
             if asProfile { CharacterProfile.remember(asset) }
-            resume(token: token)
+            resume()
         } catch { self.error = error.localizedDescription }
     }
 
-    func resume(token: String) {
+    func resume() {
         guard !busy, let asset else { return }
         busy = true
         error = nil
         work = Task {
             defer { busy = false }
             do {
-                let api = try CharacterAPI(address: asset.server, accessToken: token, session: session)
+                let api = try HostedCharacterService.api(session: session)
                 let input = try Data(contentsOf: asset.directory.appendingPathComponent("input.png"))
                 let initial = try await api.request("characters", png: input, id: asset.id, headers: ["X-Rig": "1"])
                 var job = try JSONDecoder().decode(CharacterJob.self, from: initial)
@@ -412,48 +411,14 @@ enum CharacterProfile {
     }
 }
 
-/// The hosted 3D service (server/lib/characters.mjs on Vercel). The token is that deployment's
-/// TRIPO_PROXY_TOKEN, never the Tripo API key; the server's daily generation limit caps its use.
+/// The 3D service both apps always use: the production Vercel deployment (server/lib/characters.mjs).
+/// It cannot be changed in the apps. The token is that deployment's TRIPO_PROXY_TOKEN, never the
+/// Tripo API key; the server's daily generation limit caps its use.
 enum HostedCharacterService {
     static let address = "https://mecha-soonelians.vercel.app"
     static let token = "78d80f57ee21bc84260f6a528c94cbf92832f1fb6b25bdb34546dd91385575a7"
 
-    static func token(for address: String, saved: String) -> String {
-        saved.isEmpty && address.trimmingCharacters(in: .whitespacesAndNewlines) == Self.address ? token : saved
-    }
-}
-
-struct CharacterServiceSettings {
-    var address: String
-    var token: String
-    private static let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrAccount as String: "ghostModelServerToken"]
-
-    static var saved: Self {
-        let arguments = ProcessInfo.processInfo.arguments
-        var request = query
-        request[kSecReturnData as String] = true
-        request[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: CFTypeRef?
-        SecItemCopyMatching(request as CFDictionary, &result)
-        let token = (result as? Data).flatMap { String(data: $0, encoding: .utf8) } ?? ""
-        var address = UserDefaults.standard.string(forKey: "tripoServer") ?? UserDefaults.standard.string(forKey: "ghostModelServer") ?? ""
-        if address.isEmpty { address = HostedCharacterService.address }
-        var settings = Self(address: address, token: token)
-        if let index = arguments.firstIndex(of: "--model-server"), arguments.indices.contains(index + 1) { settings.address = arguments[index + 1] }
-        if let index = arguments.firstIndex(of: "--model-token"), arguments.indices.contains(index + 1) { settings.token = arguments[index + 1] }
-        settings.token = HostedCharacterService.token(for: settings.address, saved: settings.token)
-        return settings
-    }
-
-    func save() throws {
-        _ = try CharacterAPI(address: address, accessToken: token)
-        UserDefaults.standard.set(address.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "tripoServer")
-        UserDefaults.standard.set(address.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "ghostModelServer")
-        SecItemDelete(Self.query as CFDictionary)
-        guard !token.isEmpty else { return }
-        var item = Self.query
-        item[kSecValueData as String] = Data(token.utf8)
-        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        guard SecItemAdd(item as CFDictionary, nil) == errSecSuccess else { throw CharacterFailure("Couldn't securely save the server access token.") }
+    static func api(session: URLSession = .shared) throws -> CharacterAPI {
+        try CharacterAPI(address: address, accessToken: token, session: session)
     }
 }

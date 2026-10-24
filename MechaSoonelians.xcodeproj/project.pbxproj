@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		0185AB12EFDA0D8A1732AC6A /* Character3DModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7FFFBDBEC0B6D593AFC7A7 /* Character3DModel.swift */; };
-		0BCC1E3A100EF1B3F729DE89 /* ModelServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB756F6C6B452E359FFDAB4D /* ModelServer.swift */; };
 		145D1BF8B11BD44D49BA5FC3 /* LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 6C2D535BD41EC0F0EBED9996 /* LICENSE.txt */; };
 		15CA543F94ACF082E2CD966A /* CharacterStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72DAACAF2F70200E7F265971 /* CharacterStudioView.swift */; };
 		177218563D231CB7703D242D /* GhostCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1013AAE8F957E87D79BCB2E6 /* GhostCapture.swift */; };
@@ -118,7 +117,6 @@
 		E981861409898200BC9CCBF6 /* human-2-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-2-mask.png"; sourceTree = "<group>"; };
 		F15CF7625006B02A6F8C92C4 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		F51E65ADE5E00819B806A976 /* PaintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaintView.swift; sourceTree = "<group>"; };
-		FB756F6C6B452E359FFDAB4D /* ModelServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelServer.swift; sourceTree = "<group>"; };
 		FD9A8B3A361FC622CEC3D641 /* SprayPaintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SprayPaintView.swift; sourceTree = "<group>"; };
 		FF79F3BBCC9CA2AC029477CB /* CaptureEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -204,7 +202,6 @@
 				5BE9FA0E1173D95D05C52BBA /* GameView.swift */,
 				3BDB2E1BCEB1FCFDA269353B /* Ghost3DView.swift */,
 				1013AAE8F957E87D79BCB2E6 /* GhostCapture.swift */,
-				FB756F6C6B452E359FFDAB4D /* ModelServer.swift */,
 				F51E65ADE5E00819B806A976 /* PaintView.swift */,
 				6094388F83BF57E6079B4861 /* RoomObstacles.swift */,
 				9D67C6E4F96256D342E849EE /* SprayPainter.swift */,
@@ -405,7 +402,6 @@
 				CDBD32B3FD6F491FCB912578 /* JellyTokens.swift in Sources */,
 				7F5875895879575C5D4F5A50 /* MapTestView.swift in Sources */,
 				66650E709BCF023072433390 /* MechaSooneliansApp.swift in Sources */,
-				0BCC1E3A100EF1B3F729DE89 /* ModelServer.swift in Sources */,
 				A4C53F0F7411917B9C70F84E /* PaintView.swift in Sources */,
 				B67C1B83A11790E5D686ECF3 /* PersonCameraView.swift in Sources */,
 				216D3DA2E0C913B9D88C727D /* PoseCanvas.swift in Sources */,

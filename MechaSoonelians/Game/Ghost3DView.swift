@@ -41,10 +41,10 @@ final class GhostSculptor: ObservableObject {
 
     var showsViewer: Bool { modelData != nil || pendingViews != nil }
 
-    func generate(png: Data, server: ModelServer) {
+    func generate(png: Data) {
         work = Task {
             do {
-                let api = try CharacterAPI(address: server.address, accessToken: server.token)
+                let api = try HostedCharacterService.api()
                 // The photo already has the hiding pose, so skip rigging.
                 var job = try JSONDecoder().decode(CharacterJob.self, from: try await api.request(
                     "characters", png: png, id: requestID, headers: ["X-Rig": "0"]))
