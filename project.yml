@@ -10,7 +10,8 @@ targets:
   MechaSoonelians:
     type: application
     platform: iOS
-    sources: [MechaSoonelians]
+    # Rally's design system is shared with Kai's lobby app, not copied.
+    sources: [MechaSoonelians, Rally/Design.swift]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ryushentan.MechaSoonelians
@@ -20,6 +21,8 @@ targets:
       properties:
         CFBundleDisplayName: Mecha Soonelians
         NSCameraUsageDescription: The camera is used to scan the house.
+        NSLocalNetworkUsageDescription: Finds and connects to other players' phones on your Wi-Fi.
+        NSBonjourServices: [_mecha-soon._tcp, _mecha-soon._udp]
         UIRequiredDeviceCapabilities: [arkit]
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

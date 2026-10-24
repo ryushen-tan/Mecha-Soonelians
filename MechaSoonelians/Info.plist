@@ -22,8 +22,15 @@
 	<string>1</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_mecha-soon._tcp</string>
+		<string>_mecha-soon._udp</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>The camera is used to scan the house.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Finds and connects to other players' phones on your Wi-Fi.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

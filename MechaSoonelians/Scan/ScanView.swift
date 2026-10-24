@@ -42,9 +42,11 @@ final class ScanController: NSObject, ObservableObject, RoomCaptureViewDelegate 
         Task { @MainActor in
             do {
                 let structure = try await StructureBuilder(options: [.beautifyObjects]).capturedStructure(from: rooms)
+                // Apple's RoomPlan relocalization flow saves the world map after pausing the ARSession.
+                // Maps saved while it was still running never relocalized in testing.
+                arSession.pause()
                 let worldMap = try await currentWorldMap()
                 try HouseStore.saveHouse(structure: structure, rooms: rooms, worldMap: worldMap)
-                arSession.pause()
                 onSaved()
                 message = "Saved \(rooms.count) room(s)."
             } catch {

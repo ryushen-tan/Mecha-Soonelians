@@ -7,25 +7,51 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		177218563D231CB7703D242D /* GhostCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1013AAE8F957E87D79BCB2E6 /* GhostCapture.swift */; };
 		41523905A7AC596D58AD1F51 /* HouseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EE05025550A1C0ADC6A58D /* HouseStore.swift */; };
 		66650E709BCF023072433390 /* MechaSooneliansApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */; };
+		7F5875895879575C5D4F5A50 /* MapTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8913A7AC10A5CE0BD4D9535A /* MapTestView.swift */; };
+		917D84DC5578C69DFEB32DE6 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15CF7625006B02A6F8C92C4 /* Design.swift */; };
+		934880E1C4BA41990B693DD7 /* ARGameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9392E082D145DE0B1F5484FA /* ARGameController.swift */; };
+		A4C53F0F7411917B9C70F84E /* PaintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F51E65ADE5E00819B806A976 /* PaintView.swift */; };
+		C66FBCC1C4F22EC959F33A7B /* GameSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72EA1D5DC5972D7C62DD623 /* GameSession.swift */; };
+		D6FA24E44C694A306F2179CE /* GameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BE9FA0E1173D95D05C52BBA /* GameView.swift */; };
+		DD2079108A4E5E81740ED31D /* GameModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */; };
 		DDA3913CE4881610A4129A29 /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E306C8758FEAB51BA780EC0 /* ScanView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1013AAE8F957E87D79BCB2E6 /* GhostCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhostCapture.swift; sourceTree = "<group>"; };
 		2E306C8758FEAB51BA780EC0 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
 		4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MechaSooneliansApp.swift; sourceTree = "<group>"; };
 		5240FEA26661D94879BE1BB1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		5BE9FA0E1173D95D05C52BBA /* GameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameView.swift; sourceTree = "<group>"; };
+		718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModels.swift; sourceTree = "<group>"; };
+		8913A7AC10A5CE0BD4D9535A /* MapTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTestView.swift; sourceTree = "<group>"; };
 		92B5B5D48BC985127201AA50 /* MechaSoonelians.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MechaSoonelians.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9392E082D145DE0B1F5484FA /* ARGameController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARGameController.swift; sourceTree = "<group>"; };
+		B72EA1D5DC5972D7C62DD623 /* GameSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSession.swift; sourceTree = "<group>"; };
 		E2EE05025550A1C0ADC6A58D /* HouseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseStore.swift; sourceTree = "<group>"; };
+		F15CF7625006B02A6F8C92C4 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
+		F51E65ADE5E00819B806A976 /* PaintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaintView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		52C0AB9281C8041D86E1573F /* MapTest */ = {
+			isa = PBXGroup;
+			children = (
+				8913A7AC10A5CE0BD4D9535A /* MapTestView.swift */,
+			);
+			path = MapTest;
+			sourceTree = "<group>";
+		};
 		70EC23C53541979FEA2D87D6 /* MechaSoonelians */ = {
 			isa = PBXGroup;
 			children = (
 				5240FEA26661D94879BE1BB1 /* Info.plist */,
 				4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */,
+				9926EB57992165407400A30F /* Game */,
+				52C0AB9281C8041D86E1573F /* MapTest */,
 				C06A06FB25AD1918485E408E /* Scan */,
 				81A2E4F4A5D2580E080E0141 /* Shared */,
 			);
@@ -48,10 +74,32 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		9926EB57992165407400A30F /* Game */ = {
+			isa = PBXGroup;
+			children = (
+				9392E082D145DE0B1F5484FA /* ARGameController.swift */,
+				718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */,
+				B72EA1D5DC5972D7C62DD623 /* GameSession.swift */,
+				5BE9FA0E1173D95D05C52BBA /* GameView.swift */,
+				1013AAE8F957E87D79BCB2E6 /* GhostCapture.swift */,
+				F51E65ADE5E00819B806A976 /* PaintView.swift */,
+			);
+			path = Game;
+			sourceTree = "<group>";
+		};
+		B541E82EAFE433AA371E8D5F /* Rally */ = {
+			isa = PBXGroup;
+			children = (
+				F15CF7625006B02A6F8C92C4 /* Design.swift */,
+			);
+			path = Rally;
+			sourceTree = "<group>";
+		};
 		B84D76F3A58D1CB82B80A272 = {
 			isa = PBXGroup;
 			children = (
 				70EC23C53541979FEA2D87D6 /* MechaSoonelians */,
+				B541E82EAFE433AA371E8D5F /* Rally */,
 				89583F88FF4B9E62E920B722 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -119,8 +167,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				934880E1C4BA41990B693DD7 /* ARGameController.swift in Sources */,
+				917D84DC5578C69DFEB32DE6 /* Design.swift in Sources */,
+				DD2079108A4E5E81740ED31D /* GameModels.swift in Sources */,
+				C66FBCC1C4F22EC959F33A7B /* GameSession.swift in Sources */,
+				D6FA24E44C694A306F2179CE /* GameView.swift in Sources */,
+				177218563D231CB7703D242D /* GhostCapture.swift in Sources */,
 				41523905A7AC596D58AD1F51 /* HouseStore.swift in Sources */,
+				7F5875895879575C5D4F5A50 /* MapTestView.swift in Sources */,
 				66650E709BCF023072433390 /* MechaSooneliansApp.swift in Sources */,
+				A4C53F0F7411917B9C70F84E /* PaintView.swift in Sources */,
 				DDA3913CE4881610A4129A29 /* ScanView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
