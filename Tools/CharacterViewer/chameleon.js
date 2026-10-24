@@ -1,15 +1,47 @@
 import * as THREE from 'three';
 
-// Maps a player's 360° turnaround onto the chameleon base body: BlueMan's MECCHA CHAMELEON
-// Player rig (CC BY 4.0), prepared by Tools/ChameleonModel/prepare.mjs into one smooth skinned
-// mesh with its own UVs and Mixamo bone names. The body faces +Z with its left side at +X.
+// Maps four photos of a player (front, right side, back, left side) onto the chameleon base body:
+// BlueMan's MECCHA CHAMELEON Player rig (CC BY 4.0), prepared by Tools/ChameleonModel/prepare.mjs
+// into one smooth skinned mesh with its own UVs and Mixamo bone names. The body faces +Z with its
+// left side at +X.
+//
+// Like Minecraft "skin from photo" tools, it works part by part: each limb, the torso and the head
+// take their own strip of the photo, stretched along the limb from joint to joint, so a different
+// body shape still lands in the right place. Anything no photo covers gets that part's main color,
+// never white.
 
 const ATLAS = 1024;
-const DEPTH_SIZE = 256;
-// Players spin with their arms out a little; the base rests in a T-pose.
+const BINS = 24;
+// Players stand with their arms out a little; the base rests in a T-pose.
 const ARM_DROP = THREE.MathUtils.degToRad(40);
 
-/// Drops the arms from the T-pose to the turnaround's A-pose, in world space.
+// Body part → [model joint at its start, model joint at its end, photo keypoint at start, at end,
+// how far past the end the part runs (hands, feet), widest the photo strip may be as a share of
+// its length].
+const PARTS = {
+  torso: ['Hips', 'Neck', 'hips', 'neck', 0.15, 0.75],
+  head: ['Neck', 'HeadTop_End', 'neck', 'headTop', 0.1, 0.6],
+  leftUpperArm: ['LeftArm', 'LeftForeArm', 'leftShoulder', 'leftElbow', 0.1, 0.45],
+  leftForearm: ['LeftForeArm', 'LeftHand', 'leftElbow', 'leftWrist', 0.45, 0.45],
+  rightUpperArm: ['RightArm', 'RightForeArm', 'rightShoulder', 'rightElbow', 0.1, 0.45],
+  rightForearm: ['RightForeArm', 'RightHand', 'rightElbow', 'rightWrist', 0.45, 0.45],
+  leftThigh: ['LeftUpLeg', 'LeftLeg', 'leftHip', 'leftKnee', 0.1, 0.4],
+  leftShin: ['LeftLeg', 'LeftFoot', 'leftKnee', 'leftAnkle', 0.35, 0.4],
+  rightThigh: ['RightUpLeg', 'RightLeg', 'rightHip', 'rightKnee', 0.1, 0.4],
+  rightShin: ['RightLeg', 'RightFoot', 'rightKnee', 'rightAnkle', 0.35, 0.4]
+};
+
+// Which part each bone's skin belongs to.
+const PART_OF_BONE = {
+  _rootJoint: 'torso', Hips: 'torso', Spine: 'torso', Spine1: 'torso', Spine2: 'torso', Chest: 'torso', UpperChest: 'torso',
+  Neck: 'head', Head: 'head', HeadTop_End: 'head',
+  LeftArm: 'leftUpperArm', LeftForeArm: 'leftForearm', LeftHand: 'leftForearm',
+  RightArm: 'rightUpperArm', RightForeArm: 'rightForearm', RightHand: 'rightForearm',
+  LeftUpLeg: 'leftThigh', LeftLeg: 'leftShin', LeftFoot: 'leftShin',
+  RightUpLeg: 'rightThigh', RightLeg: 'rightShin', RightFoot: 'rightShin'
+};
+
+/// Drops the arms from the T-pose to the photos' A-pose, in world space.
 function armsDown(character) {
   character.updateMatrixWorld(true);
   for (const [name, sign] of [['LeftArm', -1], ['RightArm', 1]]) {
@@ -24,7 +56,7 @@ function armsDown(character) {
   character.updateMatrixWorld(true);
 }
 
-/// Posed world positions and normals of every vertex, plus the triangles.
+/// Posed world positions and smooth normals of every vertex, plus the triangles.
 function posedSurface(mesh) {
   mesh.skeleton.update();
   const count = mesh.geometry.attributes.position.count;
@@ -35,7 +67,6 @@ function posedSurface(mesh) {
     vertex.toArray(positions, index * 3);
   }
   const triangles = mesh.geometry.index.array;
-  // Normals from the posed triangles, since skinning moved them.
   const normals = new Float32Array(count * 3);
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   for (let t = 0; t < triangles.length; t += 3) {
@@ -52,143 +83,228 @@ function posedSurface(mesh) {
   return { positions, normals, triangles };
 }
 
-/// For one view: an orthographic depth buffer of the body, so we know which surface the camera sees.
-function depthBuffer(surface, view, frame) {
-  const depth = new Float32Array(DEPTH_SIZE * DEPTH_SIZE).fill(-Infinity);
-  const { positions, triangles } = surface;
-  const project = index => {
-    const x = positions[index * 3], y = positions[index * 3 + 1], z = positions[index * 3 + 2];
-    const across = x * view.right.x + z * view.right.z, toward = x * view.toCamera.x + z * view.toCamera.z;
-    return [(across - frame.left) / frame.size * DEPTH_SIZE, (frame.top - y) / frame.size * DEPTH_SIZE, toward];
-  };
-  for (let t = 0; t < triangles.length; t += 3) {
-    const [p, q, r] = [project(triangles[t]), project(triangles[t + 1]), project(triangles[t + 2])];
-    const area = (q[0] - p[0]) * (r[1] - p[1]) - (r[0] - p[0]) * (q[1] - p[1]);
-    if (Math.abs(area) < 1e-9) continue;
-    const minX = Math.max(0, Math.floor(Math.min(p[0], q[0], r[0]))), maxX = Math.min(DEPTH_SIZE - 1, Math.ceil(Math.max(p[0], q[0], r[0])));
-    const minY = Math.max(0, Math.floor(Math.min(p[1], q[1], r[1]))), maxY = Math.min(DEPTH_SIZE - 1, Math.ceil(Math.max(p[1], q[1], r[1])));
-    for (let y = minY; y <= maxY; y++) {
-      for (let x = minX; x <= maxX; x++) {
-        const px = x + 0.5, py = y + 0.5;
-        const w1 = ((q[0] - px) * (r[1] - py) - (r[0] - px) * (q[1] - py)) / area;
-        const w2 = ((r[0] - px) * (p[1] - py) - (p[0] - px) * (r[1] - py)) / area;
-        const w3 = 1 - w1 - w2;
-        if (w1 < 0 || w2 < 0 || w3 < 0) continue;
-        const z = w1 * p[2] + w2 * q[2] + w3 * r[2];
-        const cell = y * DEPTH_SIZE + x;
-        if (z > depth[cell]) depth[cell] = z;
-      }
-    }
+/// Which part each vertex belongs to, from its strongest bone weight.
+function vertexParts(mesh) {
+  const joints = mesh.geometry.attributes.skinIndex, weights = mesh.geometry.attributes.skinWeight;
+  const parts = new Array(joints.count);
+  for (let v = 0; v < joints.count; v++) {
+    let best = 0;
+    for (let k = 1; k < 4; k++) if (weights.getComponent(v, k) > weights.getComponent(v, best)) best = k;
+    parts[v] = PART_OF_BONE[mesh.skeleton.bones[joints.getComponent(v, best)]?.name] ?? 'torso';
   }
-  return { depth, project };
+  return parts;
 }
 
-/// Projects the turnaround photos onto the body's texture and returns it as a canvas.
-/// Each view is a person cutout cropped head-to-feet, the turn in degrees (turning to their
-/// right is positive), and where the hips are across the crop (0–1).
+/// Closest point on segment a–b to p, and how far along (0 at a, 1 at b; not clamped).
+function alongSegment(p, a, b) {
+  const ab = b.clone().sub(a);
+  const t = p.clone().sub(a).dot(ab) / Math.max(ab.lengthSq(), 1e-9);
+  return { t, point: a.clone().addScaledVector(ab, THREE.MathUtils.clamp(t, 0, 1)) };
+}
+
+/// A 2D frame along an axis in screen space (x right, y up): how far along, and how far to the side.
+function axisCoordinates(point, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy) || 1e-9;
+  const ux = dx / length, uy = dy / length;
+  const rx = point.x - a.x, ry = point.y - a.y;
+  return { t: (rx * ux + ry * uy) / length, side: rx * -uy + ry * ux, length, ux, uy };
+}
+
+/// Reads a photo: its pixels, plus named keypoints in pixels with y up (so they match the model's
+/// screen space). The person's left and right are sorted by where they must be from this side.
+function preparePhoto(view) {
+  const canvas = document.createElement('canvas');
+  canvas.width = view.image.width; canvas.height = view.image.height;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  context.drawImage(view.image, 0, 0);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  const width = canvas.width, height = canvas.height;
+  const opaque = (x, y) => x >= 0 && y >= 0 && x < width && y < height && pixels[(Math.round(height - 1 - y) * width + Math.round(x)) * 4 + 3] >= 128;
+  const points = {};
+  for (const [name, [x, y, confidence]] of Object.entries(view.keypoints ?? {})) {
+    if (confidence >= 0.2) points[name] = new THREE.Vector2(x, height - y);
+  }
+  const yaw = ((view.yaw % 360) + 360) % 360;
+  const facingCamera = yaw < 45 || yaw > 315, backToCamera = yaw > 135 && yaw < 225;
+  // From the front the person's left is on the image's right; from behind it's on the left.
+  // Vision can get this backwards when the back is turned, so sort by position.
+  if (facingCamera || backToCamera) {
+    for (const joint of ['Shoulder', 'Elbow', 'Wrist', 'Hip', 'Knee', 'Ankle']) {
+      const left = points['left' + joint], right = points['right' + joint];
+      if (left && right && (left.x < right.x) === facingCamera) [points['left' + joint], points['right' + joint]] = [right, left];
+    }
+  }
+  if (!points.neck && points.leftShoulder && points.rightShoulder) points.neck = points.leftShoulder.clone().add(points.rightShoulder).multiplyScalar(0.5);
+  if (!points.hips) {
+    if (points.leftHip && points.rightHip) points.hips = points.leftHip.clone().add(points.rightHip).multiplyScalar(0.5);
+    else points.hips = points.root ?? points.leftHip ?? points.rightHip;
+  }
+  // The top of the head: straight up from the neck to the top of the cutout.
+  if (points.neck) {
+    let y = points.neck.y;
+    while (y < height && opaque(points.neck.x, y + 1)) y++;
+    points.headTop = new THREE.Vector2(points.neck.x, y);
+  }
+  const turn = THREE.MathUtils.degToRad(yaw);
+  return {
+    pixels, width, height, opaque, points, yaw,
+    toCamera: new THREE.Vector3(Math.sin(turn), 0, Math.cos(turn)), right: new THREE.Vector3(Math.cos(turn), 0, -Math.sin(turn)),
+    // From the side, the far limbs and the torso are hidden behind the near arm and leg.
+    uses: part => facingCamera || backToCamera || part === 'head'
+      || (yaw < 180 ? part.startsWith('left') : part.startsWith('right'))
+  };
+}
+
+/// Maps every vertex of one part into one photo: along its joint-to-joint axis, and across it in
+/// proportion to the part's width at that point, in the model and in the photo's cutout.
+function strip(part, view, model, partVertices, positions) {
+  const [startJoint, endJoint, startKey, endKey, overrun, maxWidth] = PARTS[part];
+  const a = view.points[startKey], b = view.points[endKey];
+  const A3 = model.joints[startJoint], B3 = model.joints[endJoint];
+  if (!a || !b || !A3 || !B3 || a.distanceTo(b) < 4) return null;
+  const screen = p => new THREE.Vector2(p.dot(view.right), p.y);
+  const A = screen(A3), B = screen(B3);
+
+  // The model part's half-width along its length, measured from its vertices.
+  const modelWidth = new Float32Array(BINS).fill(0);
+  const bin = t => THREE.MathUtils.clamp(Math.floor((t + 0.2) / (1.4 + overrun) * BINS), 0, BINS - 1);
+  const point = new THREE.Vector3();
+  for (const v of partVertices) {
+    point.fromArray(positions, v * 3);
+    const c = axisCoordinates(screen(point), A, B);
+    const index = bin(c.t);
+    modelWidth[index] = Math.max(modelWidth[index], Math.abs(c.side));
+  }
+  // The photo's cutout: how far it reaches to either side of the axis at each step along it.
+  const axis = axisCoordinates(b, a, b);
+  const photoLeft = new Float32Array(BINS), photoRight = new Float32Array(BINS);
+  let limit = axis.length * maxWidth;
+  // The torso's cutout runs into the arms at shoulder height; stop at about half the shoulders' span.
+  const { leftShoulder, rightShoulder, leftHip, rightHip } = view.points;
+  if (part === 'torso' && leftShoulder && rightShoulder) {
+    limit = Math.min(limit, 0.6 * Math.max(leftShoulder.distanceTo(rightShoulder), leftHip && rightHip ? leftHip.distanceTo(rightHip) * 1.3 : 0));
+  }
+  for (let index = 0; index < BINS; index++) {
+    const t = (index + 0.5) / BINS * (1.4 + overrun) - 0.2;
+    const cx = a.x + (b.x - a.x) * t, cy = a.y + (b.y - a.y) * t;
+    let left = 0, right = 0;
+    // "Right of the axis" is the +side direction (-uy, ux) from axisCoordinates; left is the opposite.
+    while (left < limit && view.opaque(cx + axis.uy * (left + 1), cy - axis.ux * (left + 1))) left++;
+    while (right < limit && view.opaque(cx - axis.uy * (right + 1), cy + axis.ux * (right + 1))) right++;
+    photoLeft[index] = left; photoRight[index] = right;
+  }
+  return { A, B, a, b, axis, modelWidth, photoLeft, photoRight, bin, screen };
+}
+
+/// Projects the four photos onto the body's texture and returns the body wearing it.
+/// Each view: a person cutout cropped head-to-feet, how far they'd turned to their right (0, 90,
+/// 180, 270), and Vision body keypoints in crop pixels from the top-left: { name: [x, y, confidence] }.
 export function bakeOnto(character, views, { faceless = true } = {}) {
   let mesh;
   character.traverse(node => { if (node.isSkinnedMesh && !mesh) mesh = node; });
   const rest = mesh.skeleton.bones.map(bone => bone.quaternion.clone());
   armsDown(character);
-  const surface = posedSurface(mesh);
-  const { positions, normals, triangles } = surface;
+  const { positions, normals, triangles } = posedSurface(mesh);
+  const parts = vertexParts(mesh);
+  const joints = {};
+  for (const bone of mesh.skeleton.bones) joints[bone.name] = bone.getWorldPosition(new THREE.Vector3());
+  const point = new THREE.Vector3(), normal = new THREE.Vector3();
 
-  let minY = Infinity, maxY = -Infinity, extent = 0;
-  for (let v = 0; v < positions.length; v += 3) {
-    minY = Math.min(minY, positions[v + 1]); maxY = Math.max(maxY, positions[v + 1]);
-    extent = Math.max(extent, Math.abs(positions[v]), Math.abs(positions[v + 2]));
+  // The rig skins the sides of the chest to the upper arms and the hips to the thighs. Anything on
+  // the body's side of the shoulder or hip joint is torso.
+  for (let v = 0; v < parts.length; v++) {
+    const part = parts[v];
+    if (!/UpperArm|Thigh/.test(part)) continue;
+    const [start, end] = PARTS[part];
+    point.fromArray(positions, v * 3);
+    if (alongSegment(point, joints[start], joints[end]).t < 0.12) parts[v] = 'torso';
   }
-  const height = maxY - minY;
-  const frame = { left: -Math.max(extent, height / 2), top: maxY, size: Math.max(2 * extent, height) };
-  // The face is the front half of everything above the neck.
-  let neckY = minY + height * 0.8, headCenterZ = 0;
-  character.traverse(node => {
-    if (node.isBone && node.name === 'Neck') neckY = node.getWorldPosition(new THREE.Vector3()).y;
-    if (node.isBone && node.name === 'Head') headCenterZ = node.getWorldPosition(new THREE.Vector3()).z;
-  });
 
-  const samples = views.map(view => {
-    const image = document.createElement('canvas');
-    image.width = view.image.width; image.height = view.image.height;
-    const imageContext = image.getContext('2d', { willReadFrequently: true });
-    imageContext.drawImage(view.image, 0, 0);
-    const turn = THREE.MathUtils.degToRad(view.yaw);
-    const sample = {
-      pixels: imageContext.getImageData(0, 0, image.width, image.height).data, width: image.width, height: image.height,
-      toCamera: new THREE.Vector3(Math.sin(turn), 0, Math.cos(turn)), right: new THREE.Vector3(Math.cos(turn), 0, -Math.sin(turn)),
-      centerX: view.centerX ?? 0.5
-    };
-    Object.assign(sample, depthBuffer(surface, sample, frame));
-    // Average brightness of the person, to even out frames that came out lighter or darker.
-    let sum = 0, count = 0;
-    for (let index = 0; index < sample.pixels.length; index += 16) {
-      if (sample.pixels[index + 3] < 128) continue;
-      sum += 0.299 * sample.pixels[index] + 0.587 * sample.pixels[index + 1] + 0.114 * sample.pixels[index + 2];
-      count++;
+  // Point normals outward, away from each part's axis (the source mesh's winding isn't reliable).
+  for (let v = 0; v < parts.length; v++) {
+    const [start, end] = PARTS[parts[v]];
+    if (!joints[start] || !joints[end]) continue;
+    point.fromArray(positions, v * 3); normal.fromArray(normals, v * 3);
+    if (normal.dot(point.clone().sub(alongSegment(point, joints[start], joints[end]).point)) < 0) {
+      normals[v * 3] *= -1; normals[v * 3 + 1] *= -1; normals[v * 3 + 2] *= -1;
     }
-    sample.brightness = count ? sum / count : 128;
-    return sample;
-  });
-  const meanBrightness = samples.reduce((total, view) => total + view.brightness, 0) / Math.max(samples.length, 1);
-  for (const view of samples) view.gain = THREE.MathUtils.clamp(meanBrightness / Math.max(view.brightness, 1), 0.8, 1.25);
+  }
 
-  // What one view sees at a point: [r, g, b, weight], or null.
-  const look = (view, point, normal, checkDepth) => {
-    // The source surface's winding isn't consistent, so judge by how square-on it is either way;
-    // the depth buffer decides what is really in front.
-    const facing = Math.abs(normal.dot(view.toCamera));
-    if (facing < 0.15) return null;
-    const across = point.dot(view.right), toward = point.dot(view.toCamera);
-    const cellX = Math.floor((across - frame.left) / frame.size * DEPTH_SIZE), cellY = Math.floor((frame.top - point.y) / frame.size * DEPTH_SIZE);
-    if (cellX < 0 || cellY < 0 || cellX >= DEPTH_SIZE || cellY >= DEPTH_SIZE) return null;
-    // Hidden behind another part of the body from this side.
-    if (checkDepth && toward < view.depth[cellY * DEPTH_SIZE + cellX] - height * 0.02) return null;
-    // Orthographic: head-to-feet of the body spans the crop's height.
-    const scale = view.height / height;
-    const px = Math.round(view.centerX * view.width + across * scale);
-    const py = Math.round((maxY - point.y) * scale);
+  const photos = views.map(preparePhoto);
+  const verticesOf = {};
+  parts.forEach((part, v) => (verticesOf[part] ??= []).push(v));
+  const model = { joints };
+  const strips = photos.map(view => Object.fromEntries(Object.keys(PARTS)
+    .filter(part => view.uses(part) && verticesOf[part])
+    .map(part => [part, strip(part, view, model, verticesOf[part], positions)])));
+
+  const sample = (view, x, y) => {
+    const px = Math.round(x), py = Math.round(view.height - 1 - y);
     if (px < 0 || py < 0 || px >= view.width || py >= view.height) return null;
     const index = (py * view.width + px) * 4;
-    if (view.pixels[index + 3] < 128) return null;
-    return [view.pixels[index] * view.gain, view.pixels[index + 1] * view.gain, view.pixels[index + 2] * view.gain, facing ** 4];
+    return view.pixels[index + 3] >= 128 ? [view.pixels[index], view.pixels[index + 1], view.pixels[index + 2]] : null;
+  };
+  const screenPoint = new THREE.Vector2();
+  // What the photos show at one spot of one part, blended by how squarely each photo saw it.
+  const colorFor = (part, point, normal) => {
+    let r = 0, g = 0, b = 0, total = 0;
+    photos.forEach((view, index) => {
+      const s = strips[index][part];
+      if (!s) return;
+      const facing = normal.dot(view.toCamera);
+      if (facing < 0.2) return;
+      screenPoint.set(point.dot(view.right), point.y);
+      const c = axisCoordinates(screenPoint, s.A, s.B);
+      if (c.t < -0.2 || c.t > 1 + PARTS[part][4]) return;
+      const k = s.bin(c.t);
+      // Across the part, scaled into the photo strip by how far the cutout reaches on that side.
+      const across = c.side / Math.max(s.modelWidth[k], 1e-6);
+      const offset = across * (across < 0 ? s.photoLeft[k] : s.photoRight[k]);
+      const cx = s.a.x + (s.b.x - s.a.x) * c.t, cy = s.a.y + (s.b.y - s.a.y) * c.t;
+      const rgb = sample(view, cx - s.axis.uy * offset, cy + s.axis.ux * offset);
+      if (!rgb) return;
+      const weight = facing * facing;
+      r += rgb[0] * weight; g += rgb[1] * weight; b += rgb[2] * weight; total += weight;
+    });
+    return total ? [r / total, g / total, b / total] : null;
   };
 
-  const blend = looks => {
-    let total = 0;
-    const mean = [0, 0, 0];
-    for (const [r, g, b, w] of looks) { mean[0] += r * w; mean[1] += g * w; mean[2] += b * w; total += w; }
-    return total ? [mean[0] / total, mean[1] / total, mean[2] / total] : null;
+  const median = list => {
+    if (!list?.length) return null;
+    return [0, 1, 2].map(c => list.map(rgb => rgb[c]).sort((x, y) => x - y)[Math.floor(list.length / 2)]);
   };
+  // Skin from just above the nose in the front photo, for a faceless face.
+  const front = photos.find(view => view.yaw < 45 || view.yaw > 315);
+  let skin = null;
+  if (front?.points.nose) {
+    const around = [];
+    for (let dy = -6; dy <= 6; dy += 2) for (let dx = -6; dx <= 6; dx += 2) {
+      const rgb = sample(front, front.points.nose.x + dx, front.points.nose.y + dy + 8);
+      if (rgb) around.push(rgb);
+    }
+    skin = median(around);
+  }
+  skin ??= [224, 182, 150];
 
-  const colorAt = (point, normal) => {
-    if (faceless && point.y > neckY && point.z > headCenterZ) return null;
-    let looks = samples.map(view => look(view, point, normal, true)).filter(Boolean);
-    // Nothing clearly saw this spot (armpits, between the legs): take the best guess anyway.
-    if (!looks.length) looks = samples.map(view => look(view, point, normal, false)).filter(Boolean);
-    const mean = blend(looks);
-    if (!mean || looks.length < 3) return mean;
-    // Drop colors the other frames disagree with (blur, a hand passing in front).
-    const agreeing = looks.filter(([r, g, b]) => Math.hypot(r - mean[0], g - mean[1], b - mean[2]) < 60);
-    const kept = agreeing.reduce((sum, item) => sum + item[3], 0) / looks.reduce((sum, item) => sum + item[3], 0);
-    return kept > 0.4 ? blend(agreeing) : mean;
-  };
-
+  // Paint the texture texel by texel. Texels no photo covers are marked and filled afterwards with
+  // their part's main color.
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = ATLAS;
   const context = canvas.getContext('2d', { willReadFrequently: true });
   const atlas = context.createImageData(ATLAS, ATLAS);
+  const texelPart = new Array(ATLAS * ATLAS);
+  const partSamples = {};
   const uv = mesh.geometry.attributes.uv;
   const ua = new THREE.Vector2(), ub = new THREE.Vector2(), uc = new THREE.Vector2();
-  const point = new THREE.Vector3(), normal = new THREE.Vector3();
   for (let t = 0; t < triangles.length; t += 3) {
     const [i, j, k] = [triangles[t], triangles[t + 1], triangles[t + 2]];
+    const part = parts[i];
     ua.fromBufferAttribute(uv, i).multiplyScalar(ATLAS); ub.fromBufferAttribute(uv, j).multiplyScalar(ATLAS); uc.fromBufferAttribute(uv, k).multiplyScalar(ATLAS);
     const area = (ub.x - ua.x) * (uc.y - ua.y) - (uc.x - ua.x) * (ub.y - ua.y);
     if (Math.abs(area) < 1e-9) continue;
     const minX = Math.max(0, Math.floor(Math.min(ua.x, ub.x, uc.x))), maxX = Math.min(ATLAS - 1, Math.ceil(Math.max(ua.x, ub.x, uc.x)));
-    const minY = Math.max(0, Math.floor(Math.min(ua.y, ub.y, uc.y))), maxY2 = Math.min(ATLAS - 1, Math.ceil(Math.max(ua.y, ub.y, uc.y)));
-    for (let y = minY; y <= maxY2; y++) {
+    const minY = Math.max(0, Math.floor(Math.min(ua.y, ub.y, uc.y))), maxY = Math.min(ATLAS - 1, Math.ceil(Math.max(ua.y, ub.y, uc.y)));
+    for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         const px = x + 0.5, py = y + 0.5;
         const w1 = ((ub.x - px) * (uc.y - py) - (uc.x - px) * (ub.y - py)) / area;
@@ -201,15 +317,31 @@ export function bakeOnto(character, views, { faceless = true } = {}) {
           normal.x += normals[vertex * 3] * weight; normal.y += normals[vertex * 3 + 1] * weight; normal.z += normals[vertex * 3 + 2] * weight;
         }
         normal.normalize();
-        const rgb = colorAt(point, normal);
-        const pixel = (y * ATLAS + x) * 4;
-        // Anything no photo saw stays chameleon white.
-        atlas.data[pixel] = rgb ? rgb[0] : 255;
-        atlas.data[pixel + 1] = rgb ? rgb[1] : 255;
-        atlas.data[pixel + 2] = rgb ? rgb[2] : 255;
-        atlas.data[pixel + 3] = 255;
+        const texel = y * ATLAS + x;
+        // Faceless: the front of the head is plain skin.
+        const rgb = faceless && part === 'head' && normal.z > 0.3 && point.y > joints.Neck.y ? skin : colorFor(part, point, normal);
+        texelPart[texel] = part;
+        if (rgb) {
+          atlas.data.set([rgb[0], rgb[1], rgb[2], 255], texel * 4);
+          if ((x + y) % 7 === 0 && rgb !== skin) (partSamples[part] ??= []).push(rgb);
+        }
       }
     }
+  }
+
+  // Each part's main color (per-channel median). Limbs without photos borrow from their other
+  // half or the other side, then the torso; nothing stays white.
+  const mainColor = {};
+  for (const part of Object.keys(PARTS)) mainColor[part] = median(partSamples[part]);
+  const borrow = { leftForearm: 'leftUpperArm', leftUpperArm: 'leftForearm', rightForearm: 'rightUpperArm', rightUpperArm: 'rightForearm',
+    leftShin: 'leftThigh', leftThigh: 'leftShin', rightShin: 'rightThigh', rightThigh: 'rightShin' };
+  for (const part of Object.keys(PARTS)) {
+    mainColor[part] ??= mainColor[borrow[part]] ?? mainColor[part.replace('left', 'right')] ?? mainColor[part.replace('right', 'left')];
+  }
+  for (const part of Object.keys(PARTS)) mainColor[part] ??= mainColor.torso ?? [128, 128, 128];
+  for (let texel = 0; texel < texelPart.length; texel++) {
+    const part = texelPart[texel];
+    if (part && !atlas.data[texel * 4 + 3]) atlas.data.set([...mainColor[part], 255], texel * 4);
   }
   dilate(atlas, 4);
   context.putImageData(atlas, 0, 0);

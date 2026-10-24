@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Make your chameleon: a front-camera 360° turnaround mapped onto the smooth chameleon body.
+/// Make your chameleon: four front-camera photos (front, side, back, side) mapped part by part onto the smooth chameleon body.
 /// Made once, then placed, posed and painted every round.
 struct ChameleonStudioView: View {
     private enum Step { case intro, capturing, building }
@@ -41,11 +41,11 @@ struct ChameleonStudioView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Eyebrow(text: "MAKE YOUR CHAMELEON")
-                Text("Spin once, hide forever.").font(RallyStyle.font(32, .heavy)).tracking(-1)
+                Text("Four photos, hide forever.").font(RallyStyle.font(32, .heavy)).tracking(-1)
                 VStack(alignment: .leading, spacing: 10) {
                     Label("Prop your phone up at waist height, screen facing you.", systemImage: "iphone")
                     Label("Walk back until your whole body fits. It starts by itself and talks you through it.", systemImage: "figure.arms.open")
-                    Label("At the beep, spin slowly to your right, all the way around (about 10 seconds). It stops by itself.", systemImage: "arrow.clockwise")
+                    Label("It takes 4 photos: front, side, back, other side. Just turn right when it tells you.", systemImage: "arrow.clockwise")
                     Label("Good, even light works best. Hold your arms out a little like the outline.", systemImage: "light.max")
                 }
                 .font(RallyStyle.font(15, .medium))
@@ -69,7 +69,7 @@ struct ChameleonStudioView: View {
     private var capturing: some View {
         ZStack {
             TurnaroundPreview(session: capture.session).ignoresSafeArea()
-            // The pose to hold while spinning: arms out a little, like the chameleon body's A-pose.
+            // The pose to hold for the photos: arms out a little, like the chameleon body's A-pose.
             Image(systemName: "figure.arms.open")
                 .resizable().scaledToFit()
                 .frame(maxHeight: 420)
@@ -88,9 +88,10 @@ struct ChameleonStudioView: View {
                             .disabled(!capture.fullBodyInView)
                     case .countdown(let second):
                         Text("\(second)").font(RallyStyle.font(64, .heavy))
-                    case .spinning(let seconds):
-                        Text("Spin slowly to your right…").font(RallyStyle.font(20, .bold))
-                        Text(String(format: "%.0f s", seconds)).font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
+                    case .photo(let index):
+                        Text(["Face the phone", "Turn to your right", "Back to the phone", "One more turn"][index])
+                            .font(RallyStyle.font(20, .bold))
+                        Text("Photo \(index + 1) of \(ChameleonCapture.photoCount)").font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
                     case .processing:
                         HStack { ProgressView(); Text("Cutting you out…").font(RallyStyle.font(16, .semibold)) }
                     case .done:

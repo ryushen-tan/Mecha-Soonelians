@@ -2,7 +2,7 @@ import AVFoundation
 import SwiftUI
 import Vision
 
-/// The player's chameleon: their 360° turnaround mapped onto the chameleon body (BlueMan's rig, CC BY 4.0), saved as GLB.
+/// The player's chameleon: four photos of them mapped onto the chameleon body (BlueMan's rig, CC BY 4.0), saved as GLB.
 enum ChameleonStore {
     /// Every chameleon stands this tall in the house, whoever made it.
     static let height: Float = 1.0
@@ -19,38 +19,43 @@ enum ChameleonStore {
     static func load() -> Data? { try? Data(contentsOf: modelURL) }
 }
 
-/// One shot of the turnaround: the person cut out and cropped head-to-feet.
+/// One photo of the player: cut out and cropped head-to-feet, with their body joints.
 struct ChameleonView {
     let png: Data
-    /// How far they've turned to their right, in degrees.
+    /// How far they'd turned to their right: 0 front, 90, 180 back, 270.
     let yaw: Double
-    /// Where their hips are across the crop, 0–1.
-    let centerX: Double
+    /// Vision body joints in crop pixels from the top-left: name → [x, y, confidence].
+    let keypoints: [String: [Double]]
 
-    var viewerArguments: [String: Any] { ["image": png.base64EncodedString(), "yaw": yaw, "centerX": centerX] }
+    var viewerArguments: [String: Any] { ["image": png.base64EncodedString(), "yaw": yaw, "keypoints": keypoints] }
 }
 
-/// Front-camera turnaround: the player props the phone up and walks back; once they're fully in
-/// view it locks the camera's exposure and colors, and records them spinning slowly once to their
-/// right. It stops when their face comes back around, then keeps the clearest frame every 15°.
+/// Front-camera photos from four sides, Minecraft-skin style: the player props the phone up and
+/// walks back; once they're fully in view with their arms out, it locks exposure and colors and
+/// talks them through a front, side, back and other-side photo.
 final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     enum Stage: Equatable {
         case framing
         case countdown(Int)
-        case spinning(Double)
+        /// Which of the four photos is next (0 front … 3 other side).
+        case photo(Int)
         case processing
         case done
         case failed(String)
     }
 
-    /// Frames kept from the spin, one per this many degrees.
-    static let step = 15.0
-    private static let frameInterval = 0.2
-    private static let longestSpin = 16.0
+    /// The four photos: how far round, what to say, and whether the face must (or must not) show.
+    private static let sides: [(yaw: Double, say: String, face: Bool?)] = [
+        (0, "Face me and hold still.", true),
+        (90, "Turn to your right, and hold still.", nil),
+        (180, "Turn right again, back to me. Hold still.", false),
+        (270, "One more turn to the right. Hold still.", nil),
+    ]
+    static var photoCount: Int { sides.count }
 
-    @Published private(set) var stage = Stage.framing
     enum Framing { case notInView, armsDown, ready }
 
+    @Published private(set) var stage = Stage.framing
     @Published private(set) var framing = Framing.notInView
     var fullBodyInView: Bool { framing == .ready }
     @Published private(set) var views: [ChameleonView] = []
@@ -62,16 +67,6 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
     private var camera: AVCaptureDevice?
     private let speech = AVSpeechSynthesizer()
     private var framingTask: Task<Void, Never>?
-
-    /// One recorded frame and what the face detector saw in it.
-    private struct Frame {
-        let time: Double
-        let jpeg: Data
-        /// Face turn in degrees (unsigned), when a face is visible.
-        let faceYaw: Double?
-        /// Face center across the frame, 0–1, when visible.
-        let faceX: Double?
-    }
 
     func start() {
         stage = .framing
@@ -94,7 +89,7 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
             output.alwaysDiscardsLateVideoFrames = true
             output.setSampleBufferDelegate(self, queue: queue)
             if session.canAddOutput(output) { session.addOutput(output) }
-            // Upright portrait frames, not mirrored: the projection relies on the person's left
+            // Upright portrait frames, not mirrored: the mapping relies on the person's left
             // appearing on the image's right, as the camera really sees them.
             if let connection = output.connection(with: .video) {
                 if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
@@ -143,7 +138,7 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
         return CIContext().createCGImage(image, from: image.extent)
     }
 
-    /// Exposure and white balance stay put during the spin, so every frame has the same colors.
+    /// Exposure and white balance stay put across the four photos, so they all have the same colors.
     private func setCameraLocked(_ locked: Bool) {
         guard let camera, (try? camera.lockForConfiguration()) != nil else { return }
         let exposure: AVCaptureDevice.ExposureMode = locked ? .locked : .continuousAutoExposure
@@ -183,166 +178,82 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
         framingTask?.cancel()
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: .duckOthers)
         setCameraLocked(true)
-        say("Got you. Hold your arms out a little. When you hear the beep, spin slowly to your right, all the way around.")
-        for second in stride(from: 5, through: 1, by: -1) {
+        say("Got you. Keep your arms out a little for four photos.")
+        for second in stride(from: 3, through: 1, by: -1) {
             stage = .countdown(second)
             try? await Task.sleep(for: .seconds(1))
         }
-        AudioServicesPlaySystemSound(1113)
-
-        // Record until the face has gone around the back and come back to the front.
-        var frames: [Frame] = []
-        let started = Date()
-        var faceGoneSince: Double?
-        var wentAround = false
-        while true {
-            let time = Date().timeIntervalSince(started)
-            stage = .spinning(time)
-            if let image = latestImage(scale: 2.0 / 3.0) {
-                let face = await Task.detached { Self.face(in: image) }.value
-                if let jpeg = UIImage(cgImage: image).jpegData(compressionQuality: 0.85) {
-                    frames.append(Frame(time: time, jpeg: jpeg, faceYaw: face?.yaw, faceX: face?.x))
-                }
-                if face == nil {
-                    faceGoneSince = faceGoneSince ?? time
-                    if time - faceGoneSince! > 0.8 { wentAround = true }
-                } else {
-                    faceGoneSince = nil
-                    if wentAround, let yaw = face?.yaw, yaw < 30, time > 3 { break }
+        var photos: [(yaw: Double, image: CGImage)] = []
+        for (index, side) in Self.sides.enumerated() {
+            stage = .photo(index)
+            say(side.say)
+            try? await Task.sleep(for: .seconds(index == 0 ? 2 : 3))
+            // Wait (up to 3 more seconds) until the face shows or hides as it should from this side.
+            var image = latestImage()
+            if let wantFace = side.face {
+                for _ in 0..<10 {
+                    guard let candidate = latestImage() else { break }
+                    image = candidate
+                    let hasFace = await Task.detached { Self.hasFrontFace(candidate) }.value
+                    if hasFace == wantFace { break }
+                    try? await Task.sleep(for: .milliseconds(300))
                 }
             }
-            if time > Self.longestSpin { break }
-            try? await Task.sleep(for: .seconds(Self.frameInterval))
+            AudioServicesPlaySystemSound(1108)
+            if let image { photos.append((side.yaw, image)) }
         }
-        AudioServicesPlaySystemSound(1114)
-        say("Got it!")
+        say("Done!")
         stage = .processing
         stop()
-        views = await Task.detached { Self.process(frames) }.value
-        stage = views.count >= 8 ? .done : .failed("Couldn't follow your spin. Spin slowly, keep your whole body in view, and try again.")
+        views = await Task.detached { Self.process(photos) }.value
+        stage = views.count >= 3 ? .done : .failed("Couldn't see you in enough photos. Keep your whole body in view and try again.")
     }
 
     private func say(_ text: String) {
+        speech.stopSpeaking(at: .immediate)
         let utterance = AVSpeechUtterance(string: text)
         utterance.rate = 0.52
         speech.speak(utterance)
     }
 
-    /// The most prominent face's turn (unsigned degrees) and center across the frame.
-    private static func face(in image: CGImage) -> (yaw: Double, x: Double)? {
+    /// Whether a face is turned mostly toward the camera.
+    private static func hasFrontFace(_ image: CGImage) -> Bool {
         let request = VNDetectFaceRectanglesRequest()
         request.revision = VNDetectFaceRectanglesRequestRevision3
         guard (try? VNImageRequestHandler(cgImage: image).perform([request])) != nil,
-              let face = request.results?.max(by: { $0.boundingBox.width < $1.boundingBox.width }) else { return nil }
-        let yaw = abs((face.yaw?.doubleValue ?? 0) * 180 / .pi)
-        return (yaw, Double(face.boundingBox.midX))
+              let face = request.results?.max(by: { $0.boundingBox.width < $1.boundingBox.width }) else { return false }
+        return abs((face.yaw?.doubleValue ?? 0) * 180 / .pi) < 40
     }
 
-    /// The spin's shape from the face: the longest stretch without a face is the back turned to the
-    /// camera; the spin ends when the face comes back to the front. Nil if there's no such stretch.
-    private static func spinBounds(_ frames: [Frame]) -> (backStart: Int, backEnd: Int, end: Int)? {
-        var best: (start: Int, end: Int)?
-        var runStart: Int?
-        for (index, frame) in frames.enumerated() {
-            if frame.faceYaw == nil {
-                runStart = runStart ?? index
-            } else if let start = runStart {
-                if best == nil || frames[index].time - frames[start].time > frames[best!.end].time - frames[best!.start].time {
-                    best = (start, index)
-                }
-                runStart = nil
-            }
-        }
-        guard let best, frames[best.end].time - frames[best.start].time > 0.6 else { return nil }
-        let end = frames[best.end...].firstIndex(where: { ($0.faceYaw ?? 90) < 30 })
-            ?? frames[best.end...].lastIndex(where: { $0.faceYaw != nil }) ?? best.end
-        return (best.start, best.end, end)
-    }
-
-    /// How far round each frame is. The face pins down the front half: at the start its turn grows
-    /// from 0° to about 90°, and at the end it shrinks back from about 270° to 360°. Between those,
-    /// while the back is to the camera, the spin is assumed steady.
-    private static func yaws(for frames: [Frame], backStart: Int, backEnd: Int) -> [Double] {
-        var anchors: [(time: Double, yaw: Double)] = [(frames[0].time, 0)]
-        var lastYaw = 0.0
-        for frame in frames[..<backStart] {
-            guard let yaw = frame.faceYaw, yaw > lastYaw else { continue }
-            lastYaw = min(yaw, 85)
-            anchors.append((frame.time, lastYaw))
-        }
-        var tail: [(time: Double, yaw: Double)] = []
-        var nextYaw = 360.0
-        for frame in frames[backEnd...].reversed() {
-            guard let yaw = frame.faceYaw, 360 - yaw < nextYaw else { continue }
-            nextYaw = max(360 - yaw, 275)
-            tail.insert((frame.time, nextYaw), at: 0)
-        }
-        anchors += tail
-        if anchors.last!.time < frames.last!.time { anchors.append((frames.last!.time, 360)) }
-        return frames.map { frame in
-            guard let after = anchors.firstIndex(where: { $0.time >= frame.time }) else { return 360 }
-            if after == 0 { return anchors[0].yaw }
-            let a = anchors[after - 1], b = anchors[after]
-            let t = b.time > a.time ? (frame.time - a.time) / (b.time - a.time) : 0
-            return a.yaw + (b.yaw - a.yaw) * t
-        }
-    }
-
-    /// Keeps the frame nearest each 15° step, cuts the person out and finds their hips.
-    private static func process(_ allFrames: [Frame]) -> [ChameleonView] {
-        guard let bounds = spinBounds(allFrames) else {
-            saveLog(allFrames, yaws: nil)
-            return []
-        }
-        let frames = Array(allFrames[...bounds.end])
-        var yaws = yaws(for: frames, backStart: bounds.backStart, backEnd: bounds.backEnd)
-        // They were told to turn right; if the face drifted the other way, they turned left.
-        let early = frames.prefix(while: { $0.time < 1.2 }).compactMap(\.faceX)
-        if let first = early.first, let lastX = early.last, lastX - first > 0.03 {
-            // Turning right swings the face toward the camera's left (smaller x). It went right instead.
-            yaws = yaws.map { $0 == 0 ? 0 : 360 - $0 }
-        }
-        saveLog(allFrames, yaws: yaws)
-        var views: [ChameleonView] = []
-        for target in stride(from: 0.0, to: 360, by: step) {
-            guard let best = yaws.indices.min(by: { angleGap(yaws[$0], target) < angleGap(yaws[$1], target) }),
-                  angleGap(yaws[best], target) < step,
-                  let photo = UIImage(data: frames[best].jpeg)?.cgImage,
-                  let (person, bounds) = try? GhostCapture.cutOut(photo),
+    /// Cuts the person out of each photo and finds their joints, in crop pixels.
+    private static func process(_ photos: [(yaw: Double, image: CGImage)]) -> [ChameleonView] {
+        let joints: [(String, VNHumanBodyPoseObservation.JointName)] = [
+            ("nose", .nose), ("neck", .neck), ("root", .root),
+            ("leftShoulder", .leftShoulder), ("rightShoulder", .rightShoulder),
+            ("leftElbow", .leftElbow), ("rightElbow", .rightElbow),
+            ("leftWrist", .leftWrist), ("rightWrist", .rightWrist),
+            ("leftHip", .leftHip), ("rightHip", .rightHip),
+            ("leftKnee", .leftKnee), ("rightKnee", .rightKnee),
+            ("leftAnkle", .leftAnkle), ("rightAnkle", .rightAnkle),
+        ]
+        return photos.compactMap { yaw, photo in
+            guard let (person, bounds) = try? GhostCapture.cutOut(photo),
                   bounds.height > CGFloat(photo.height) * 0.3,
                   let crop = person.cropping(to: bounds),
-                  let png = UIImage(cgImage: crop).pngData() else { continue }
-            var centerX = 0.5
+                  let png = UIImage(cgImage: crop).pngData() else { return nil }
+            var keypoints: [String: [Double]] = [:]
             let pose = VNDetectHumanBodyPoseRequest()
-            if (try? VNImageRequestHandler(cgImage: photo).perform([pose])) != nil,
-               let root = try? pose.results?.first?.recognizedPoint(.root), root.confidence > 0.3 {
-                let x = root.location.x * CGFloat(photo.width)
-                centerX = min(max(Double((x - bounds.minX) / bounds.width), 0.2), 0.8)
+            if (try? VNImageRequestHandler(cgImage: photo).perform([pose])) != nil, let body = pose.results?.first {
+                for (name, joint) in joints {
+                    guard let point = try? body.recognizedPoint(joint), point.confidence > 0.1 else { continue }
+                    // Vision: normalized, origin bottom-left. The crop: pixels, origin top-left.
+                    let x = point.location.x * CGFloat(photo.width) - bounds.minX
+                    let y = (1 - point.location.y) * CGFloat(photo.height) - bounds.minY
+                    keypoints[name] = [Double(x), Double(y), Double(point.confidence)]
+                }
             }
-            views.append(ChameleonView(png: png, yaw: yaws[best].truncatingRemainder(dividingBy: 360), centerX: centerX))
+            return ChameleonView(png: png, yaw: yaw, keypoints: keypoints)
         }
-        return views
-    }
-
-    /// What the face detector saw and the angles worked out, for debugging a bad spin later
-    /// (Documents/Chameleon/last-spin.json).
-    private static func saveLog(_ frames: [Frame], yaws: [Double]?) {
-        let entries = frames.enumerated().map { index, frame -> [String: Any] in
-            var entry: [String: Any] = ["time": frame.time]
-            if let yaw = frame.faceYaw { entry["faceYaw"] = yaw }
-            if let x = frame.faceX { entry["faceX"] = x }
-            if let yaws, index < yaws.count { entry["yaw"] = yaws[index] }
-            return entry
-        }
-        guard let data = try? JSONSerialization.data(withJSONObject: ["frames": entries], options: .prettyPrinted) else { return }
-        let directory = ChameleonStore.modelURL.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? data.write(to: directory.appendingPathComponent("last-spin.json"))
-    }
-
-    private static func angleGap(_ a: Double, _ b: Double) -> Double {
-        let gap = abs(a - b).truncatingRemainder(dividingBy: 360)
-        return min(gap, 360 - gap)
     }
 
     /// Bounding box of person pixels in a segmentation mask, in mask pixels from the top-left.

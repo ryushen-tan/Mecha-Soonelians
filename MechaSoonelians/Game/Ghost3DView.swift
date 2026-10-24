@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 /// Drives Ryu's bundled 3D viewer for the game: shows a model (from Tripo, or the player's saved
-/// chameleon) or builds a chameleon from turnaround shots, then poses, paints and exports it as USDZ.
+/// chameleon) or builds a chameleon from four photos, then poses, paints and exports it as USDZ.
 @MainActor
 final class GhostSculptor: ObservableObject {
     struct Pose: Identifiable, Decodable {
