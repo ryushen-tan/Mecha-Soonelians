@@ -393,34 +393,22 @@ struct GameView: View {
                 .font(RallyStyle.font(14, .semibold))
             } else {
                 if session.myGhost != nil {
-                    Text("Ghost placed ✅").font(RallyStyle.font(23, .bold))
+                    Text("Hidden ✅").font(RallyStyle.font(23, .bold))
                     Text("You can walk around now. Redo it any time before hiding ends.")
-                        .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
-                } else if ChameleonStore.hasChameleon {
-                    Text("Find your spot").font(RallyStyle.font(23, .bold))
-                    Text("Place your chameleon, pick a pose, then paint it to blend in.")
                         .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
                 } else {
                     Text("Find your spot").font(RallyStyle.font(23, .bold))
-                    Text("Have a friend take your photo, or prop the phone up and use the timer. Get your whole body in. (Make a chameleon from the home screen to hide as one.)")
+                    Text("Place your white chameleon, pick a pose, then paint it to blend in.")
                         .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
                 }
                 if !ar.isRelocalized {
                     Text(ar.trackingMessage).font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
                 }
-                if ChameleonStore.hasChameleon {
-                    Button { startPlacingChameleon() } label: { ActionLabel(text: "Place my chameleon") }
-                        .buttonStyle(PushButtonStyle())
-                        .disabled(!ar.isRelocalized)
+                Button { startPlacingChameleon() } label: {
+                    ActionLabel(text: session.myGhost == nil ? "Place my chameleon" : "Hide somewhere else")
                 }
-                Toggle("5-second timer", isOn: $useTimer)
-                    .font(RallyStyle.font(14, .semibold)).tint(RallyStyle.ink)
-                Button { takePhoto() } label: {
-                    ActionLabel(text: isCapturing ? "Cutting you out…" : session.myGhost == nil ? "Take hiding photo" : "Retake photo",
-                                busy: isCapturing)
-                }
-                .buttonStyle(PushButtonStyle(dark: ChameleonStore.hasChameleon))
-                .disabled(!ar.isRelocalized || isCapturing || countdown != nil)
+                .buttonStyle(PushButtonStyle())
+                .disabled(!ar.isRelocalized)
             }
             if session.isHost {
                 Button("Start seeking now") { session.endPhase() }
@@ -547,7 +535,7 @@ struct GameView: View {
     private func startPlacingChameleon() {
         placingChameleon = true
         ar.onTapPlace = { point in
-            guard let placement = ar.chameleonPlacement(at: point), let model = ChameleonStore.load() else {
+            guard let placement = ar.chameleonPlacement(at: point), let model = ChameleonStore.whiteBody else {
                 captureError = "Couldn't find a floor or wall there. Point at it from closer and tap again."
                 return
             }

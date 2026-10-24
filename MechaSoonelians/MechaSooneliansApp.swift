@@ -18,14 +18,13 @@ private enum EntryTab: String, CaseIterable {
 }
 
 private enum Route: Hashable {
-    case join, host, scan, mapTest, studio, chameleon
+    case join, host, scan, mapTest, studio
 }
 
 /// Home, in Rally's style: pick a face and a name, then join a game nearby or host one.
 /// Hosting needs a house scan, so the Host tab also holds the scanner.
 struct ContentView: View {
     @State private var hasHouse = HouseStore.hasHouse
-    @State private var hasChameleon = ChameleonStore.hasChameleon
     @State private var tab = EntryTab.join
     @State private var path: [Route] = ProcessInfo.processInfo.arguments.contains("--mock-editor") ? [.studio] : []
     @AppStorage("playerName") private var name = ""
@@ -58,12 +57,10 @@ struct ContentView: View {
                 case .scan: ScanView(onSaved: { hasHouse = true })
                 case .mapTest: MapTestView()
                 case .studio: CaptureEditorView()
-                case .chameleon: ChameleonStudioView()
                 }
             }
             .onAppear {
                 hasHouse = HouseStore.hasHouse
-                hasChameleon = ChameleonStore.hasChameleon
             }
         }
     }
@@ -188,18 +185,6 @@ struct ContentView: View {
                     .rallyField().accessibilityLabel("Nickname")
                 Text("1–20 characters").font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
             }
-            Button { path.append(.chameleon) } label: {
-                HStack {
-                    Image(systemName: "figure.stand").accessibilityHidden(true)
-                    Text(hasChameleon ? "Your chameleon ✅ · remake" : "Make your chameleon")
-                    Spacer()
-                    Image(systemName: "arrow.right").accessibilityHidden(true)
-                }
-                .font(RallyStyle.font(15, .semibold))
-                .padding(14)
-                .background(RallyStyle.line.opacity(0.3), in: RoundedRectangle(cornerRadius: 14))
-            }
-            .buttonStyle(.plain)
         }
     }
 
