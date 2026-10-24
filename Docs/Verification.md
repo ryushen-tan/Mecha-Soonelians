@@ -1,6 +1,6 @@
 # Gameplay verification
 
-Verified on October 24, 2026: 10 native unit/integration tests plus three Simulator UI tests passed with no skips, as did 20 server tests, four viewer geometry tests and production Next.js integration. Rally built for Simulator and unsigned iOS devices; the legacy scanner built for Simulator. These results do not include physical-device AR/LiDAR testing.
+Verified on October 24, 2026. These passed with no skips: 13 native unit/integration tests and three Simulator UI tests, using the cached full-body human `FEAE1A47…` and a local Next.js server on port 3099. Also passing: 25 server tests, 22 viewer tests and production Next.js integration. Rally and the legacy scanner built for Simulator. These results do not include physical-device AR/LiDAR testing.
 
 ## What was actually exercised
 
@@ -19,6 +19,18 @@ A second standing frame from the same TUM sequence deformed substantially better
 The complete full-body reference was [Jerma T pose.png](https://commons.wikimedia.org/wiki/File:Jerma_T_pose.png), attributed to Jerma, from the creator's freely reusable green-screen footage. The Commons description records permission for derivative use and links the source permission statement. Apple Vision removed the background locally; Tripo generated the textured mesh and Mixamo rig. This photograph has **no depth data**. The separately bundled TUM fixture remains the real registered RGB-D test input, not iPhone LiDAR.
 
 The full-body source produced a 65-joint mesh with intact feet and markedly cleaner pose deformation. Final screenshots and stretch measurements are cached in `artifacts/gameplay-verification/`. These are evidence for this mesh, not a guarantee that every generated person will deform naturally. Two additional live mesh+rig jobs consumed 110 Tripo credits during this verification; automated tests do not submit paid jobs.
+
+## Editor and gameplay behaviour under test
+
+This section describes the current editor. Earlier iterations (automatic wall attachment, arrow buttons, Move/Height joysticks) were removed and are no longer tested.
+
+- **Two modes.** **Position & pose** owns body placement, including **Against wall**. **Lock** switches to **Paint** and keeps the chosen transform. Returning to placement keeps the paint. Joint and pose edits are rejected while locked.
+- **Direct manipulation.** Tap the person to select it. A lime bounding outline and X/Y/Z handles appear. **Move** drags along the supporting surface, **Rotate** exposes all three rings and **Size** resizes uniformly (15%–150%). Dragging the background orbits. A two-finger gesture that starts on the body cancels the drag and zooms or pans the camera. Placement lock and hunting hide the handles.
+- **Surface constraint.** The viewer measures an oriented collider from the visible posed, skinned body, raycasts the supporting face and slides in small collision-checked steps. Walls, floors and furniture block movement; decorations do not. The whole footprint must fit, including at door openings and floor edges. A pose, size or turn change that would intersect geometry restores the last safe shape. Saved bodies and clones are re-fitted on load. **To floor** picks a clear floor rather than detaching into free space.
+- **Painting.** The paint view shows real room geometry, using surface colors rather than photo textures. A closer camera paints finer world-space marks. Pinching never leaves paint.
+- **Emergency eject.** The tested path runs from the native hider through the authenticated Next.js action and the server-chosen floor spot, then the snapshot offset, to the native seeker. The test checks that bounds match on all three, that paint and pose are unchanged, and that the relocated triangles tag for 500 points. Server tests cover authentication, one use per round, phase/role/found restrictions, rejection of client-supplied positions, blocked and undersized rooms, transformed RoomPlan floors and clone movement.
+
+Viewer tests cover pointer-to-surface dragging, transform math, uniform resizing, selection and cancellation, thin-wall tunneling, sliding along furniture, doorway clearance, transformed RoomPlan geometry and wall-backed paint framing. Real-human native tests drive canvas pointer events: select and drag, cancel, pinch, pick the actual rotation rings, resize, lock and save. They also open an intersecting saved placement and check for a 6 mm support gap with no collisions. The Simulator UI flow taps and drags the person, switches transform tools, uses both Pose wheel pages, paints, pinches, saves and reopens. Evidence such as `surface-constraints.json` and `surface-constrained-human.png` is written alongside the other native render evidence. These checks cover the supplied room geometry, not unscanned physical obstacles.
 
 ## Reproduce
 
