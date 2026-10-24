@@ -76,6 +76,7 @@ export function advanceAR(room, time) {
   }
   if (ar.phase === 'hiding' && time >= ar.phaseEnds) {
     ar.phase = 'seeking';
+    ar.seekingStarted = ar.phaseEnds;
     ar.phaseEnds += ar.seekSeconds * 1000;
     if (time >= ar.phaseEnds) ar.phaseEnds = time + ar.seekSeconds * 1000;
   }
@@ -103,6 +104,7 @@ export function skipPhase(room, member, time) {
   advanceAR(room, time);
   if (ar.phase === 'hiding') {
     ar.phase = 'seeking';
+    ar.seekingStarted = time;
     ar.phaseEnds = time + ar.seekSeconds * 1000;
   } else if (ar.phase === 'seeking') {
     ar.phase = 'results';
@@ -130,11 +132,14 @@ export function validateGhost(ghost, member) {
 // A hide that began while hiding (its upload links were issued then) still counts if hiding ends
 // while its files upload, so a slow connection or the host skipping ahead never loses a ghost.
 export const PLACE_GRACE = 120_000;
+// And a hide pressed just as hiding ended (the timer ran out, or the host skipped ahead) still starts.
+export const LATE_HIDE = 30_000;
 
 export function beginUpload(room, member, ghostID, time) {
   const ar = requireAR(room);
   advanceAR(room, time);
-  if (ar.phase !== 'hiding') fail(409, 'Ghosts can only be placed while hiding.');
+  const justEnded = ar.phase === 'seeking' && ar.seekingStarted != null && time - ar.seekingStarted < LATE_HIDE;
+  if (ar.phase !== 'hiding' && !justEnded) fail(409, 'Hiding is over, so you can no longer place a ghost.');
   if (ar.roles[member.id] === 'seeker') fail(403, 'The seeker does not hide.');
   ar.pending ??= {};
   ar.pending[member.id] = { id: String(ghostID).toLowerCase(), at: time };
@@ -145,7 +150,7 @@ export function placeGhost(room, member, ghost, time) {
   advanceAR(room, time);
   const pending = ar.pending?.[member.id];
   const late = ar.phase === 'seeking' && pending && pending.id === String(ghost?.id).toLowerCase() && time - pending.at < PLACE_GRACE;
-  if (ar.phase !== 'hiding' && !late) fail(409, 'Ghosts can only be placed while hiding.');
+  if (ar.phase !== 'hiding' && !late) fail(409, 'Hiding is over, so you can no longer place a ghost.');
   if (ar.roles[member.id] === 'seeker') fail(403, 'The seeker does not hide.');
   validateGhost(ghost, member);
   if (ar.ghosts.some(other => other.id === ghost.id.toLowerCase() && other.ownerID !== member.id)) fail(409, 'That ghost belongs to someone else.');
