@@ -192,11 +192,13 @@ final class GameSession: ObservableObject {
                 defer { loadingGhosts.remove(ghost.id) }
                 do {
                     let assets: GhostDownloadURLs = try await call("ar/ghosts/\(ghost.id.uuidString.lowercased())")
-                    let (imageFile, _) = try await URLSession.shared.download(from: assets.image.url)
+                    let (imageFile, imageResponse) = try await URLSession.shared.download(from: assets.image.url)
+                    try Self.requireSuccess(imageResponse)
                     let image = try Data(contentsOf: imageFile)
                     try? FileManager.default.removeItem(at: imageFile)
                     if let model = assets.model?.url, let format = assets.modelFormat {
-                        let (file, _) = try await URLSession.shared.download(from: model)
+                        let (file, modelResponse) = try await URLSession.shared.download(from: model)
+                        try Self.requireSuccess(modelResponse)
                         let name = Self.ghostModelsDir.appendingPathComponent("incoming-\(ghost.id.uuidString).\(format)")
                         try? FileManager.default.removeItem(at: name)
                         try FileManager.default.moveItem(at: file, to: name)
@@ -247,6 +249,13 @@ final class GameSession: ObservableObject {
         let (_, response) = try await URLSession.shared.upload(for: request, from: data)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw LobbyError(status: (response as? HTTPURLResponse)?.statusCode ?? 0, message: "The upload didn't go through. Try again.")
+        }
+    }
+
+    /// A download that came back as an error page must not be treated as the file.
+    private static func requireSuccess(_ response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw LobbyError(status: (response as? HTTPURLResponse)?.statusCode ?? 0, message: "A ghost file didn't download.")
         }
     }
 

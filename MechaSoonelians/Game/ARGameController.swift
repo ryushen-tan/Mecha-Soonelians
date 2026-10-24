@@ -89,12 +89,18 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     /// Runs the session again with the same house map, without resetting where the phone thinks it is.
     /// Fixes a camera view that went black after being covered or interrupted.
     func restartCamera() {
-        guard isRunning, let configuration else { return }
-        arView.session.run(configuration)
+        guard isRunning, let configuration, let resume = configuration.copy() as? ARWorldTrackingConfiguration else { return }
+        // The house map is already loaded into the running session. Giving it again would send the phone
+        // back to searching for the house, so resume without it and without resetting tracking.
+        resume.initialWorldMap = nil
+        arView.session.run(resume)
         arView.setNeedsDisplay()
     }
 
     var currentFrame: ARFrame? { arView.session.currentFrame }
+
+    /// How many ghosts are in the scene right now.
+    var shownGhostCount: Int { ghostEntities.count }
 
     /// The floor height in house coordinates: the scanned floor, else a detected floor plane,
     /// else a guess from the camera height.

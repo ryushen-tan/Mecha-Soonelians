@@ -22,6 +22,7 @@
 		2C54BFFAE740C857AC80D6DA /* CharacterGameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F8BAF4B0D1DB4D0EF16C9A4 /* CharacterGameTests.swift */; };
 		32ECF808FF04508A77FD1311 /* human-1-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = E659EBB21F9FE43758369A7B /* human-1-mask.png */; };
 		331E1FE4BD86D07DD19B84F3 /* CaptureEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF79F3BBCC9CA2AC029477CB /* CaptureEditorView.swift */; };
+		3679102808061347474DCF6C /* OnlineRoundTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04BDD119F25B3D5B6FB8E4F3 /* OnlineRoundTests.swift */; };
 		38EB2D34B38FEAEA9BACB9ED /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7EBEDCF57512A68370EC152 /* Design.swift */; };
 		4107B9CBB99AE55C1EB502A4 /* Character3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D99F9A560431B9C94F58D80E /* Character3DView.swift */; };
 		41523905A7AC596D58AD1F51 /* HouseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EE05025550A1C0ADC6A58D /* HouseStore.swift */; };
@@ -102,6 +103,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		04BDD119F25B3D5B6FB8E4F3 /* OnlineRoundTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnlineRoundTests.swift; sourceTree = "<group>"; };
 		0534AA838FD7A4A1CDC52F05 /* ProfileAvatarMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAvatarMesh.swift; sourceTree = "<group>"; };
 		0ABE41D7846B7EE0C68B2F1B /* human-rgb.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-rgb.png"; sourceTree = "<group>"; };
 		0DF44A506EAC5F271D13C10D /* GameRoomGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameRoomGeometry.swift; sourceTree = "<group>"; };
@@ -191,6 +193,7 @@
 				0F8BAF4B0D1DB4D0EF16C9A4 /* CharacterGameTests.swift */,
 				61F5F90064265EE3BB0A094D /* JellyTests.swift */,
 				88D2E957FDE6B2C5D9BD3CBA /* LobbyTests.swift */,
+				04BDD119F25B3D5B6FB8E4F3 /* OnlineRoundTests.swift */,
 				C7D20FEE66D76AC0214E3DA5 /* PersonalBodyTests.swift */,
 				372EF0FC80E70635D0266ACB /* ProfilePhotoTests.swift */,
 				BFC6AF8476328BEC413492FA /* StudioTests.swift */,
@@ -515,6 +518,7 @@
 				2C54BFFAE740C857AC80D6DA /* CharacterGameTests.swift in Sources */,
 				43B120B16E2AC2849FEC50E3 /* JellyTests.swift in Sources */,
 				2779BFFE128731932E01EBCD /* LobbyTests.swift in Sources */,
+				3679102808061347474DCF6C /* OnlineRoundTests.swift in Sources */,
 				C1B9208AB9F3A3F33851ECA8 /* PersonalBodyTests.swift in Sources */,
 				89DFA4187DA317244EE84B5D /* ProfilePhotoTests.swift in Sources */,
 				77D68A48F70360B89A1C11DB /* StudioTests.swift in Sources */,
