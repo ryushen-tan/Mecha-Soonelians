@@ -1,15 +1,18 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 const MODES = ['basic', 'infection', 'double', 'chicken'];
 const vector = value => Array.isArray(value) && value.length === 3 && value.every(number => Number.isFinite(number) && Math.abs(number) <= 100);
 const bounded = (value, minimum, maximum, fallback) => Number.isFinite(value) ? Math.min(maximum, Math.max(minimum, value)) : fallback;
 export const defaultSurfaces = [
+  { id: 'floor', kind: 'floor', dimensions: [6, 0.08, 6], position: [0, -0.06, 0] },
   { id: 'back-wall', kind: 'wall', dimensions: [6, 3, 0.12], position: [0, 1.5, 2.8] },
   { id: 'left-wall', kind: 'wall', dimensions: [0.12, 3, 6], position: [-3, 1.5, 0] },
   { id: 'cabinet', kind: 'object', dimensions: [1.2, 0.85, 0.6], position: [1.5, 0.425, 2.35] },
   { id: 'sofa', kind: 'object', dimensions: [1.8, 0.65, 0.8], position: [-2.25, 0.325, 1.6] }
 ];
+
+const corners = box => Array.from({ length: 8 }, (_, corner) => box.min.map((value, axis) => corner & (1 << axis) ? box.max[axis] : value));
 
 export function rayBox(origin, direction, box) {
   let near = 0, far = Infinity;
@@ -61,8 +64,7 @@ export function acceptDisguise(room, member, data) {
   if ([...(json.images ?? []), ...(json.buffers ?? [])].some(item => item.uri && !item.uri.startsWith('data:'))) fail(400, 'Disguises must contain their own textures and geometry.');
   const boxes = json.nodes?.find(node => Array.isArray(node.extras?.disguises))?.extras.disguises;
   if (!boxes?.length || boxes.length > 3 || boxes.some(box => !vector(box.min) || !vector(box.max) || box.min.some((value, axis) => value >= box.max[axis] || box.max[axis] - value > 5))) fail(400, 'The disguise has invalid body or clone bounds.');
-  if (room.game?.phase === 'hunting' && room.game.found[member.id] && ['basic', 'infection'].includes(room.game.mode)) fail(409, 'This disguise was already found.');
-  if (room.game?.phase === 'hunting' && ['hunter', 'dual'].includes(room.game.roles[member.id])) fail(409, 'Hunters keep their published disguise locked during the hunt.');
+  if (room.game?.phase === 'hunting') fail(409, 'Disguises stay locked during the hunt. Use emergency eject to risk a new spot.');
   room.disguises ??= new Map();
   const version = createHash('sha256').update(data).digest('hex');
   room.disguises.set(member.id, { data, boxes, version });
@@ -86,7 +88,7 @@ export function startGame(room, body, time) {
     autoTauntSeconds: body.autoTauntSeconds === 0 ? 0 : bounded(body.autoTauntSeconds, 10, 120, 30),
     roles: Object.fromEntries(room.members.map(member => [member.id, ['double', 'chicken'].includes(mode) ? 'dual' : member.id === hunter.id ? 'hunter' : 'hider'])),
     found: {}, scores: Object.fromEntries(room.members.map(member => [member.id, 0])), finds: {}, shots: {}, taunts: [], lastHint: time,
-    views: {}, exposure: {}, lastExposure: time,
+    views: {}, exposure: {}, lastExposure: time, ejects: {},
     targets: hiders.map(member => member.id), targetIndex: 0, targetSeconds: Math.max(10, hunting / Math.max(hiders.length, 1)),
     surfaces: surfaces ?? defaultSurfaces, roomName: typeof body.room?.name === 'string' ? body.room.name.slice(0, 80) : 'Shared room',
     roomSource: body.room?.source === 'roomplan' ? 'roomplan' : 'practice', winner: null };
@@ -146,7 +148,7 @@ function scoreExposure(room, time) {
       const tangent = Math.tan(view.fov * Math.PI / 360);
       return (room.disguises?.get(id)?.boxes ?? []).some(box => {
         const center = box.min.map((value, axis) => (value + box.max[axis]) / 2);
-        const points = [center, ...Array.from({ length: 8 }, (_, corner) => box.min.map((value, axis) => corner & (1 << axis) ? box.max[axis] : value))];
+        const points = [center, ...corners(box)];
         return points.some(point => {
           const delta = point.map((value, axis) => value - view.origin[axis]);
           const dot = axis => delta.reduce((total, value, index) => total + value * axis[index], 0);
@@ -195,11 +197,68 @@ export function snapshotGame(room, member, time) {
     role: game?.roles[member?.id] ?? 'unassigned', winner: game?.winner ?? null,
     targetID: game?.mode === 'chicken' && game.phase === 'hunting' ? game.targets[game.targetIndex] ?? null : null,
     published: room.members.filter(player => room.disguises?.has(player.id)).map(player => player.id),
-    visible: visible.filter(id => room.disguises?.has(id)).map(id => ({ id, version: room.disguises.get(id).version })),
+    visible: visible.filter(id => room.disguises?.has(id)).map(id => ({ id, version: room.disguises.get(id).version, offset: room.disguises.get(id).offset ?? [0, 0, 0] })),
     scores: room.members.map(player => ({ id: player.id, name: player.name, points: game?.scores[player.id] ?? 0, found: game?.found[player.id] ?? false })),
     taunts: game?.phase === 'hunting' ? game.taunts : [],
-    room: game ? { name: game.roomName, source: game.roomSource, surfaces: game.surfaces } : null
+    room: game ? { name: game.roomName, source: game.roomSource, surfaces: game.surfaces } : null,
+    eject: { available: Boolean(game?.phase === 'hunting' && game.targets.includes(member?.id) && !game.found[member?.id] && !game.ejects[member?.id]),
+      used: Boolean(game?.ejects[member?.id]), bounds: room.disguises?.get(member?.id)?.boxes[0] ?? null }
   };
+}
+
+function surfaceCoordinates(surface, point, inverse = false) {
+  const matrix = surface.transform ?? [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ...(surface.position ?? [0, 0, 0]), 1];
+  if (!inverse) return [0, 1, 2].map(axis => matrix[12 + axis] + point.reduce((total, value, index) => total + value * matrix[index * 4 + axis], 0));
+  return [0, 1, 2].map(axis => {
+    const column = matrix.slice(axis * 4, axis * 4 + 3);
+    const lengthSquared = column.reduce((total, value) => total + value * value, 0);
+    return point.reduce((total, value, index) => total + (value - matrix[12 + index]) * column[index], 0) / lengthSquared;
+  });
+}
+
+function overlapsSurface(box, surface) {
+  const points = corners(box).map(point => surfaceCoordinates(surface, point, true));
+  const minimum = [0, 1, 2].map(axis => Math.min(...points.map(point => point[axis])));
+  const maximum = [0, 1, 2].map(axis => Math.max(...points.map(point => point[axis])));
+  if (surface.dimensions.some((value, axis) => minimum[axis] >= value / 2 - 0.001 || maximum[axis] <= -value / 2 + 0.001)) return false;
+  if (surface.holes?.some(([horizontal, vertical, width, height]) => minimum[0] > horizontal - width / 2 && maximum[0] < horizontal + width / 2 && minimum[1] > vertical - height / 2 && maximum[1] < vertical + height / 2)) return false;
+  return true;
+}
+
+export function emergencyEject(room, member, time, random = () => randomInt(1_000_000) / 1_000_000) {
+  advanceGame(room, time);
+  const game = room.game;
+  if (!game || game.phase !== 'hunting' || !game.targets.includes(member.id) || game.found[member.id]) fail(409, 'Only an active hiding player can eject during the hunt.');
+  if (game.ejects[member.id]) fail(409, 'Emergency eject is already used for this round.');
+  const disguise = room.disguises?.get(member.id);
+  if (!disguise) fail(409, 'Publish your disguise before ejecting.');
+  const floors = game.surfaces.filter(surface => surface.kind === 'floor').map(surface => {
+    const normalAxis = surface.dimensions.indexOf(Math.min(...surface.dimensions));
+    const up = surface.transform?.[normalAxis * 4 + 1] ?? (normalAxis === 1 ? 1 : 0);
+    return { surface, normalAxis, up };
+  }).filter(floor => Math.abs(floor.up) > 0.99);
+  const primary = disguise.boxes[0];
+  const center = primary.min.map((value, axis) => (value + primary.max[axis]) / 2);
+  const bottom = Math.min(...disguise.boxes.map(box => box.min[1]));
+  for (let attempt = 0; attempt < 128 && floors.length; attempt++) {
+    const { surface, normalAxis, up } = floors[Math.floor(random() * floors.length)];
+    const local = surface.dimensions.map((value, axis) => axis === normalAxis ? Math.sign(up) * value / 2 : (random() - 0.5) * value);
+    const point = surfaceCoordinates(surface, local);
+    const delta = [point[0] - center[0], point[1] + 0.006 - bottom, point[2] - center[2]];
+    if (Math.hypot(delta[0], delta[2]) < 0.75) continue;
+    const boxes = disguise.boxes.map(box => ({ ...box, min: box.min.map((value, axis) => value + delta[axis]), max: box.max.map((value, axis) => value + delta[axis]) }));
+    if (boxes.some(box => !vector(box.min) || !vector(box.max) || corners(box).some(corner => {
+      const localCorner = surfaceCoordinates(surface, corner, true);
+      return surface.dimensions.some((value, axis) => axis !== normalAxis && Math.abs(localCorner[axis]) > value / 2 - 0.02);
+    }))) continue;
+    if (boxes.some(box => game.surfaces.some(obstacle => obstacle !== surface && !['decoration', 'window'].includes(obstacle.kind) && overlapsSurface(box, obstacle)))) continue;
+    const offset = delta.map((value, axis) => value + (disguise.offset?.[axis] ?? 0));
+    const version = createHash('sha256').update(disguise.version + JSON.stringify(offset)).digest('hex');
+    room.disguises.set(member.id, { ...disguise, boxes, offset, version });
+    game.ejects[member.id] = true;
+    return { ejected: true };
+  }
+  fail(409, 'No different spot fits your body and clones. Eject has not been used.');
 }
 
 function recordTaunt(room, id, time) {

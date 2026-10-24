@@ -1,5 +1,5 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
-import { acceptDisguise, snapshotGame, visibleOwners, startGame, shoot, taunt, recordView } from './game.mjs';
+import { acceptDisguise, snapshotGame, visibleOwners, startGame, shoot, taunt, recordView, emergencyEject } from './game.mjs';
 
 const LIMIT = 4096;
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
@@ -128,6 +128,7 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
         } else if (body.action === 'shoot') result = shoot(room, member, body, now());
         else if (body.action === 'taunt') taunt(room, member, now());
         else if (body.action === 'view') recordView(room, member, body, now());
+        else if (body.action === 'eject') result = emergencyEject(room, member, now());
         else fail(400, 'Choose a supported game action.');
         return send(200, { game: snapshotGame(room, member, now()), result: result ?? null });
       }

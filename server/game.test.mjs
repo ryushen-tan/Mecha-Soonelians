@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createLobbyHandler } from './lib/lobby.mjs';
-import { startGame, snapshotGame, shoot, taunt, acceptDisguise, rayBox, recordView } from './lib/game.mjs';
+import { startGame, snapshotGame, shoot, taunt, acceptDisguise, rayBox, recordView, emergencyEject } from './lib/game.mjs';
 
 const box = (horizontal = 0) => ({ id: '0', min: [horizontal - 0.3, 0, -0.3], max: [horizontal + 0.3, 1.8, 0.3] });
 function disguise(boxes = [box()]) {
@@ -29,6 +29,71 @@ function room() {
 
 const config = mode => ({ mode, preparationSeconds: 0, huntSeconds: 60, autoTauntSeconds: 0, room: { surfaces: [] } });
 const ray = horizontal => ({ origin: [horizontal, 1, -2], direction: [0, 0, 1], targetID: horizontal < -2 ? 'hunter' : horizontal > 5 ? 'second' : 'first' });
+const ejectFloor = { id: 'floor', kind: 'floor', dimensions: [12, 0.1, 12], position: [0, -0.05, 0] };
+
+test('emergency eject moves the published body and clones once, preserving appearance and scoring', () => {
+  const gameRoom = room();
+  startGame(gameRoom, { ...config('basic'), room: { surfaces: [ejectFloor] } }, 1000);
+  const member = gameRoom.members[1], original = gameRoom.disguises.get(member.id);
+  assert.equal(snapshotGame(gameRoom, member, 1000).eject.available, true);
+  emergencyEject(gameRoom, member, 1000, () => 0.65);
+  const moved = gameRoom.disguises.get(member.id);
+  assert.equal(moved.data, original.data);
+  assert.notEqual(moved.version, original.version);
+  assert.ok(Math.hypot(moved.offset[0], moved.offset[2]) >= 0.75);
+  for (const [index, bounds] of moved.boxes.entries()) {
+    bounds.min.forEach((value, axis) => assert.ok(Math.abs(value - original.boxes[index].min[axis] - moved.offset[axis]) < 0.00001));
+    bounds.max.forEach((value, axis) => assert.ok(Math.abs(value - original.boxes[index].max[axis] - moved.offset[axis]) < 0.00001));
+  }
+  assert.equal(snapshotGame(gameRoom, member, 1000).eject.used, true);
+  assert.equal(snapshotGame(gameRoom, member, 1000).eject.available, false);
+  assert.throws(() => emergencyEject(gameRoom, member, 1000), /already used/);
+  assert.equal(shoot(gameRoom, gameRoom.members[0], ray(0), 1000).hit, false);
+  const clone = moved.boxes[1];
+  const origin = clone.min.map((value, axis) => (value + clone.max[axis]) / 2); origin[2] -= 2;
+  assert.equal(shoot(gameRoom, gameRoom.members[0], { origin, direction: [0, 0, 1], targetID: member.id }, 2000).hit, true);
+  assert.equal(gameRoom.game.scores.hunter, 500);
+  assert.throws(() => acceptDisguise(gameRoom, member, disguise()), /stay locked/);
+});
+
+test('eject rejects preparation, hunters, found players and finished rounds; each round resets its use', () => {
+  const gameRoom = room(), member = gameRoom.members[1];
+  const options = { ...config('basic'), preparationSeconds: 2, room: { surfaces: [ejectFloor] } };
+  startGame(gameRoom, options, 1000);
+  assert.throws(() => emergencyEject(gameRoom, member, 1000), /active hiding/);
+  assert.throws(() => emergencyEject(gameRoom, gameRoom.members[0], 3000), /active hiding/);
+  emergencyEject(gameRoom, member, 3000, () => 0.65);
+  gameRoom.game.found.second = true;
+  assert.throws(() => emergencyEject(gameRoom, gameRoom.members[2], 3000), /active hiding/);
+  assert.throws(() => emergencyEject(gameRoom, member, 100000), /active hiding/);
+  startGame(gameRoom, { ...options, preparationSeconds: 0 }, 101000);
+  assert.equal(snapshotGame(gameRoom, member, 101000).eject.available, true);
+  emergencyEject(gameRoom, member, 101000, () => 0.35);
+});
+
+test('eject rejects blocked or undersized spots without consuming the one use', () => {
+  const gameRoom = room(), member = gameRoom.members[1];
+  startGame(gameRoom, { ...config('basic'), room: { surfaces: [ejectFloor, { kind: 'object', dimensions: [1, 2, 1], position: [1.8, 1, 1.8] }] } }, 1000);
+  const original = gameRoom.disguises.get(member.id);
+  assert.throws(() => emergencyEject(gameRoom, member, 1000, () => 0.65), /No different spot/);
+  assert.equal(gameRoom.disguises.get(member.id), original);
+  assert.equal(snapshotGame(gameRoom, member, 1000).eject.available, true);
+  emergencyEject(gameRoom, member, 1000, () => 0.35);
+  const tiny = room();
+  startGame(tiny, { ...config('basic'), room: { surfaces: [{ ...ejectFloor, dimensions: [0.2, 0.1, 0.2] }] } }, 1000);
+  assert.throws(() => emergencyEject(tiny, tiny.members[1], 1000), /No different spot/);
+  assert.equal(snapshotGame(tiny, tiny.members[1], 1000).eject.used, false);
+});
+
+test('eject supports RoomPlan floors with a transformed local normal', () => {
+  const gameRoom = room(), member = gameRoom.members[1];
+  const floor = { kind: 'floor', dimensions: [12, 12, 0.1], transform: [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 10, 2, 10, 1] };
+  startGame(gameRoom, { ...config('basic'), room: { surfaces: [floor] } }, 1000);
+  emergencyEject(gameRoom, member, 1000, () => 0.65);
+  const moved = gameRoom.disguises.get(member.id);
+  assert.ok(Math.abs(moved.boxes[0].min[1] - 2.056) < 0.00001);
+  assert.ok(moved.boxes.every(bounds => bounds.min[0] > 4 && bounds.max[0] < 16 && bounds.min[2] > 4 && bounds.max[2] < 16));
+});
 
 test('visible hiding earns exposure points, but walls and stale views do not', () => {
   const gameRoom = room(); startGame(gameRoom, config('basic'), 1000);
@@ -139,8 +204,17 @@ test('HTTP game flow publishes private GLBs, starts a match and scores a tag', a
   assert.equal((await call(path + '/disguise/' + guest.memberID, 'GET', undefined, guest.token)).status, 200);
   await call(path, 'PATCH', { status: 'waiting' }, host.token);
   await call(path + '/me', 'PATCH', { ready: true }, guest.token);
-  await call(path + '/game', 'POST', { action: 'start', ...config('basic') }, host.token);
-  const shot = await call(path + '/game', 'POST', { action: 'shoot', ...ray(0), targetID: guest.memberID }, host.token);
+  await call(path + '/game', 'POST', { action: 'start', ...config('basic'), room: { surfaces: [ejectFloor] } }, host.token);
+  assert.equal((await call(path + '/game', 'POST', { action: 'eject' })).status, 401);
+  assert.equal((await call(path + '/game', 'POST', { action: 'eject' }, host.token)).status, 409);
+  const ejected = await call(path + '/game', 'POST', { action: 'eject', position: [99, 99, 99] }, guest.token);
+  assert.equal(ejected.status, 200);
+  assert.equal(ejected.data.game.eject.used, true);
+  assert.equal((await call(path + '/game', 'POST', { action: 'eject' }, guest.token)).status, 409);
+  assert.equal((await call(path + '/disguise', 'POST', data, guest.token, true)).status, 409);
+  const bounds = ejected.data.game.eject.bounds;
+  const origin = bounds.min.map((value, axis) => (value + bounds.max[axis]) / 2); origin[2] -= 2;
+  const shot = await call(path + '/game', 'POST', { action: 'shoot', origin, direction: [0, 0, 1], targetID: guest.memberID }, host.token);
   assert.equal(shot.status, 200);
   assert.equal(shot.data.result.hit, true);
   assert.equal(shot.data.game.winner, 'hunters');
