@@ -55,7 +55,7 @@ test('production Next.js serves the Swift endpoints and lobby contract', { timeo
   const suite = await promisify(execFile)(process.execPath, ['--test', '--test-reporter=tap', 'server.test.mjs'], {
     cwd, env: environment, timeout: 25_000
   });
-  assert.match(suite.stdout, /# pass 4\b/);
+  assert.match(suite.stdout, /# pass 5\b/);
   t.diagnostic(suite.stdout.trim());
   const gameplay = await promisify(execFile)(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern=HTTP game', 'game.test.mjs'], {
     cwd, env: environment, timeout: 25_000

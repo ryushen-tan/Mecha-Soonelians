@@ -1,5 +1,8 @@
 # Supabase room storage
 
+For the character-selection update, apply the new migration before deploying the
+API; follow [the deployment steps](CharacterSelectionDeployment.md).
+
 Rooms, members, game state and disguise metadata are stored in Supabase Postgres (schema `rally`), and disguise GLBs go in the private Storage bucket `rally-disguises`. Every Vercel instance reads and writes the same rows, so no single instance owns a room. Each request locks its room row for the length of one transaction. That makes joins, leaves, kicks, starts, game actions and heartbeats apply one at a time per room, across all instances.
 
 | Piece | Where |
@@ -101,7 +104,7 @@ Run these against the deployment. Every check must pass before you call the live
 
 ```sh
 cd server
-RALLY_TEST_URL=https://mecha-soonelians.vercel.app node --test server.test.mjs           # 4 pass; 64 simultaneous joins
+RALLY_TEST_URL=https://mecha-soonelians.vercel.app node --test server.test.mjs           # 5 pass; includes character selection and 64 simultaneous joins
 RALLY_TEST_URL=https://mecha-soonelians.vercel.app node --test --test-name-pattern='HTTP game' game.test.mjs
 ```
 

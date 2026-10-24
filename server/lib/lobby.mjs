@@ -44,7 +44,7 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
     return {
       code: room.code, locked: room.locked,
       status: room.status, createdAt: room.createdAt,
-      members: room.members.map(({ id, name, avatar, host, ready }) => ({ id, name, avatar, host, ready })),
+      members: room.members.map(({ id, name, avatar, host, ready, hasCharacter }) => ({ id, name, avatar, host, ready, hasCharacter })),
       game: snapshotGame(room, member, now())
     };
   }
@@ -68,7 +68,7 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
     }
     const token = randomBytes(32).toString('hex');
     const member = { ...details, nameKey, id: randomUUID(), tokenHash: hashToken(token),
-      host, ready: host, seenAt: now() };
+      host, hasCharacter: body.hasCharacter === true, ready: room.requiresCharacter ? false : host, seenAt: now() };
     room.members.push(member);
     room.touchedAt = now();
     return { room: snapshot(room), memberID: member.id, token };
@@ -121,6 +121,7 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
       if (body.action === 'start') {
         if (!member.host) fail(403, 'Only the host can start a round.');
         if (room.game && room.game.phase !== 'finished') fail(409, 'A round is already running.');
+        if (room.requiresCharacter && !room.members.every(m => m.hasCharacter)) fail(409, 'Everyone needs a character before starting.');
         startGame(room, body, now());
       } else if (body.action === 'shoot') result = shoot(room, member, body, now());
       else if (body.action === 'taunt') taunt(room, member, now());
@@ -143,8 +144,15 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
     }
     if (req.method === 'PATCH' && action === 'me') {
       if (typeof body.ready !== 'boolean') fail(400, 'Ready must be true or false.');
+      if ('hasCharacter' in body && typeof body.hasCharacter !== 'boolean') fail(400, 'Character availability must be true or false.');
       if (room.status !== 'waiting') fail(409, 'The session has already started.');
-      if (!member.host) member.ready = body.ready;
+      const hasCharacter = body.hasCharacter ?? member.hasCharacter;
+      if (room.requiresCharacter) {
+        if (body.ready && !hasCharacter) fail(409, 'Choose a character before getting ready.');
+        if (body.ready && !room.disguises?.has(member.id)) fail(409, 'Prepare your character before getting ready.');
+        member.ready = body.ready;
+      } else if (!member.host) member.ready = body.ready;
+      member.hasCharacter = hasCharacter;
       return [200, { room: snapshot(room) }];
     }
     if (!member.host) fail(403, 'Only the host can change the room.');
@@ -160,16 +168,18 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
         room.locked = body.locked;
       } else if (body.status === 'started') {
         if (room.status !== 'waiting') fail(409, 'This session has already started.');
+        if (room.requiresCharacter && !room.members.every(m => m.hasCharacter)) fail(409, 'Everyone needs a character before starting.');
         if (room.members.length < 2 || !room.members.every(m => m.ready)) {
           fail(409, 'At least two players must be in the room and everyone must be ready.');
         }
+        if (room.requiresCharacter) startGame(room, { mode: 'basic', preparationSeconds: 60, huntSeconds: 180 }, now());
         room.status = 'started';
         room.locked = true;
       } else if (body.status === 'waiting') {
         room.status = 'waiting';
         room.game = null;
         room.locked = false;
-        room.members.forEach(m => { m.ready = m.host; });
+        room.members.forEach(m => { m.ready = room.requiresCharacter ? false : m.host; });
       } else fail(400, 'Choose a valid room action.');
       return [200, { room: snapshot(room) }];
     }
@@ -233,7 +243,10 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
       const body = ['POST', 'PATCH'].includes(req.method) && !disguiseUpload ? await readBody(req, path.endsWith('/game') ? 256 * 1024 : LIMIT) : {};
       if (req.method === 'POST' && path === '/rooms') {
         profile(body);
-        return send(201, await store.createRoom(room => addMember(room, body, true),
+        return send(201, await store.createRoom(room => {
+          room.requiresCharacter = body.requiresCharacter === true;
+          return addMember(room, body, true);
+        },
           { time: now(), maxRooms, memberTTL, idleTTL, prune }));
       }
       const match = path.match(/^\/rooms\/(\d{6})(?:\/(join|me|leave|game|disguise(?:\/([a-zA-Z0-9-]+))?|members\/([a-zA-Z0-9-]+)))?$/);

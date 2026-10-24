@@ -46,9 +46,12 @@ export async function startPostgres() {
   await start();
   const admin = postgres(`postgres://postgres@127.0.0.1:${port}/postgres`, { onnotice: () => {}, max: 2 });
   await admin.unsafe(SUPABASE_SHIM);
-  for (const file of (await readdir(migrations)).filter(name => name.endsWith('.sql')).sort()) {
-    await admin.unsafe(await readFile(new URL(file, migrations), 'utf8'));
-  }
+  const migrationConnection = await admin.reserve();
+  try {
+    for (const file of (await readdir(migrations)).filter(name => name.endsWith('.sql')).sort()) {
+      await migrationConnection.unsafe(await readFile(new URL(file, migrations), 'utf8'));
+    }
+  } finally { migrationConnection.release(); }
   await admin`alter role rally_api with login password 'rally-test'`;
   return {
     admin,

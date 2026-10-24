@@ -67,7 +67,7 @@ export function createSupabaseRoomStore({ sql, storage }) {
   const column = (result, name) => [result].flat(2).find(row => row && name in row)?.[name];
 
   const hydrate = data => ({
-    id: data.id, code: data.code, locked: data.locked, status: data.status,
+    id: data.id, code: data.code, locked: data.locked, status: data.status, requiresCharacter: data.requiresCharacter ?? false,
     createdAt: new Date(data.createdAt).toISOString(), touchedAt: data.touchedAt,
     game: data.game && { ...data.game, surfaces: data.surfaces },
     members: data.members.map(member => ({ ...member, stored: true })),
@@ -78,8 +78,8 @@ export function createSupabaseRoomStore({ sql, storage }) {
   const gameState = game => game ? JSON.stringify({ ...game, surfaces: undefined }) : null;
 
   const capture = room => ({
-    locked: room.locked, status: room.status, touchedAt: room.touchedAt,
-    members: new Map(room.members.map(m => [m.id, { ready: m.ready, seenAt: m.seenAt }])),
+    locked: room.locked, status: room.status, touchedAt: room.touchedAt, requiresCharacter: room.requiresCharacter,
+    members: new Map(room.members.map(m => [m.id, { ready: m.ready, hasCharacter: m.hasCharacter, seenAt: m.seenAt }])),
     game: gameState(room.game), surfaces: room.game?.surfaces,
     disguises: new Map([...room.disguises].map(([id, disguise]) => [id, JSON.stringify(disguise)]))
   });
@@ -90,18 +90,18 @@ export function createSupabaseRoomStore({ sql, storage }) {
     if (room.closed) return { payload: { closed: true }, orphaned: true };
     const payload = {};
     let orphaned = false;
-    if (room.locked !== before.locked || room.status !== before.status || room.touchedAt !== before.touchedAt) {
-      payload.room = { locked: room.locked, status: room.status, touchedAt: room.touchedAt };
+    if (room.locked !== before.locked || room.status !== before.status || room.touchedAt !== before.touchedAt || room.requiresCharacter !== before.requiresCharacter) {
+      payload.room = { locked: room.locked, status: room.status, touchedAt: room.touchedAt, requiresCharacter: room.requiresCharacter };
     }
     const kept = new Set(room.members.map(m => m.id));
     const removed = [...before.members.keys()].filter(id => !kept.has(id));
     if (removed.length) { payload.removed = removed; orphaned = true; }
-    const added = room.members.filter(m => !m.stored).map(({ id, name, nameKey, avatar, host, ready, tokenHash, seenAt }) =>
-      ({ id, name, nameKey, avatar, host, ready, tokenHash, seenAt }));
+    const added = room.members.filter(m => !m.stored).map(({ id, name, nameKey, avatar, host, ready, hasCharacter, tokenHash, seenAt }) =>
+      ({ id, name, nameKey, avatar, host, ready, hasCharacter, tokenHash, seenAt }));
     if (added.length) payload.added = added;
     const changed = room.members.filter(m => m.stored &&
-      (before.members.get(m.id).ready !== m.ready || before.members.get(m.id).seenAt !== m.seenAt))
-      .map(({ id, ready, seenAt }) => ({ id, ready, seenAt }));
+      (before.members.get(m.id).ready !== m.ready || before.members.get(m.id).seenAt !== m.seenAt || before.members.get(m.id).hasCharacter !== m.hasCharacter))
+      .map(({ id, ready, hasCharacter, seenAt }) => ({ id, ready, hasCharacter, seenAt }));
     if (changed.length) payload.changed = changed;
     const game = gameState(room.game);
     if (!game && before.game) payload.game = null;

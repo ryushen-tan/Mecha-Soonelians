@@ -124,7 +124,7 @@ describe('Supabase room store', { skip: hasPostgres ? false : 'PostgreSQL (initd
     const run = args => promisify(execFile)(process.execPath, ['--test', '--test-reporter=tap', ...args], { cwd, env, timeout: 60_000 });
     try {
       const lobby = await run(['server.test.mjs']);
-      assert.match(lobby.stdout, /# pass 4\b/);
+      assert.match(lobby.stdout, /# pass 5\b/);
       assert.match(lobby.stdout, /# fail 0\b/);
       const game = await run(['--test-name-pattern=HTTP game', 'game.test.mjs']);
       assert.match(game.stdout, /# pass 1\b/);
@@ -132,6 +132,35 @@ describe('Supabase room store', { skip: hasPostgres ? false : 'PostgreSQL (initd
     } finally {
       await proxy.close(); await a.kill(); await b.kill();
     }
+  });
+
+  test('character selection survives an API restart and legacy saves preserve its fields', async () => {
+    const a = await startInstance();
+    const host = (await call(a, '/rooms', 'POST', {
+      name: 'Character host', avatar: 0, requiresCharacter: true, hasCharacter: false
+    })).data;
+    const path = `/rooms/${host.room.code}`;
+    assert.equal(host.room.members[0].ready, false);
+    const selected = await call(a, `${path}/me`, 'PATCH', { ready: false, hasCharacter: true }, host.token);
+    assert.equal(selected.status, 200);
+    assert.equal(selected.data.room.members[0].hasCharacter, true);
+    await a.kill();
+    const b = await startInstance();
+    const seen = await call(b, path, 'GET', undefined, host.token);
+    assert.equal(seen.data.room.members[0].hasCharacter, true);
+    assert.equal(seen.data.room.members[0].ready, false);
+    const [{ id, requires_character }] = await db.admin`select id, requires_character from rally.rooms where code = ${host.room.code}`;
+    assert.equal(requires_character, true);
+    // A still-running older deployment omits the two new fields when it saves a heartbeat.
+    const changes = { room: { locked: false, status: 'waiting', touchedAt: Date.now() },
+      changed: [{ id: host.memberID, ready: false, seenAt: Date.now() }] };
+    await db.admin`select rally.room_save(${id}, ${db.admin.json(changes)})`;
+    const after = await call(b, path, 'GET', undefined, host.token);
+    assert.equal(after.data.room.members[0].hasCharacter, true);
+    // The required-character rule survives too: no model has been uploaded yet.
+    assert.equal((await call(b, `${path}/me`, 'PATCH', { ready: true }, host.token)).status, 409);
+    await call(b, `${path}/leave`, 'POST', {}, host.token);
+    await b.kill();
   });
 
   test('simultaneous joins through both processes never lose a player', async () => {
