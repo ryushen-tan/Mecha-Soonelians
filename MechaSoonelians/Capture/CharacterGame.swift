@@ -36,6 +36,8 @@ struct GameSnapshot: Decodable {
     let taunts: [Hint]
     let room: GameRoomGeometry?
     let eject: Eject?
+
+    var isWaitingToHunt: Bool { phase == "preparation" && role == "hunter" }
 }
 
 @MainActor
@@ -116,7 +118,9 @@ final class CharacterGameModel: ObservableObject {
         }
         try accept(try await request("game", body: camera))
         guard let snapshot, let connection, let editor, editor.viewerLoaded, let view = editor.webView else { return }
-        _ = try await view.callAsyncJavaScript("window.characterViewer.huntLock(locked)", arguments: ["locked": snapshot.phase == "hunting"], in: nil, contentWorld: .page)
+        view.isUserInteractionEnabled = !snapshot.isWaitingToHunt
+        if snapshot.isWaitingToHunt { view.resignFirstResponder() }
+        _ = try await view.callAsyncJavaScript("window.characterViewer.huntLock(locked)", arguments: ["locked": snapshot.phase == "hunting" || snapshot.isWaitingToHunt], in: nil, contentWorld: .page)
         _ = try await view.callAsyncJavaScript("window.characterViewer.owner(id)", arguments: ["id": connection.memberID], in: nil, contentWorld: .page)
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
@@ -144,7 +148,7 @@ final class CharacterGameModel: ObservableObject {
             loadedOwnVersion = own.version
         }
         let found = snapshot.scores.first(where: { $0.id == connection.memberID })?.found ?? false
-        let showOwn = snapshot.phase != "hunting" || (!found && !["hunter", "dual"].contains(snapshot.role))
+        let showOwn = !snapshot.isWaitingToHunt && (snapshot.phase != "hunting" || (!found && !["hunter", "dual"].contains(snapshot.role)))
         _ = try await view.callAsyncJavaScript("window.characterViewer.visibility(ids, own)", arguments: ["ids": snapshot.visible.map(\.id), "own": showOwn], in: nil, contentWorld: .page)
         if let hint = snapshot.taunts.max(by: { $0.at < $1.at }), hint.at > lastHint {
             lastHint = hint.at
@@ -158,6 +162,7 @@ final class CharacterGameModel: ObservableObject {
 
     func publishCurrent() {
         guard !busy, let editor else { return }
+        guard snapshot?.isWaitingToHunt != true else { error = "Wait until the hiding phase ends."; return }
         guard snapshot?.phase != "hunting" else { error = "Disguises are locked during the hunt."; return }
         guard editor.editing.placementLocked == true else { error = "Lock your position and pose before publishing."; return }
         publishing = true

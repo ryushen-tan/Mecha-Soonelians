@@ -62,8 +62,16 @@ final class CharacterGameTests: XCTestCase {
         }
         XCTAssertNil(hidingGame.error)
         XCTAssertEqual(hidingGame.snapshot?.published, [guest.memberID])
-        huntingGame.start(mode: "basic", preparation: 0, hunt: 60, autoTaunt: false)
+        huntingGame.start(mode: "basic", preparation: 5, hunt: 60, autoTaunt: false)
         let view = try XCTUnwrap(hunter.webView)
+        for _ in 0..<40 {
+            if huntingGame.snapshot?.isWaitingToHunt == true && !view.isUserInteractionEnabled { break }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertEqual(huntingGame.snapshot?.isWaitingToHunt, true)
+        XCTAssertFalse(view.isUserInteractionEnabled, "The hunter cannot interact with the scene while hiders prepare.")
+        XCTAssertEqual(huntingGame.snapshot?.visible.count, 0)
+        XCTAssertEqual(hider.webView?.isUserInteractionEnabled, true)
         var rendered = false
         for _ in 0..<200 {
             if huntingGame.snapshot?.phase == "hunting" {
@@ -73,6 +81,7 @@ final class CharacterGameTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(100))
         }
         XCTAssertTrue(rendered, huntingGame.error ?? "The real published human must load in the hunter's renderer.")
+        XCTAssertTrue(view.isUserInteractionEnabled, "Hunter controls return when the hunt begins.")
         let original = try await hider.webView?.callAsyncJavaScript("return window.characterViewer.diagnostics()", arguments: [:], in: nil, contentWorld: .page) as? [String: Any]
         for _ in 0..<50 {
             if hidingGame.snapshot?.eject?.available == true { break }
