@@ -24,18 +24,6 @@ struct SprayPaintView: View {
             crosshair
             VStack(spacing: 0) {
                 topBar
-                if painter.debug, !painter.debugText.isEmpty {
-                    Text(painter.debugText)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.white)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
-                        .padding(.horizontal, 12)
-                        .padding(.top, 6)
-                        .allowsHitTesting(false)
-                        .accessibilityLabel("Debug info")
-                }
                 Spacer()
                 moveControls
                 bottomPanel
@@ -77,7 +65,6 @@ struct SprayPaintView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            roundButton("ladybug", label: painter.debug ? "Hide debug info" : "Show debug info") { painter.debug.toggle() }
             roundButton("arrow.uturn.backward", label: "Undo") { painter.undo() }
                 .disabled(!painter.canUndo)
                 .opacity(painter.canUndo ? 1 : 0.4)
