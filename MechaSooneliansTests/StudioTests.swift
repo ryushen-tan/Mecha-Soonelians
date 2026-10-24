@@ -1,7 +1,7 @@
 import XCTest
 import UIKit
 import Combine
-@testable import Rally
+@testable import MechaSoonelians
 
 final class StudioTests: XCTestCase {
     @MainActor func testSelfieTimerCountsDownFiveSecondsAndCapturesOnlyOnce() async throws {

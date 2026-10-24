@@ -50,6 +50,17 @@
                ReferencedContainer = "container:MechaSoonelians.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "E54B54B98829DE5EFAE11043"
+               BuildableName = "MechaSooneliansUITests.xctest"
+               BlueprintName = "MechaSooneliansUITests"
+               ReferencedContainer = "container:MechaSoonelians.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

@@ -18,6 +18,15 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>rally</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
@@ -35,7 +44,14 @@
 	<key>NSCameraUsageDescription</key>
 	<string>The camera is used to scan the house and capture people with depth for player cutouts.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connects to other players' phones on your Wi-Fi, and to your Mac to generate 3D characters with Tripo.</string>
+	<string>Connects to your lobby server so everyone in the room stays in sync.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Tilt your phone to move the figurines on the landing screen.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>JellyAssets/fonts/Outfit[wght].ttf</string>
+		<string>JellyAssets/fonts/Nunito[wght].ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -52,6 +68,12 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 </dict>
 </plist>

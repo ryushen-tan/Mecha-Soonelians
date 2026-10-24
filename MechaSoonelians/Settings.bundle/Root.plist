@@ -2,6 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>PreferenceSpecifiers</key><array>
-<dict><key>Type</key><string>PSGroupSpecifier</string><key>Title</key><string>Connection</string><key>FooterText</key><string>Everyone must use the same Rally server. Use HTTPS for a remote server, or your Mac's local Wi-Fi address for development.</string></dict>
+<dict><key>Type</key><string>PSGroupSpecifier</string><key>Title</key><string>Connection</string><key>FooterText</key><string>Everyone must use the same Mecha Soonelians server. Use HTTPS for a remote server, or your Mac's local Wi-Fi address for development.</string></dict>
 <dict><key>Type</key><string>PSTextFieldSpecifier</string><key>Title</key><string>Server address</string><key>Key</key><string>server</string><key>DefaultValue</key><string>https://mecha-soonelians.vercel.app</string><key>AutocapitalizationType</key><string>None</string><key>AutocorrectionType</key><string>No</string><key>KeyboardType</key><string>URL</string></dict>
 </array></dict></plist>

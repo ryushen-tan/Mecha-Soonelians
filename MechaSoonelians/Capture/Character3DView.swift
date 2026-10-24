@@ -22,7 +22,6 @@ struct Character3DView: View {
         }
         .navigationTitle("3D character").navigationBarTitleDisplayMode(.inline)
         .toolbar(model.modelData == nil ? .visible : .hidden, for: .navigationBar)
-        .onDisappear { model.stopPolling() }
     }
 
     private var generationView: some View {
@@ -74,7 +73,6 @@ struct Character3DView: View {
         } message: {
             Text("This sends the selected person’s cutout to Tripo for one mesh generation and, if compatible, one auto-rig. Only upload images you have permission to use. Your API key stays on the server.")
         }
-        .onDisappear { model.stopPolling() }
         .onChange(of: model.yaw) { _, _ in model.saved = false }
         .onChange(of: model.angles) { _, _ in model.saved = false }
     }
@@ -97,10 +95,13 @@ struct CharacterLaunchGate<Content: View>: View {
     var body: some View {
         Group {
             if hasCharacter || bypassSetup {
-                content()
+                content().safeAreaInset(edge: .bottom, spacing: 0) { CharacterBuildBar() }
             } else if started {
-                content().overlay(alignment: .top) {
-                    CharacterBuildBanner(onReady: { hasCharacter = true }, onRestart: { started = false })
+                content().safeAreaInset(edge: .bottom, spacing: 0) {
+                    VStack(spacing: 0) {
+                        CharacterBuildBanner(onReady: { hasCharacter = true }, onRestart: { started = false })
+                        CharacterBuildBar()
+                    }
                 }
             } else {
                 CharacterSetupView(onStarted: { started = true }) { hasCharacter = CharacterProfile.ready != nil }
@@ -292,8 +293,6 @@ private struct CharacterBuildBanner: View {
     @StateObject private var model: Character3DModel
     @State private var message: String?
     @State private var preparing = false
-    @State private var dismissed = false
-    @GestureState private var drag: CGFloat = 0
     @Environment(\.scenePhase) private var scenePhase
 
     init(onReady: @escaping () -> Void, onRestart: @escaping () -> Void) {
@@ -308,36 +307,22 @@ private struct CharacterBuildBanner: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                if failure == nil { ProgressView() }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(failure == nil ? "Building your 3D self…" : "Your 3D self needs attention")
-                        .font(RallyStyle.font(13, .semibold))
-                    Text(failure ?? (preparing ? "Preparing your poses and paint…" : model.status))
-                        .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted).lineLimit(2)
-                }
-                Spacer(minLength: 0)
-                if failure != nil {
+        // Silent while it builds (the bar below shows progress); a slim row only when it needs you.
+        VStack(spacing: 0) {
+            if let failure {
+                HStack(spacing: 10) {
+                    Text(failure).font(RallyStyle.font(12)).lineLimit(2)
+                    Spacer(minLength: 0)
                     if model.asset?.rigged != false { Button("Retry") { retry() }.font(RallyStyle.font(13, .semibold)) }
                     Button("Start over") { restart() }.font(RallyStyle.font(13, .semibold))
                 }
+                .padding(.horizontal, 16).padding(.vertical, 8)
+                .frame(maxWidth: .infinity).background(RallyStyle.paper)
+                .foregroundStyle(RallyStyle.ink)
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(RallyStyle.paper, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(RallyStyle.ink.opacity(0.15)))
-            .foregroundStyle(RallyStyle.ink)
-            .padding(.horizontal, 16)
-            .offset(y: drag)
-            .opacity(dismissed ? 0 : 1 - min(abs(drag) / 120, 0.6))
-            .allowsHitTesting(!dismissed)
-            // Swipe it away (up or down) to get at what's underneath; errors bring it back.
-            .gesture(DragGesture(minimumDistance: 12)
-                .updating($drag) { value, state, _ in state = value.translation.height }
-                .onEnded { value in
-                    if abs(value.translation.height) > 30 { withAnimation(.easeOut(duration: 0.2)) { dismissed = true } }
-                })
-            // The 3D viewer prepares the poses, so it has to exist, even though nobody sees it.
+        }
+        // The 3D viewer prepares the poses, so it has to exist, even though nobody sees it.
+        .background(alignment: .bottom) {
             if model.modelData != nil {
                 CharacterWebView(model: model).frame(width: 64, height: 64).opacity(0.01).allowsHitTesting(false)
             }
@@ -348,9 +333,6 @@ private struct CharacterBuildBanner: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active && failure == nil { retry() }
-        }
-        .onChange(of: failure) { _, new in
-            if new != nil { withAnimation { dismissed = false } }
         }
         .onDisappear { model.stopPolling() }
     }
@@ -378,5 +360,26 @@ private struct CharacterBuildBanner: View {
             try CharacterProfile.saveBody(result, for: asset)
             onReady()
         } catch { message = error.localizedDescription }
+    }
+}
+
+/// A thin progress strip along the very bottom of the screen while any character is generating.
+/// It sits in the safe area, so it pushes content up a few points instead of covering it.
+struct CharacterBuildBar: View {
+    @ObservedObject private var builds = CharacterBuilds.shared
+
+    var body: some View {
+        if let fraction = builds.fraction {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Rectangle().fill(RallyStyle.ink.opacity(0.12))
+                    Rectangle().fill(RallyStyle.ink).frame(width: geometry.size.width * fraction)
+                }
+            }
+            .frame(height: 4)
+            .animation(.easeInOut(duration: 0.6), value: fraction)
+            .allowsHitTesting(false)
+            .accessibilityElement().accessibilityLabel("Building your 3D character, \(Int(fraction * 100)) percent")
+        }
     }
 }

@@ -12,12 +12,16 @@ targets:
     platform: iOS
     sources:
       - path: MechaSoonelians
-        excludes: [Capture/CharacterViewer]
+        excludes: [Capture/CharacterViewer, Lobby/JellyAssets, Lobby/ProfilePhotos]
       - path: MechaSoonelians/Capture/CharacterViewer
         type: folder
         buildPhase: resources
-      - Rally/Design.swift
-      - Rally/JellyTokens.swift
+      - path: MechaSoonelians/Lobby/JellyAssets
+        type: folder
+        buildPhase: resources
+      - path: MechaSoonelians/Lobby/ProfilePhotos
+        type: folder
+        buildPhase: resources
       - path: TestFixtures/LiDAR/room/rgb.jpg
         buildPhase: resources
       - path: TestFixtures/LiDAR/room/depth-preview.png
@@ -30,13 +34,20 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ryushentan.MechaSoonelians
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
     info:
       path: MechaSoonelians/Info.plist
       properties:
         CFBundleDisplayName: Mecha Soonelians
+        UIAppFonts: ["JellyAssets/fonts/Outfit[wght].ttf", "JellyAssets/fonts/Nunito[wght].ttf"]
+        NSMotionUsageDescription: Tilt your phone to move the figurines on the landing screen.
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [rally]
         NSCameraUsageDescription: The camera is used to scan the house and capture people with depth for player cutouts.
-        NSLocalNetworkUsageDescription: Connects to other players' phones on your Wi-Fi, and to your Mac to generate 3D characters with Tripo.
+        NSLocalNetworkUsageDescription: Connects to your lobby server so everyone in the room stays in sync.
         NSBonjourServices: [_mecha-soon._tcp, _mecha-soon._udp]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
@@ -47,10 +58,23 @@ targets:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
   MechaSooneliansTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [MechaSooneliansTests]
+    sources:
+      - MechaSooneliansTests
+      - path: TestFixtures/Character3D/test-rig.glb
+        buildPhase: resources
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: MechaSoonelians
+  MechaSooneliansUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [MechaSooneliansUITests]
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -62,4 +86,4 @@ schemes:
       targets:
         MechaSoonelians: all
     test:
-      targets: [MechaSooneliansTests]
+      targets: [MechaSooneliansTests, MechaSooneliansUITests]

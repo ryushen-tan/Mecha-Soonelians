@@ -1,6 +1,6 @@
 import Foundation
 
-struct Player: Codable, Identifiable, Equatable {
+struct LobbyPlayer: Codable, Identifiable, Equatable {
     let id: String
     let name: String
     let avatar: Int
@@ -13,7 +13,7 @@ struct Room: Codable, Equatable {
     let locked: Bool
     let status: String
     let createdAt: String
-    let members: [Player]
+    let members: [LobbyPlayer]
 
     var started: Bool { status == "started" }
     var readyCount: Int { members.filter(\.ready).count }

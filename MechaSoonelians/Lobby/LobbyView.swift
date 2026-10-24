@@ -8,7 +8,7 @@ struct LobbyView: View {
     @State private var confirmingLeave = false
     @State private var copied = false
     @State private var showsStudio = false
-    @State private var removing: Player?
+    @State private var removing: LobbyPlayer?
 
     var body: some View {
         JellyCard {
@@ -138,7 +138,7 @@ struct LobbyView: View {
         }
     }
 
-    private func playerRow(_ player: Player) -> some View {
+    private func playerRow(_ player: LobbyPlayer) -> some View {
         HStack(spacing: 10) {
             PlayerAvatar(name: player.name, color: player.avatar, size: 40).accessibilityHidden(true)
             Text(player.name).font(JellyStyle.body(16)).lineLimit(1)

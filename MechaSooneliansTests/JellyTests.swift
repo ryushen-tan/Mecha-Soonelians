@@ -1,7 +1,7 @@
 import AVFoundation
 import SpriteKit
 import XCTest
-@testable import Rally
+@testable import MechaSoonelians
 
 final class JellyTests: XCTestCase {
     @MainActor func testBundledReferenceAssetsAndFontsAreUsableOffline() throws {

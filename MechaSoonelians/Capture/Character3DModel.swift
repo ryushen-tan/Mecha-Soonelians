@@ -123,6 +123,31 @@ struct CharacterBone: Decodable, Identifiable {
     }
 }
 
+/// Every character generation in flight, for the progress bar along the bottom of the screen.
+/// Generations keep running when you leave their screen, so the bar is the one place they show.
+@MainActor
+final class CharacterBuilds: ObservableObject {
+    static let shared = CharacterBuilds()
+    @Published private(set) var progress: [String: Double] = [:]
+
+    /// The least-advanced build, or nil when nothing is generating.
+    var fraction: Double? { progress.values.min() }
+
+    func update(_ id: String, _ value: Double) { progress[id] = max(progress[id] ?? 0, min(1, max(0.02, value))) }
+    func finish(_ id: String) { progress[id] = nil }
+
+    /// Mesh, rig check and rigging, weighted roughly by how long each takes.
+    static func overall(_ job: CharacterJob) -> Double {
+        let stage = min(1, max(0, job.progress / 100))
+        switch job.status == "ready" ? "ready" : job.stage {
+        case "ready": return 1
+        case "checking": return 0.6 + 0.1 * stage
+        case "rigging": return 0.7 + 0.3 * stage
+        default: return 0.6 * stage
+        }
+    }
+}
+
 @MainActor
 final class Character3DModel: ObservableObject {
     @Published var asset: CharacterAsset?
@@ -193,8 +218,11 @@ final class Character3DModel: ObservableObject {
         guard !busy, let asset else { return }
         busy = true
         error = nil
+        // Keyed per model, so a screen handing the job to another model can't erase its entry.
+        let key = "\(asset.id)/\(ObjectIdentifier(self).hashValue)"
+        CharacterBuilds.shared.update(key, 0)
         work = Task {
-            defer { busy = false }
+            defer { busy = false; CharacterBuilds.shared.finish(key) }
             do {
                 let api = try HostedCharacterService.api(session: session)
                 let input = try Data(contentsOf: asset.directory.appendingPathComponent("input.png"))
@@ -203,6 +231,7 @@ final class Character3DModel: ObservableObject {
                 while true {
                     try Task.checkCancellation()
                     status = "\(job.stage.capitalized) · \(Int(job.progress))%"
+                    CharacterBuilds.shared.update(key, CharacterBuilds.overall(job))
                     if job.status == "failed" { throw CharacterFailure(job.error ?? "Tripo could not build this character.") }
                     if job.status == "ready" { break }
                     try await Task.sleep(for: .seconds(3))

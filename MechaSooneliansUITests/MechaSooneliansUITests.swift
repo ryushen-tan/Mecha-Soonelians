@@ -1,6 +1,6 @@
 import XCTest
 
-final class RallyUITests: XCTestCase {
+final class MechaSooneliansUITests: XCTestCase {
     @MainActor func testFirstLaunchCharacterSetupDoesNotSpendCreditsBeforeCapture() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing", "--test-character-setup", "-personalCharacterID", "missing-test-character"]

@@ -8,53 +8,79 @@
 
 /* Begin PBXBuildFile section */
 		0185AB12EFDA0D8A1732AC6A /* Character3DModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A7FFFBDBEC0B6D593AFC7A7 /* Character3DModel.swift */; };
+		09DE02A586177281FE87B8C5 /* JellyAssets in Resources */ = {isa = PBXBuildFile; fileRef = E3294E82FD29FEEEC513AD55 /* JellyAssets */; };
+		0ACED52A1B12CEAB8BE33D50 /* JellyAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E4B699C0E4B954FAC1D0110 /* JellyAudio.swift */; };
 		145D1BF8B11BD44D49BA5FC3 /* LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 6C2D535BD41EC0F0EBED9996 /* LICENSE.txt */; };
 		15CA543F94ACF082E2CD966A /* CharacterStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72DAACAF2F70200E7F265971 /* CharacterStudioView.swift */; };
 		177218563D231CB7703D242D /* GhostCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1013AAE8F957E87D79BCB2E6 /* GhostCapture.swift */; };
 		189D818642C398634A49F05A /* human-depth-preview.png in Resources */ = {isa = PBXBuildFile; fileRef = 5DE0F466297AA36DE58923B8 /* human-depth-preview.png */; };
 		1F608B86606F1BD7C9BCF03D /* human-analysis.json in Resources */ = {isa = PBXBuildFile; fileRef = 8A050B6E930C000EB23AB2C7 /* human-analysis.json */; };
 		216D3DA2E0C913B9D88C727D /* PoseCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5281FE38E7FADB0605FF96B /* PoseCanvas.swift */; };
+		25B4119841C50B2F2409D767 /* ProfilePhotos in Resources */ = {isa = PBXBuildFile; fileRef = 494600CE207A3382938DA097 /* ProfilePhotos */; };
+		2779BFFE128731932E01EBCD /* LobbyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D2E957FDE6B2C5D9BD3CBA /* LobbyTests.swift */; };
 		27BE26529E68A748B68CC577 /* human-depth-metadata.json in Resources */ = {isa = PBXBuildFile; fileRef = 3913B8DE0830AEEDA8D03755 /* human-depth-metadata.json */; };
+		2C54BFFAE740C857AC80D6DA /* CharacterGameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F8BAF4B0D1DB4D0EF16C9A4 /* CharacterGameTests.swift */; };
 		32ECF808FF04508A77FD1311 /* human-1-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = E659EBB21F9FE43758369A7B /* human-1-mask.png */; };
 		331E1FE4BD86D07DD19B84F3 /* CaptureEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF79F3BBCC9CA2AC029477CB /* CaptureEditorView.swift */; };
+		38EB2D34B38FEAEA9BACB9ED /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7EBEDCF57512A68370EC152 /* Design.swift */; };
 		4107B9CBB99AE55C1EB502A4 /* Character3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D99F9A560431B9C94F58D80E /* Character3DView.swift */; };
 		41523905A7AC596D58AD1F51 /* HouseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EE05025550A1C0ADC6A58D /* HouseStore.swift */; };
+		43B120B16E2AC2849FEC50E3 /* JellyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61F5F90064265EE3BB0A094D /* JellyTests.swift */; };
+		46870BDD21E68BAE58B4497D /* MechaSooneliansUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D78A985FC85EDDA72E11AD97 /* MechaSooneliansUITests.swift */; };
+		4764E2008E6960FC8B8E797B /* ProfileAvatarButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AC12CB1908D508442976CC9 /* ProfileAvatarButton.swift */; };
 		54501E87514E43B04138E862 /* CharacterGame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98A6BD433F465C227C7C182C /* CharacterGame.swift */; };
 		56780843821EFB47A198DF53 /* rgb.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 1DAD99AE1A3500130B641F6C /* rgb.jpg */; };
+		5720BB5FF1706D2CFDB2E952 /* LobbyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C483075B49F2B7A8043B119 /* LobbyView.swift */; };
+		5882C03887E6A4ADB13E7BF9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5FBF133014F5AE71C077B4AD /* Assets.xcassets */; };
 		5D3D823454B48F796734594E /* SprayPainter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D67C6E4F96256D342E849EE /* SprayPainter.swift */; };
+		6064CB4DE3DE946253EBE0FF /* test-rig.glb in Resources */ = {isa = PBXBuildFile; fileRef = 9BCADE667DA9C8CD2548022C /* test-rig.glb */; };
+		62D963F8FCEDB560A4BBC7D6 /* JellyStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88A9D6C8FBC397C4A6279C84 /* JellyStyle.swift */; };
 		66650E709BCF023072433390 /* MechaSooneliansApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */; };
+		6697B2FE33548B0E6F45C6C2 /* ProfileAvatarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0E0587B1CDDF8F30E2D7457 /* ProfileAvatarUITests.swift */; };
 		6767454F46983FD7EE922639 /* human-1-cutout.png in Resources */ = {isa = PBXBuildFile; fileRef = 3E4570DCDADD00D888DC06D1 /* human-1-cutout.png */; };
 		6BE465E0EC84E1FF5523ABE5 /* HumanAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F4D38EFC52020C49647B159 /* HumanAnalyzer.swift */; };
+		6C613797A24E698CFEE3DCA5 /* SessionVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = C73DF8957D4E94147D892790 /* SessionVault.swift */; };
 		6D367233E6EE450CFB8FACE5 /* BodyRig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3168DEE1FE4E95A6318A1DE /* BodyRig.swift */; };
+		6FE3B62C91415C8544606417 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32C119B6D527E20F1E1B88B9 /* HomeView.swift */; };
 		74E70CCFE053ED3991A0B65A /* HumanEditorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D18296BB4C1D5B457A9563D1 /* HumanEditorModel.swift */; };
 		769FF4E63D7701D98C842905 /* human-depth-float32.bin in Resources */ = {isa = PBXBuildFile; fileRef = B1D8FE898C8C0F85CD06E342 /* human-depth-float32.bin */; };
+		77D68A48F70360B89A1C11DB /* StudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC6AF8476328BEC413492FA /* StudioTests.swift */; };
+		7A33D928FB4FC9BC11924116 /* ProfileAvatarMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0534AA838FD7A4A1CDC52F05 /* ProfileAvatarMesh.swift */; };
 		7F5875895879575C5D4F5A50 /* MapTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8913A7AC10A5CE0BD4D9535A /* MapTestView.swift */; };
 		83BDBE8E14A828EBCB2AFA81 /* depth-preview.png in Resources */ = {isa = PBXBuildFile; fileRef = 39F6C07E00EBFC0FAB9400BB /* depth-preview.png */; };
-		917D84DC5578C69DFEB32DE6 /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = F15CF7625006B02A6F8C92C4 /* Design.swift */; };
+		84FD36B48F1428E40CF15DEB /* Character3DTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9AD460E67A6501924D4D72A /* Character3DTests.swift */; };
+		89DFA4187DA317244EE84B5D /* ProfilePhotoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 372EF0FC80E70635D0266ACB /* ProfilePhotoTests.swift */; };
 		934880E1C4BA41990B693DD7 /* ARGameController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9392E082D145DE0B1F5484FA /* ARGameController.swift */; };
+		99023BCF3CA7E95687A70600 /* StudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F2AA87976B3E81F490CBF69 /* StudioView.swift */; };
 		9BA4ACCBABE31BA6A17CB77B /* CharacterWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A94CD8A25738D99BA3FF7 /* CharacterWebView.swift */; };
 		9F17434C7B7A4A35FE7212BB /* ChameleonBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA96F47D2EC5DDCEDDA8739C /* ChameleonBody.swift */; };
+		9F2B5FFB7DB0A64DA97EB783 /* ProfilePhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C23F41FC6FAF7524F185362 /* ProfilePhoto.swift */; };
 		A4C53F0F7411917B9C70F84E /* PaintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F51E65ADE5E00819B806A976 /* PaintView.swift */; };
+		A585826199C65097DF0704C3 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98C0AA3451C18D256864A6B /* Models.swift */; };
 		B51DFBDCA76A6E4538E39521 /* GameRoomGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DF44A506EAC5F271D13C10D /* GameRoomGeometry.swift */; };
 		B5504EE75E860DF11D7BCC96 /* CharacterEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFC6E985A94B8064A083416 /* CharacterEditing.swift */; };
 		B67C1B83A11790E5D686ECF3 /* PersonCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C3816AB67CB802BA0DD2DD /* PersonCameraView.swift */; };
 		B922DE10EA1C2AEE804CC1E0 /* CharacterViewer in Resources */ = {isa = PBXBuildFile; fileRef = 1F44385A370DDF7499F11D84 /* CharacterViewer */; };
+		BD5C5D8B5286808AE988C27D /* JellyScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44199F0136E1F322187C191D /* JellyScene.swift */; };
 		C1B9208AB9F3A3F33851ECA8 /* PersonalBodyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D20FEE66D76AC0214E3DA5 /* PersonalBodyTests.swift */; };
+		C33A82B1E913742F4D7CD7F2 /* LobbyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9459A9CA1035D4F2E3F793F6 /* LobbyStore.swift */; };
 		C66FBCC1C4F22EC959F33A7B /* GameSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72EA1D5DC5972D7C62DD623 /* GameSession.swift */; };
 		C9B7072906BBC77C9FF367DD /* human-2-cutout.png in Resources */ = {isa = PBXBuildFile; fileRef = 35EFF5D7AD79BD5498F13036 /* human-2-cutout.png */; };
-		CDBD32B3FD6F491FCB912578 /* JellyTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFC2DC05D71AB95919DF0248 /* JellyTokens.swift */; };
 		D3AEDA1013AA53DDAC5CC361 /* human-2-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = E981861409898200BC9CCBF6 /* human-2-mask.png */; };
 		D546689ECAB0C3F7F1912FE9 /* Ghost3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BDB2E1BCEB1FCFDA269353B /* Ghost3DView.swift */; };
 		D6FA24E44C694A306F2179CE /* GameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BE9FA0E1173D95D05C52BBA /* GameView.swift */; };
 		DA45C1EC1D7889100B32C3DB /* ChameleonCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3757EA99DEEB8D6C2972EE /* ChameleonCapture.swift */; };
 		DD2079108A4E5E81740ED31D /* GameModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */; };
 		DDA3913CE4881610A4129A29 /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E306C8758FEAB51BA780EC0 /* ScanView.swift */; };
+		DDD6FF986342895E37B7C008 /* JellyTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8A48C5EC77EFC4F64B66F91 /* JellyTokens.swift */; };
 		E8B933866B1E0C5DF7444820 /* ChameleonStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 832C5186DE797FF76CF6DA3F /* ChameleonStudioView.swift */; };
 		E9B08F4081110F9BC2AAE35F /* CaptureImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE1EC8831CA5703DDB00CA1 /* CaptureImage.swift */; };
 		F52D814B2C79AB10F25475AC /* human-rgb.png in Resources */ = {isa = PBXBuildFile; fileRef = 0ABE41D7846B7EE0C68B2F1B /* human-rgb.png */; };
 		F57E21ADFF6E76FD88072716 /* SprayPaintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9A8B3A361FC622CEC3D641 /* SprayPaintView.swift */; };
 		F9204A235897A2ED8DFF6324 /* RoomObstacles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6094388F83BF57E6079B4861 /* RoomObstacles.swift */; };
 		FB79186CB13FA6F01ACB4321 /* ATTRIBUTION.txt in Resources */ = {isa = PBXBuildFile; fileRef = DBAC0F8CF5D53ED50877620D /* ATTRIBUTION.txt */; };
+		FE0A713ACBAEF88C7C2B6016 /* JellyExperienceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 460CD4447A575109D65E4D08 /* JellyExperienceView.swift */; };
+		FFB9CB703797C597B76310B5 /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 0DFC1CCB54AF1A1C3F824DCE /* Settings.bundle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -65,57 +91,91 @@
 			remoteGlobalIDString = 0387DB65460530E93277F5CC;
 			remoteInfo = MechaSoonelians;
 		};
+		AEF33760DA61ED0EC70FF7FF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6A1225E90DEFBA1EE4938534 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0387DB65460530E93277F5CC;
+			remoteInfo = MechaSoonelians;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0534AA838FD7A4A1CDC52F05 /* ProfileAvatarMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAvatarMesh.swift; sourceTree = "<group>"; };
 		0ABE41D7846B7EE0C68B2F1B /* human-rgb.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-rgb.png"; sourceTree = "<group>"; };
 		0DF44A506EAC5F271D13C10D /* GameRoomGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameRoomGeometry.swift; sourceTree = "<group>"; };
+		0DFC1CCB54AF1A1C3F824DCE /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = wrapper.cfbundle; path = Settings.bundle; sourceTree = "<group>"; };
+		0F8BAF4B0D1DB4D0EF16C9A4 /* CharacterGameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterGameTests.swift; sourceTree = "<group>"; };
 		1013AAE8F957E87D79BCB2E6 /* GhostCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhostCapture.swift; sourceTree = "<group>"; };
+		1C23F41FC6FAF7524F185362 /* ProfilePhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhoto.swift; sourceTree = "<group>"; };
 		1DAD99AE1A3500130B641F6C /* rgb.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = rgb.jpg; sourceTree = "<group>"; };
+		1E4B699C0E4B954FAC1D0110 /* JellyAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyAudio.swift; sourceTree = "<group>"; };
 		1F44385A370DDF7499F11D84 /* CharacterViewer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CharacterViewer; path = MechaSoonelians/Capture/CharacterViewer; sourceTree = SOURCE_ROOT; };
 		2E306C8758FEAB51BA780EC0 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
+		32C119B6D527E20F1E1B88B9 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		35EFF5D7AD79BD5498F13036 /* human-2-cutout.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-2-cutout.png"; sourceTree = "<group>"; };
+		372EF0FC80E70635D0266ACB /* ProfilePhotoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePhotoTests.swift; sourceTree = "<group>"; };
 		3913B8DE0830AEEDA8D03755 /* human-depth-metadata.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "human-depth-metadata.json"; sourceTree = "<group>"; };
 		39F6C07E00EBFC0FAB9400BB /* depth-preview.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "depth-preview.png"; sourceTree = "<group>"; };
 		3BDB2E1BCEB1FCFDA269353B /* Ghost3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ghost3DView.swift; sourceTree = "<group>"; };
 		3E4570DCDADD00D888DC06D1 /* human-1-cutout.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-1-cutout.png"; sourceTree = "<group>"; };
+		44199F0136E1F322187C191D /* JellyScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyScene.swift; sourceTree = "<group>"; };
+		460CD4447A575109D65E4D08 /* JellyExperienceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyExperienceView.swift; sourceTree = "<group>"; };
+		494600CE207A3382938DA097 /* ProfilePhotos */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ProfilePhotos; path = MechaSoonelians/Lobby/ProfilePhotos; sourceTree = SOURCE_ROOT; };
 		4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MechaSooneliansApp.swift; sourceTree = "<group>"; };
 		4EFC6E985A94B8064A083416 /* CharacterEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterEditing.swift; sourceTree = "<group>"; };
 		51C3816AB67CB802BA0DD2DD /* PersonCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonCameraView.swift; sourceTree = "<group>"; };
 		5240FEA26661D94879BE1BB1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5BE9FA0E1173D95D05C52BBA /* GameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameView.swift; sourceTree = "<group>"; };
+		5C483075B49F2B7A8043B119 /* LobbyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LobbyView.swift; sourceTree = "<group>"; };
 		5DE0F466297AA36DE58923B8 /* human-depth-preview.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-depth-preview.png"; sourceTree = "<group>"; };
 		5F8A94CD8A25738D99BA3FF7 /* CharacterWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterWebView.swift; sourceTree = "<group>"; };
+		5FBF133014F5AE71C077B4AD /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6094388F83BF57E6079B4861 /* RoomObstacles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomObstacles.swift; sourceTree = "<group>"; };
+		61F5F90064265EE3BB0A094D /* JellyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyTests.swift; sourceTree = "<group>"; };
 		6C2D535BD41EC0F0EBED9996 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
 		718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModels.swift; sourceTree = "<group>"; };
 		72DAACAF2F70200E7F265971 /* CharacterStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterStudioView.swift; sourceTree = "<group>"; };
 		832C5186DE797FF76CF6DA3F /* ChameleonStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonStudioView.swift; sourceTree = "<group>"; };
+		88A9D6C8FBC397C4A6279C84 /* JellyStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyStyle.swift; sourceTree = "<group>"; };
+		88D2E957FDE6B2C5D9BD3CBA /* LobbyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LobbyTests.swift; sourceTree = "<group>"; };
 		8913A7AC10A5CE0BD4D9535A /* MapTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapTestView.swift; sourceTree = "<group>"; };
 		8A050B6E930C000EB23AB2C7 /* human-analysis.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "human-analysis.json"; sourceTree = "<group>"; };
+		8AC12CB1908D508442976CC9 /* ProfileAvatarButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAvatarButton.swift; sourceTree = "<group>"; };
 		8F4D38EFC52020C49647B159 /* HumanAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanAnalyzer.swift; sourceTree = "<group>"; };
 		92B5B5D48BC985127201AA50 /* MechaSoonelians.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MechaSoonelians.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9392E082D145DE0B1F5484FA /* ARGameController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARGameController.swift; sourceTree = "<group>"; };
+		9459A9CA1035D4F2E3F793F6 /* LobbyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LobbyStore.swift; sourceTree = "<group>"; };
 		98A6BD433F465C227C7C182C /* CharacterGame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterGame.swift; sourceTree = "<group>"; };
 		9A7FFFBDBEC0B6D593AFC7A7 /* Character3DModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DModel.swift; sourceTree = "<group>"; };
+		9BCADE667DA9C8CD2548022C /* test-rig.glb */ = {isa = PBXFileReference; path = "test-rig.glb"; sourceTree = "<group>"; };
 		9D67C6E4F96256D342E849EE /* SprayPainter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SprayPainter.swift; sourceTree = "<group>"; };
+		9F2AA87976B3E81F490CBF69 /* StudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioView.swift; sourceTree = "<group>"; };
 		B1D8FE898C8C0F85CD06E342 /* human-depth-float32.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "human-depth-float32.bin"; sourceTree = "<group>"; };
 		B72EA1D5DC5972D7C62DD623 /* GameSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSession.swift; sourceTree = "<group>"; };
 		BBE1EC8831CA5703DDB00CA1 /* CaptureImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureImage.swift; sourceTree = "<group>"; };
+		BFC6AF8476328BEC413492FA /* StudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioTests.swift; sourceTree = "<group>"; };
+		C0E0587B1CDDF8F30E2D7457 /* ProfileAvatarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAvatarUITests.swift; sourceTree = "<group>"; };
 		C3168DEE1FE4E95A6318A1DE /* BodyRig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyRig.swift; sourceTree = "<group>"; };
+		C73DF8957D4E94147D892790 /* SessionVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionVault.swift; sourceTree = "<group>"; };
 		C7D20FEE66D76AC0214E3DA5 /* PersonalBodyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalBodyTests.swift; sourceTree = "<group>"; };
+		C98C0AA3451C18D256864A6B /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		C9AD460E67A6501924D4D72A /* Character3DTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DTests.swift; sourceTree = "<group>"; };
 		CA3757EA99DEEB8D6C2972EE /* ChameleonCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonCapture.swift; sourceTree = "<group>"; };
-		CFC2DC05D71AB95919DF0248 /* JellyTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyTokens.swift; sourceTree = "<group>"; };
 		D18296BB4C1D5B457A9563D1 /* HumanEditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanEditorModel.swift; sourceTree = "<group>"; };
 		D5281FE38E7FADB0605FF96B /* PoseCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseCanvas.swift; sourceTree = "<group>"; };
+		D78A985FC85EDDA72E11AD97 /* MechaSooneliansUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MechaSooneliansUITests.swift; sourceTree = "<group>"; };
+		D8A48C5EC77EFC4F64B66F91 /* JellyTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyTokens.swift; sourceTree = "<group>"; };
 		D99F9A560431B9C94F58D80E /* Character3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DView.swift; sourceTree = "<group>"; };
 		DA96F47D2EC5DDCEDDA8739C /* ChameleonBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonBody.swift; sourceTree = "<group>"; };
 		DBAC0F8CF5D53ED50877620D /* ATTRIBUTION.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ATTRIBUTION.txt; sourceTree = "<group>"; };
 		E11B9D42A99699E3C385DA1C /* MechaSooneliansTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MechaSooneliansTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E16C1DC548212D03EC0E7CFB /* MechaSooneliansUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MechaSooneliansUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2EE05025550A1C0ADC6A58D /* HouseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseStore.swift; sourceTree = "<group>"; };
+		E3294E82FD29FEEEC513AD55 /* JellyAssets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JellyAssets; path = MechaSoonelians/Lobby/JellyAssets; sourceTree = SOURCE_ROOT; };
 		E659EBB21F9FE43758369A7B /* human-1-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-1-mask.png"; sourceTree = "<group>"; };
+		E7EBEDCF57512A68370EC152 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		E981861409898200BC9CCBF6 /* human-2-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-2-mask.png"; sourceTree = "<group>"; };
-		F15CF7625006B02A6F8C92C4 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		F51E65ADE5E00819B806A976 /* PaintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaintView.swift; sourceTree = "<group>"; };
 		FD9A8B3A361FC622CEC3D641 /* SprayPaintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SprayPaintView.swift; sourceTree = "<group>"; };
 		FF79F3BBCC9CA2AC029477CB /* CaptureEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorView.swift; sourceTree = "<group>"; };
@@ -125,9 +185,24 @@
 		19479F2CF09E768D0E7C2A64 /* MechaSooneliansTests */ = {
 			isa = PBXGroup;
 			children = (
+				C9AD460E67A6501924D4D72A /* Character3DTests.swift */,
+				0F8BAF4B0D1DB4D0EF16C9A4 /* CharacterGameTests.swift */,
+				61F5F90064265EE3BB0A094D /* JellyTests.swift */,
+				88D2E957FDE6B2C5D9BD3CBA /* LobbyTests.swift */,
 				C7D20FEE66D76AC0214E3DA5 /* PersonalBodyTests.swift */,
+				372EF0FC80E70635D0266ACB /* ProfilePhotoTests.swift */,
+				BFC6AF8476328BEC413492FA /* StudioTests.swift */,
 			);
 			path = MechaSooneliansTests;
+			sourceTree = "<group>";
+		};
+		467D253FD101B4212A2DCC36 /* MechaSooneliansUITests */ = {
+			isa = PBXGroup;
+			children = (
+				D78A985FC85EDDA72E11AD97 /* MechaSooneliansUITests.swift */,
+				C0E0587B1CDDF8F30E2D7457 /* ProfileAvatarUITests.swift */,
+			);
+			path = MechaSooneliansUITests;
 			sourceTree = "<group>";
 		};
 		52C0AB9281C8041D86E1573F /* MapTest */ = {
@@ -141,10 +216,13 @@
 		70EC23C53541979FEA2D87D6 /* MechaSoonelians */ = {
 			isa = PBXGroup;
 			children = (
+				5FBF133014F5AE71C077B4AD /* Assets.xcassets */,
 				5240FEA26661D94879BE1BB1 /* Info.plist */,
 				4B92C3C3D96F3E2E152D9497 /* MechaSooneliansApp.swift */,
+				0DFC1CCB54AF1A1C3F824DCE /* Settings.bundle */,
 				808432637F8DA2253AEBECAF /* Capture */,
 				9926EB57992165407400A30F /* Game */,
+				B09E22A592DC1B44E816FCC3 /* Lobby */,
 				52C0AB9281C8041D86E1573F /* MapTest */,
 				C06A06FB25AD1918485E408E /* Scan */,
 				81A2E4F4A5D2580E080E0141 /* Shared */,
@@ -175,8 +253,10 @@
 		81A2E4F4A5D2580E080E0141 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				E7EBEDCF57512A68370EC152 /* Design.swift */,
 				0DF44A506EAC5F271D13C10D /* GameRoomGeometry.swift */,
 				E2EE05025550A1C0ADC6A58D /* HouseStore.swift */,
+				D8A48C5EC77EFC4F64B66F91 /* JellyTokens.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -186,6 +266,7 @@
 			children = (
 				92B5B5D48BC985127201AA50 /* MechaSoonelians.app */,
 				E11B9D42A99699E3C385DA1C /* MechaSooneliansTests.xctest */,
+				E16C1DC548212D03EC0E7CFB /* MechaSooneliansUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -210,13 +291,33 @@
 			path = Game;
 			sourceTree = "<group>";
 		};
-		B541E82EAFE433AA371E8D5F /* Rally */ = {
+		AEC46699F272610EF29FDF78 /* Character3D */ = {
 			isa = PBXGroup;
 			children = (
-				F15CF7625006B02A6F8C92C4 /* Design.swift */,
-				CFC2DC05D71AB95919DF0248 /* JellyTokens.swift */,
+				9BCADE667DA9C8CD2548022C /* test-rig.glb */,
 			);
-			path = Rally;
+			name = Character3D;
+			path = TestFixtures/Character3D;
+			sourceTree = "<group>";
+		};
+		B09E22A592DC1B44E816FCC3 /* Lobby */ = {
+			isa = PBXGroup;
+			children = (
+				32C119B6D527E20F1E1B88B9 /* HomeView.swift */,
+				1E4B699C0E4B954FAC1D0110 /* JellyAudio.swift */,
+				460CD4447A575109D65E4D08 /* JellyExperienceView.swift */,
+				44199F0136E1F322187C191D /* JellyScene.swift */,
+				88A9D6C8FBC397C4A6279C84 /* JellyStyle.swift */,
+				9459A9CA1035D4F2E3F793F6 /* LobbyStore.swift */,
+				5C483075B49F2B7A8043B119 /* LobbyView.swift */,
+				C98C0AA3451C18D256864A6B /* Models.swift */,
+				8AC12CB1908D508442976CC9 /* ProfileAvatarButton.swift */,
+				0534AA838FD7A4A1CDC52F05 /* ProfileAvatarMesh.swift */,
+				1C23F41FC6FAF7524F185362 /* ProfilePhoto.swift */,
+				C73DF8957D4E94147D892790 /* SessionVault.swift */,
+				9F2AA87976B3E81F490CBF69 /* StudioView.swift */,
+			);
+			path = Lobby;
 			sourceTree = "<group>";
 		};
 		B5CB040D0FDB148BF8B1F471 /* HumanDepth */ = {
@@ -241,10 +342,13 @@
 			isa = PBXGroup;
 			children = (
 				1F44385A370DDF7499F11D84 /* CharacterViewer */,
+				E3294E82FD29FEEEC513AD55 /* JellyAssets */,
+				494600CE207A3382938DA097 /* ProfilePhotos */,
+				AEC46699F272610EF29FDF78 /* Character3D */,
 				B5CB040D0FDB148BF8B1F471 /* HumanDepth */,
 				70EC23C53541979FEA2D87D6 /* MechaSoonelians */,
 				19479F2CF09E768D0E7C2A64 /* MechaSooneliansTests */,
-				B541E82EAFE433AA371E8D5F /* Rally */,
+				467D253FD101B4212A2DCC36 /* MechaSooneliansUITests */,
 				CE3FBB017258239B07C3C588 /* room */,
 				89583F88FF4B9E62E920B722 /* Products */,
 			);
@@ -295,6 +399,7 @@
 			buildConfigurationList = 417D0A5AC3E3E52755D572FB /* Build configuration list for PBXNativeTarget "MechaSooneliansTests" */;
 			buildPhases = (
 				63C9A98B19B4523EFA1F0BDA /* Sources */,
+				B5015A67FCDE3E550449DF4F /* Resources */,
 			);
 			buildRules = (
 			);
@@ -308,6 +413,24 @@
 			productReference = E11B9D42A99699E3C385DA1C /* MechaSooneliansTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		E54B54B98829DE5EFAE11043 /* MechaSooneliansUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E80954F4D1B408CB24E21297 /* Build configuration list for PBXNativeTarget "MechaSooneliansUITests" */;
+			buildPhases = (
+				A70D9AEE8E72E01CD4D1A582 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9D396A43A94EC71158ADF3F0 /* PBXTargetDependency */,
+			);
+			name = MechaSooneliansUITests;
+			packageProductDependencies = (
+			);
+			productName = MechaSooneliansUITests;
+			productReference = E16C1DC548212D03EC0E7CFB /* MechaSooneliansUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -317,6 +440,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					E54B54B98829DE5EFAE11043 = {
+						TestTargetID = 0387DB65460530E93277F5CC;
+					};
 				};
 			};
 			buildConfigurationList = BE7CDDCE360DDA8B675E0E53 /* Build configuration list for PBXProject "MechaSoonelians" */;
@@ -335,6 +461,7 @@
 			targets = (
 				0387DB65460530E93277F5CC /* MechaSoonelians */,
 				1486DA7DECBD6B92C0A75EC2 /* MechaSooneliansTests */,
+				E54B54B98829DE5EFAE11043 /* MechaSooneliansUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -345,8 +472,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				FB79186CB13FA6F01ACB4321 /* ATTRIBUTION.txt in Resources */,
+				5882C03887E6A4ADB13E7BF9 /* Assets.xcassets in Resources */,
 				B922DE10EA1C2AEE804CC1E0 /* CharacterViewer in Resources */,
+				09DE02A586177281FE87B8C5 /* JellyAssets in Resources */,
 				145D1BF8B11BD44D49BA5FC3 /* LICENSE.txt in Resources */,
+				25B4119841C50B2F2409D767 /* ProfilePhotos in Resources */,
+				FFB9CB703797C597B76310B5 /* Settings.bundle in Resources */,
 				83BDBE8E14A828EBCB2AFA81 /* depth-preview.png in Resources */,
 				6767454F46983FD7EE922639 /* human-1-cutout.png in Resources */,
 				32ECF808FF04508A77FD1311 /* human-1-mask.png in Resources */,
@@ -361,6 +492,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B5015A67FCDE3E550449DF4F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6064CB4DE3DE946253EBE0FF /* test-rig.glb in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -368,7 +507,22 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				84FD36B48F1428E40CF15DEB /* Character3DTests.swift in Sources */,
+				2C54BFFAE740C857AC80D6DA /* CharacterGameTests.swift in Sources */,
+				43B120B16E2AC2849FEC50E3 /* JellyTests.swift in Sources */,
+				2779BFFE128731932E01EBCD /* LobbyTests.swift in Sources */,
 				C1B9208AB9F3A3F33851ECA8 /* PersonalBodyTests.swift in Sources */,
+				89DFA4187DA317244EE84B5D /* ProfilePhotoTests.swift in Sources */,
+				77D68A48F70360B89A1C11DB /* StudioTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A70D9AEE8E72E01CD4D1A582 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				46870BDD21E68BAE58B4497D /* MechaSooneliansUITests.swift in Sources */,
+				6697B2FE33548B0E6F45C6C2 /* ProfileAvatarUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -389,32 +543,50 @@
 				54501E87514E43B04138E862 /* CharacterGame.swift in Sources */,
 				15CA543F94ACF082E2CD966A /* CharacterStudioView.swift in Sources */,
 				9BA4ACCBABE31BA6A17CB77B /* CharacterWebView.swift in Sources */,
-				917D84DC5578C69DFEB32DE6 /* Design.swift in Sources */,
+				38EB2D34B38FEAEA9BACB9ED /* Design.swift in Sources */,
 				DD2079108A4E5E81740ED31D /* GameModels.swift in Sources */,
 				B51DFBDCA76A6E4538E39521 /* GameRoomGeometry.swift in Sources */,
 				C66FBCC1C4F22EC959F33A7B /* GameSession.swift in Sources */,
 				D6FA24E44C694A306F2179CE /* GameView.swift in Sources */,
 				D546689ECAB0C3F7F1912FE9 /* Ghost3DView.swift in Sources */,
 				177218563D231CB7703D242D /* GhostCapture.swift in Sources */,
+				6FE3B62C91415C8544606417 /* HomeView.swift in Sources */,
 				41523905A7AC596D58AD1F51 /* HouseStore.swift in Sources */,
 				6BE465E0EC84E1FF5523ABE5 /* HumanAnalyzer.swift in Sources */,
 				74E70CCFE053ED3991A0B65A /* HumanEditorModel.swift in Sources */,
-				CDBD32B3FD6F491FCB912578 /* JellyTokens.swift in Sources */,
+				0ACED52A1B12CEAB8BE33D50 /* JellyAudio.swift in Sources */,
+				FE0A713ACBAEF88C7C2B6016 /* JellyExperienceView.swift in Sources */,
+				BD5C5D8B5286808AE988C27D /* JellyScene.swift in Sources */,
+				62D963F8FCEDB560A4BBC7D6 /* JellyStyle.swift in Sources */,
+				DDD6FF986342895E37B7C008 /* JellyTokens.swift in Sources */,
+				C33A82B1E913742F4D7CD7F2 /* LobbyStore.swift in Sources */,
+				5720BB5FF1706D2CFDB2E952 /* LobbyView.swift in Sources */,
 				7F5875895879575C5D4F5A50 /* MapTestView.swift in Sources */,
 				66650E709BCF023072433390 /* MechaSooneliansApp.swift in Sources */,
+				A585826199C65097DF0704C3 /* Models.swift in Sources */,
 				A4C53F0F7411917B9C70F84E /* PaintView.swift in Sources */,
 				B67C1B83A11790E5D686ECF3 /* PersonCameraView.swift in Sources */,
 				216D3DA2E0C913B9D88C727D /* PoseCanvas.swift in Sources */,
+				4764E2008E6960FC8B8E797B /* ProfileAvatarButton.swift in Sources */,
+				7A33D928FB4FC9BC11924116 /* ProfileAvatarMesh.swift in Sources */,
+				9F2B5FFB7DB0A64DA97EB783 /* ProfilePhoto.swift in Sources */,
 				F9204A235897A2ED8DFF6324 /* RoomObstacles.swift in Sources */,
 				DDA3913CE4881610A4129A29 /* ScanView.swift in Sources */,
+				6C613797A24E698CFEE3DCA5 /* SessionVault.swift in Sources */,
 				F57E21ADFF6E76FD88072716 /* SprayPaintView.swift in Sources */,
 				5D3D823454B48F796734594E /* SprayPainter.swift in Sources */,
+				99023BCF3CA7E95687A70600 /* StudioView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		9D396A43A94EC71158ADF3F0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0387DB65460530E93277F5CC /* MechaSoonelians */;
+			targetProxy = AEF33760DA61ED0EC70FF7FF /* PBXContainerItemProxy */;
+		};
 		B87F8E9F7C1FF45E26FD79EF /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 0387DB65460530E93277F5CC /* MechaSoonelians */;
@@ -428,14 +600,16 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = MechaSoonelians/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ryushentan.MechaSoonelians;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -495,6 +669,23 @@
 			};
 			name = Release;
 		};
+		811C10D211F239756328CB30 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.ryushentan.MechaSooneliansUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = MechaSoonelians;
+			};
+			name = Debug;
+		};
 		95EFD3DD4B4F011E0BDDABDF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -517,14 +708,33 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = MechaSoonelians/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ryushentan.MechaSoonelians;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		CA8F9D242F051EF005B5F1AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.ryushentan.MechaSooneliansUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = MechaSoonelians;
 			};
 			name = Release;
 		};
@@ -634,6 +844,15 @@
 			buildConfigurations = (
 				E3E4DB01FBE09DE68C1394A0 /* Debug */,
 				7E514A1E98910BA792168973 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E80954F4D1B408CB24E21297 /* Build configuration list for PBXNativeTarget "MechaSooneliansUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				811C10D211F239756328CB30 /* Debug */,
+				CA8F9D242F051EF005B5F1AA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

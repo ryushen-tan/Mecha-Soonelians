@@ -1,6 +1,6 @@
 import XCTest
 import SwiftUI
-@testable import Rally
+@testable import MechaSoonelians
 
 final class CharacterGameTests: XCTestCase {
     @MainActor func testTwoNativeEditorsPublishRenderAndTagThroughNextJS() async throws {

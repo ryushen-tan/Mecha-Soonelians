@@ -1,7 +1,7 @@
 import XCTest
-@testable import Rally
+@testable import MechaSoonelians
 
-final class RallyTests: XCTestCase {
+final class LobbyTests: XCTestCase {
     func testServerAddressAllowsHTTPSAndLocalHTTPOnly() throws {
         for address in ["https://lobby.example.com", "http://localhost:3000", "http://192.168.1.20:3000", "http://10.0.0.3:3000", "http://[::1]:3000", "http://mac.local:3000"] {
             XCTAssertNoThrow(try ServerAddress.parse(address), address)
@@ -12,10 +12,10 @@ final class RallyTests: XCTestCase {
     }
 
     func testRoomRequiresTwoReadyPlayersBeforeStarting() {
-        let host = Player(id: "host", name: "Kai", avatar: 0, host: true, ready: true)
-        let waiting = Player(id: "guest", name: "Maya", avatar: 1, host: false, ready: false)
-        let ready = Player(id: "guest", name: "Maya", avatar: 1, host: false, ready: true)
-        func room(_ players: [Player], status: String = "waiting") -> Room {
+        let host = LobbyPlayer(id: "host", name: "Kai", avatar: 0, host: true, ready: true)
+        let waiting = LobbyPlayer(id: "guest", name: "Maya", avatar: 1, host: false, ready: false)
+        let ready = LobbyPlayer(id: "guest", name: "Maya", avatar: 1, host: false, ready: true)
+        func room(_ players: [LobbyPlayer], status: String = "waiting") -> Room {
             Room(code: "482916", locked: false, status: status, createdAt: "2026-10-24", members: players)
         }
         XCTAssertFalse(room([host]).canStart)

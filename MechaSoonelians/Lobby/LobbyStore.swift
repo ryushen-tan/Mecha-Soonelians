@@ -27,7 +27,7 @@ final class LobbyStore: ObservableObject {
         membership = SessionVault.read()
     }
 
-    var me: Player? { room?.members.first { $0.id == membership?.memberID } }
+    var me: LobbyPlayer? { room?.members.first { $0.id == membership?.memberID } }
     var isHost: Bool { me?.host == true }
     var validName: Bool {
         let name = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -92,7 +92,7 @@ final class LobbyStore: ObservableObject {
 
     func start() async { await mutate(body: ["status": "started"]) }
     func reset() async { await mutate(body: ["status": "waiting"]) }
-    func remove(_ player: Player) async { await mutate(suffix: "/members/\(player.id)", method: "DELETE") }
+    func remove(_ player: LobbyPlayer) async { await mutate(suffix: "/members/\(player.id)", method: "DELETE") }
 
     private func mutate(suffix: String = "", method: String = "PATCH", body: [String: Any]? = nil) async {
         guard let session = membership, !busy else { return }

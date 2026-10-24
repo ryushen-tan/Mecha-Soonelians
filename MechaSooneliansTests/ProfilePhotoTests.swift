@@ -1,6 +1,6 @@
 import XCTest
 import SceneKit
-@testable import Rally
+@testable import MechaSoonelians
 
 final class ProfilePhotoTests: XCTestCase {
     func testFullNameMatchingIgnoresCaseAndWhitespace() {

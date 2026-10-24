@@ -1,7 +1,7 @@
 import XCTest
 import SwiftUI
 import WebKit
-@testable import Rally
+@testable import MechaSoonelians
 
 private final class CharacterSetupMockProtocol: URLProtocol {
     // Generation always goes to the hosted service; this session answers for it without a network.
