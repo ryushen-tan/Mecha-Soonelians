@@ -104,7 +104,7 @@ Rooms have no configured player cap. The lobby displays the current player count
 - The server generates unique room codes and separate cryptographic membership tokens. Room reads require membership; lock, remove, start, and reset actions require the host.
 - The app polls while active, shows reconnection state after a network failure, and saves its membership token in the device Keychain for restoration.
 - An inactive guest expires after 90 seconds without a heartbeat. If the host expires or ends the room, the entire room closes. Keeping the host app in the background for over 90 seconds can therefore end the room.
-- Rooms are stored in memory in one persistent Next.js process. Restarting that process clears them. Development route recompilation reuses the same store. Deploy a single Node.js instance; serverless functions or multiple replicas require a shared database before they can reliably host rooms.
+- Rooms are stored in Supabase (Postgres schema `rally`; disguise GLBs in the private `rally-disguises` bucket), so any number of serverless instances serve the same rooms and memberships survive restarts and redeploys. Each request locks its room row, so concurrent instances apply changes one at a time. Database outages return a retryable `503`, never “room not found”. Setup, behaviour and limits: [Docs/Supabase.md](Docs/Supabase.md). For one local process without Supabase, set `RALLY_STORE=memory`.
 - `PORT` defaults to `3000`; the scripts bind to `0.0.0.0` to allow devices on your Wi-Fi. For localhost-only use, run `npx next dev --hostname 127.0.0.1`. Deploy behind HTTPS to use across networks.
 
 ## Next.js server
@@ -160,7 +160,7 @@ xcodebuild -project Rally.xcodeproj -target Rally -sdk iphonesimulator \
   -configuration Debug CODE_SIGNING_ALLOWED=NO build
 ```
 
-Build output and screenshots are ignored by Git. App Store signing is not configured in this repository. The lobby server is deployed to Vercel (`https://mecha-soonelians.vercel.app`) from `server/` with `vercel deploy --prod`; rooms live in memory, so they can be lost when Vercel starts or recycles instances.
+Build output and screenshots are ignored by Git. App Store signing is not configured in this repository. The lobby server is deployed to Vercel (`https://mecha-soonelians.vercel.app`) from `server/` with `vercel deploy --prod`; rooms live in Supabase once `RALLY_DATABASE_URL`, `SUPABASE_URL` and `SUPABASE_SECRET_KEY` are set (see [Docs/Supabase.md](Docs/Supabase.md)).
 
 ### Verification in this checkout
 

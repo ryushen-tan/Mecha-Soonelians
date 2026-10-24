@@ -1,11 +1,12 @@
 import { createLobbyHandler } from '../../lib/lobby.mjs';
+import { createRoomStoreFromEnv } from '../../lib/supabase-store.mjs';
 import { createCharactersHandler } from '../../lib/characters.mjs';
 import { createBlobStore } from '../../lib/blob-store.mjs';
 
-// Keep one room store across requests and development route recompilation.
-// Run one persistent Next.js process; serverless replicas need shared storage.
+// Rooms live in Supabase, so every serverless instance sees the same rooms. Keep one handler
+// (and its database pool) across requests and development route recompilation.
 const key = Symbol.for('rally.lobby');
-const handler = globalThis[key] ??= createLobbyHandler();
+const handler = globalThis[key] ??= createLobbyHandler({ store: createRoomStoreFromEnv() });
 
 // 3D characters keep their state in Vercel Blob, so any instance can serve them.
 let characters;

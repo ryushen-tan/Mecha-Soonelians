@@ -18,7 +18,7 @@ test('production Next.js serves the Swift endpoints and lobby contract', { timeo
   const base = `http://127.0.0.1:${port}`;
   const server = spawn(process.execPath, [
     'node_modules/next/dist/bin/next', 'start', '--hostname', '127.0.0.1', '--port', String(port)
-  ], { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+  ], { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: { RALLY_STORE: 'memory', ...process.env } }); // One process; supabase.test.mjs covers shared rooms.
   let output = '';
   let startupError;
   server.on('error', error => { startupError = error; });
