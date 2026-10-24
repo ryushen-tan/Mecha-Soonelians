@@ -57,6 +57,11 @@ test('production Next.js serves the Swift endpoints and lobby contract', { timeo
   });
   assert.match(suite.stdout, /# pass 4\b/);
   t.diagnostic(suite.stdout.trim());
+  const gameplay = await promisify(execFile)(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern=HTTP game', 'game.test.mjs'], {
+    cwd, env: environment, timeout: 25_000
+  });
+  assert.match(gameplay.stdout, /# pass 1\b/);
+  t.diagnostic(gameplay.stdout.trim());
 
   // Both URL forms must share membership and room state.
   const created = await fetch(`${base}/rooms`, {

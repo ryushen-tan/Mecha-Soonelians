@@ -2,6 +2,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --test editor.test.mjs",
     "build": "esbuild viewer.js --bundle --minify --legal-comments=eof --outfile=../../MechaSoonelians/Capture/CharacterViewer/viewer.js"
   },
   "dependencies": { "three": "0.186.1" },

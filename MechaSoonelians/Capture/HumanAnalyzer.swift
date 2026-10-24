@@ -14,6 +14,20 @@ struct HumanDetection: Identifiable {
     let joints: [BodyJoint]
     let cutout: CGImage
     let mask: CGImage
+
+    var generationWarning: String? {
+        let visible = Set(joints.filter { $0.confidence >= 0.2 }.map(\.name))
+        if !visible.isSuperset(of: ["leftAnkle", "rightAnkle", "leftWrist", "rightWrist"]) || bounds.maxY > 0.995 {
+            return "The scan could not verify both hands and feet inside the frame. Retake a full-body photo before using credits; cropped limbs can remain missing in the 3D mesh."
+        }
+        for side in ["left", "right"] {
+            if let hip = joints.first(where: { $0.name == side + "Hip" }), let knee = joints.first(where: { $0.name == side + "Knee" }),
+               abs(knee.point.y - hip.point.y) < abs(knee.point.x - hip.point.x) * 0.8 {
+                return "This looks like a seated or foreshortened capture. Standing with arms separated from the torso reduces fused surfaces and stretched poses."
+            }
+        }
+        return nil
+    }
 }
 
 struct HumanSampleMetadata: Codable {

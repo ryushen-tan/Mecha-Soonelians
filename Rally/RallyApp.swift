@@ -39,6 +39,10 @@ struct RootView: View {
             }
         }
         .foregroundStyle(RallyStyle.ink)
+        .environment(\.gameConnection, store.membership.map { membership in
+            GameConnection(server: membership.server, code: membership.code, memberID: membership.memberID,
+                token: membership.token, isHost: store.isHost)
+        })
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active { store.reloadServerAddress() }
         }
