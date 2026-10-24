@@ -118,7 +118,7 @@ export function setReady(room, member, ready) {
 const requireAR = room => room.ar ?? fail(404, 'No round is running in this room.');
 
 export function validateGhost(ghost, member) {
-  const valid = ghost && typeof ghost === 'object' && UUID.test(ghost.id ?? '') && ghost.ownerID === member.id &&
+  const valid = ghost && typeof ghost === 'object' && UUID.test(ghost.id ?? '') && String(ghost.ownerID).toLowerCase() === member.id &&
     matrix(ghost.transform) && matrix(ghost.floorTransform) && typeof ghost.flushBack === 'boolean' &&
     typeof ghost.hasModel === 'boolean' && finite(ghost.width) && finite(ghost.height) &&
     ghost.width > 0 && ghost.height > 0 && ghost.width <= 20 && ghost.height <= 20 &&
@@ -133,7 +133,7 @@ export function placeGhost(room, member, ghost, time) {
   if (ar.phase !== 'hiding') fail(409, 'Ghosts can only be placed while hiding.');
   if (ar.roles[member.id] === 'seeker') fail(403, 'The seeker does not hide.');
   validateGhost(ghost, member);
-  if (ar.ghosts.some(other => other.id === ghost.id && other.ownerID !== member.id)) fail(409, 'That ghost belongs to someone else.');
+  if (ar.ghosts.some(other => other.id === ghost.id.toLowerCase() && other.ownerID !== member.id)) fail(409, 'That ghost belongs to someone else.');
   ar.ghosts = ar.ghosts.filter(other => other.ownerID !== member.id);
   ar.ghosts.push({
     id: ghost.id.toLowerCase(), ownerID: member.id, transform: ghost.transform, floorTransform: ghost.floorTransform,
