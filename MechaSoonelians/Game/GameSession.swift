@@ -30,6 +30,9 @@ final class GameSession: NSObject, ObservableObject {
     private var browser: MCNearbyServiceBrowser?
     private var hostPeer: MCPeerID?
     private var playerForPeer: [MCPeerID: UUID] = [:]
+    /// Host: which player each ghost model came from. The model may arrive before its ghost, so the
+    /// first sender claims the ID and nobody else can replace it.
+    private var modelOwner: [UUID: UUID] = [:]
     private var timer: Timer?
     private var progressObservations: [NSKeyValueObservation] = []
 
@@ -97,6 +100,7 @@ final class GameSession: NSObject, ObservableObject {
     func placeGhost(_ ghost: Ghost, image: Data, model: URL? = nil) {
         if let model {
             if isHost {
+                modelOwner[ghost.id] = me.id
                 if let stored = storeGhostModel(ghost.id, from: model, move: false) {
                     sendGhostModel(ghost.id, at: stored, to: session.connectedPeers)
                 }
@@ -134,6 +138,7 @@ final class GameSession: NSObject, ObservableObject {
         state.ghosts = []
         ghostImages = [:]
         ghostModels = [:]
+        modelOwner = [:]
         state.phase = .hiding
         state.secondsLeft = state.hideSeconds
         broadcastState()
@@ -201,7 +206,11 @@ final class GameSession: NSObject, ObservableObject {
             broadcastState()
 
         case let .placeGhost(ghost, image):
-            guard state.phase == .hiding else { return }
+            // A player can only place their own ghost, under an ID whose model (if any) they sent.
+            let sender = peer.flatMap { playerForPeer[$0] } ?? me.id
+            guard state.phase == .hiding, ghost.ownerID == sender,
+                  modelOwner[ghost.id].map({ $0 == sender }) ?? true,
+                  !state.ghosts.contains(where: { $0.id == ghost.id && $0.ownerID != sender }) else { return }
             state.ghosts.removeAll { $0.ownerID == ghost.ownerID }
             state.ghosts.append(ghost)
             ghostImages[ghost.id] = image
@@ -361,8 +370,17 @@ extension GameSession: MCSessionDelegate {
             defer { if let staged { try? FileManager.default.removeItem(at: staged) } }
             if let id = Self.ghostID(fromResourceName: resourceName) {
                 // Hiders send 3D ghosts to the host, which passes them on to everyone else.
-                guard error == nil, let staged, isHost ? playerForPeer[peerID] != nil : peerID == hostPeer,
-                      let stored = storeGhostModel(id, from: staged, move: true) else { return }
+                guard error == nil, let staged else { return }
+                if isHost {
+                    // Only the ghost's owner may send its model.
+                    guard let sender = playerForPeer[peerID],
+                          state.ghosts.first(where: { $0.id == id }).map({ $0.ownerID == sender }) ?? true,
+                          modelOwner[id].map({ $0 == sender }) ?? true else { return }
+                    modelOwner[id] = sender
+                } else {
+                    guard peerID == hostPeer else { return }
+                }
+                guard let stored = storeGhostModel(id, from: staged, move: true) else { return }
                 if isHost {
                     sendGhostModel(id, at: stored, to: session.connectedPeers.filter { $0 != peerID })
                 }
