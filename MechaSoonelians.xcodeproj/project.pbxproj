@@ -43,6 +43,7 @@
 		C1B9208AB9F3A3F33851ECA8 /* PersonalBodyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D20FEE66D76AC0214E3DA5 /* PersonalBodyTests.swift */; };
 		C66FBCC1C4F22EC959F33A7B /* GameSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72EA1D5DC5972D7C62DD623 /* GameSession.swift */; };
 		C9B7072906BBC77C9FF367DD /* human-2-cutout.png in Resources */ = {isa = PBXBuildFile; fileRef = 35EFF5D7AD79BD5498F13036 /* human-2-cutout.png */; };
+		CDBD32B3FD6F491FCB912578 /* JellyTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFC2DC05D71AB95919DF0248 /* JellyTokens.swift */; };
 		D3AEDA1013AA53DDAC5CC361 /* human-2-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = E981861409898200BC9CCBF6 /* human-2-mask.png */; };
 		D546689ECAB0C3F7F1912FE9 /* Ghost3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BDB2E1BCEB1FCFDA269353B /* Ghost3DView.swift */; };
 		D6FA24E44C694A306F2179CE /* GameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BE9FA0E1173D95D05C52BBA /* GameView.swift */; };
@@ -105,6 +106,7 @@
 		C3168DEE1FE4E95A6318A1DE /* BodyRig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BodyRig.swift; sourceTree = "<group>"; };
 		C7D20FEE66D76AC0214E3DA5 /* PersonalBodyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalBodyTests.swift; sourceTree = "<group>"; };
 		CA3757EA99DEEB8D6C2972EE /* ChameleonCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonCapture.swift; sourceTree = "<group>"; };
+		CFC2DC05D71AB95919DF0248 /* JellyTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyTokens.swift; sourceTree = "<group>"; };
 		D18296BB4C1D5B457A9563D1 /* HumanEditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanEditorModel.swift; sourceTree = "<group>"; };
 		D5281FE38E7FADB0605FF96B /* PoseCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseCanvas.swift; sourceTree = "<group>"; };
 		D99F9A560431B9C94F58D80E /* Character3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Character3DView.swift; sourceTree = "<group>"; };
@@ -215,6 +217,7 @@
 			isa = PBXGroup;
 			children = (
 				F15CF7625006B02A6F8C92C4 /* Design.swift */,
+				CFC2DC05D71AB95919DF0248 /* JellyTokens.swift */,
 			);
 			path = Rally;
 			sourceTree = "<group>";
@@ -399,6 +402,7 @@
 				41523905A7AC596D58AD1F51 /* HouseStore.swift in Sources */,
 				6BE465E0EC84E1FF5523ABE5 /* HumanAnalyzer.swift in Sources */,
 				74E70CCFE053ED3991A0B65A /* HumanEditorModel.swift in Sources */,
+				CDBD32B3FD6F491FCB912578 /* JellyTokens.swift in Sources */,
 				7F5875895879575C5D4F5A50 /* MapTestView.swift in Sources */,
 				66650E709BCF023072433390 /* MechaSooneliansApp.swift in Sources */,
 				0BCC1E3A100EF1B3F729DE89 /* ModelServer.swift in Sources */,

@@ -14,6 +14,7 @@
 		0D17EF66E11663557F81F837 /* Character3DTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97CEED9462C3511CB698276F /* Character3DTests.swift */; };
 		116CFB5536F536363551121B /* LobbyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A1EBB0D749F010D12D26105 /* LobbyView.swift */; };
 		11B1EAD23CDADC196899495B /* CharacterGameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E437B4394716C4E60030BAE /* CharacterGameTests.swift */; };
+		166EF3BDC440AED9C87D1C68 /* JellyTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EB892C8ADEAADE9808EB12C /* JellyTokens.swift */; };
 		1874806EDB264FF4F2B17646 /* CharacterStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FA276BD42A0FA77802CB386 /* CharacterStudioView.swift */; };
 		1A0F768C80847C16562F3646 /* human-1-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = 267A606A1FCA4B349F86DC60 /* human-1-mask.png */; };
 		1B7993E0AB1980FC786B1E31 /* ATTRIBUTION.txt in Resources */ = {isa = PBXBuildFile; fileRef = 0C0F1C4CF7CE335710857B96 /* ATTRIBUTION.txt */; };
@@ -98,6 +99,7 @@
 		3862E34262223F569A04E1A1 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		3B3FA6EF373D06771E167B90 /* JellyExperienceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyExperienceView.swift; sourceTree = "<group>"; };
 		3BEE1A513F1447AAD4DEB851 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
+		3EB892C8ADEAADE9808EB12C /* JellyTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyTokens.swift; sourceTree = "<group>"; };
 		40B0871EDA7A77A022C07DD7 /* RallyUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RallyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		446B15BB8FE53901E8CCAC3D /* RallyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RallyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		45D6D7FD82120FFDCAFD29CB /* CharacterViewer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CharacterViewer; path = MechaSoonelians/Capture/CharacterViewer; sourceTree = SOURCE_ROOT; };
@@ -212,6 +214,7 @@
 				3B3FA6EF373D06771E167B90 /* JellyExperienceView.swift */,
 				94870F72F5B1E46571E59171 /* JellyScene.swift */,
 				C97513C7B4FB4C3761035337 /* JellyStyle.swift */,
+				3EB892C8ADEAADE9808EB12C /* JellyTokens.swift */,
 				6B84151F3143B02763882BE5 /* LobbyStore.swift */,
 				1A1EBB0D749F010D12D26105 /* LobbyView.swift */,
 				4BA32005EDFB2002ACBDDBC4 /* Models.swift */,
@@ -429,6 +432,7 @@
 				81900B850F5029CE32CF62D3 /* JellyExperienceView.swift in Sources */,
 				E164366EBF5B23AA62B3201E /* JellyScene.swift in Sources */,
 				8AD51F40601A9EEBDCB57F1B /* JellyStyle.swift in Sources */,
+				166EF3BDC440AED9C87D1C68 /* JellyTokens.swift in Sources */,
 				277C64173862B96F03EB9983 /* LobbyStore.swift in Sources */,
 				116CFB5536F536363551121B /* LobbyView.swift in Sources */,
 				9C1C83115AE50CDBFE9BC2BD /* Models.swift in Sources */,

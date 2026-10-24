@@ -17,6 +17,7 @@ targets:
         type: folder
         buildPhase: resources
       - Rally/Design.swift
+      - Rally/JellyTokens.swift
       - path: TestFixtures/LiDAR/room/rgb.jpg
         buildPhase: resources
       - path: TestFixtures/LiDAR/room/depth-preview.png
