@@ -86,8 +86,16 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
             session.startRunning()
         }
         framingTask = Task { @MainActor [weak self] in
+            var inViewStreak = 0
             while !Task.isCancelled, let self, self.stage == .framing {
                 self.fullBodyInView = await self.checkFraming()
+                // The player is across the room, so start by itself once they've been fully in view
+                // for about two seconds.
+                inViewStreak = self.fullBodyInView ? inViewStreak + 1 : 0
+                if inViewStreak >= 3, self.stage == .framing {
+                    Task { await self.run() }
+                    return
+                }
                 try? await Task.sleep(for: .milliseconds(600))
             }
         }
@@ -130,9 +138,10 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
 
     @MainActor
     func run() async {
+        guard stage == .framing else { return }
         framingTask?.cancel()
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: .duckOthers)
-        say("Stand back with your arms out a little. Starting in five.")
+        say("Got you. Arms out a little. Starting in five.")
         for second in stride(from: 5, through: 1, by: -1) {
             stage = .countdown(second)
             try? await Task.sleep(for: .seconds(1))

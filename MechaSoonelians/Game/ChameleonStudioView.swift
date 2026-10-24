@@ -44,7 +44,7 @@ struct ChameleonStudioView: View {
                 Text("Spin once, hide forever.").font(RallyStyle.font(32, .heavy)).tracking(-1)
                 VStack(alignment: .leading, spacing: 10) {
                     Label("Prop your phone up at waist height, screen facing you.", systemImage: "iphone")
-                    Label("Step back until your whole body fits, arms out a little.", systemImage: "figure.arms.open")
+                    Label("Walk back until your whole body fits. It starts by itself and talks you through it.", systemImage: "figure.arms.open")
                     Label("At each beep, turn a little to your right. Eight turns makes a full circle.", systemImage: "arrow.clockwise")
                 }
                 .font(RallyStyle.font(15, .medium))
@@ -73,9 +73,9 @@ struct ChameleonStudioView: View {
                 VStack(spacing: 12) {
                     switch capture.stage {
                     case .framing:
-                        Text(capture.fullBodyInView ? "Looking good. Ready when you are." : "Step back until your whole body fits.")
+                        Text(capture.fullBodyInView ? "Got you! Hold still, it starts by itself." : "Walk back until your whole body fits. It starts by itself.")
                             .font(RallyStyle.font(17, .bold))
-                        Button { Task { await capture.run() } } label: { ActionLabel(text: "Start the spin") }
+                        Button { Task { await capture.run() } } label: { ActionLabel(text: "Start now") }
                             .buttonStyle(PushButtonStyle())
                             .disabled(!capture.fullBodyInView)
                     case .countdown(let second):
