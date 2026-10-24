@@ -27,25 +27,42 @@ struct GhostPlacement {
         self.height = height
     }
 
+    /// A body stuck flat on a surface: its back on the surface with its feet at `origin`, its front
+    /// out along `normal`, and its head toward `up`. Works for walls and floors alike.
+    init(on origin: SIMD3<Float>, normal: SIMD3<Float>, up: SIMD3<Float>, width: Float, height: Float) {
+        let out = simd_normalize(normal)
+        let head = simd_normalize(up - out * simd_dot(up, out))
+        floorTransform = simd_float4x4(SIMD4(simd_cross(head, out), 0), SIMD4(head, 0), SIMD4(out, 0), SIMD4(origin, 1))
+        var center = floorTransform
+        center.columns.3 = SIMD4(origin + head * (height / 2) + out * 0.02, 1)
+        transform = center
+        flushBack = true
+        self.width = width
+        self.height = height
+    }
+
     /// Where the feet are.
     var origin: SIMD3<Float> { simd_make_float3(floorTransform.columns.3) }
-    /// The way the ghost faces, flat.
+    /// The way the ghost faces: out of the surface it's stuck to.
     var facing: SIMD3<Float> { simd_make_float3(floorTransform.columns.2) }
+    /// The way its head points.
+    var up: SIMD3<Float> { simd_make_float3(floorTransform.columns.1) }
+    /// Stuck to a wall, rather than lying on the floor or furniture.
+    var onWall: Bool { abs(facing.y) < 0.5 }
 
-    /// The same ghost slid along the floor by `offset` and turned by `turn` radians.
-    func moved(by offset: SIMD3<Float>, turn: Float) -> GhostPlacement {
-        let facing = simd_quatf(angle: turn, axis: [0, 1, 0]).act(facing)
-        return GhostPlacement(origin: origin + SIMD3(offset.x, 0, offset.z), facing: facing, onWall: flushBack, width: width, height: height)
+    /// The same stuck body slid along its surface by `offset`.
+    func moved(by offset: SIMD3<Float>) -> GhostPlacement {
+        GhostPlacement(on: origin + offset, normal: facing, up: up, width: width, height: height)
     }
 
-    /// The same ghost with its feet at `height` above the house's zero.
-    func raised(to y: Float) -> GhostPlacement {
-        GhostPlacement(origin: SIMD3(origin.x, y, origin.z), facing: facing, onWall: flushBack, width: width, height: height)
+    /// The same stuck body spun by `angle` radians about the way it faces.
+    func turned(by angle: Float) -> GhostPlacement {
+        GhostPlacement(on: origin, normal: facing, up: simd_quatf(angle: angle, axis: facing).act(up), width: width, height: height)
     }
 
-    /// The same ghost at a new size, keeping its proportions.
+    /// The same stuck body at a new size, keeping its proportions.
     func resized(to newHeight: Float) -> GhostPlacement {
-        GhostPlacement(origin: origin, facing: facing, onWall: flushBack, width: width * newHeight / height, height: newHeight)
+        GhostPlacement(on: origin, normal: facing, up: up, width: width * newHeight / height, height: newHeight)
     }
 }
 

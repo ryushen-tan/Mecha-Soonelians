@@ -25,6 +25,8 @@ struct RoomObstacles {
 
     private(set) var walls: [Wall] = []
     private(set) var furniture: [Box] = []
+    /// The top of the highest scanned wall.
+    var ceiling: Float? { walls.map { $0.box.center.y + $0.box.halfSize.y }.max() }
 
     init() {}
 

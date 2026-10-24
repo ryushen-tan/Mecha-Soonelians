@@ -299,9 +299,9 @@ final class PaintCanvas {
 
 /// Spray-painting the hider's chameleon where it stands in AR: aim the + at the wall to pick a
 /// color, then hold to spray where the + points. Closer sprays finer, farther sprays wider. The
-/// chameleon can also change pose, be tapped and dragged onto the floor, a wall or furniture,
-/// pinched to resize and twisted to turn, or walked with a joystick. It never goes inside the
-/// scanned walls or furniture.
+/// chameleon is stuck flat on a wall or lying on the floor (or furniture); it can change pose, be
+/// tapped and dragged to another spot, pinched to resize, twisted to spin, or slid up, down, left
+/// and right along its surface with a joystick. It never goes inside the scanned walls or furniture.
 @MainActor
 final class SprayPainter: ObservableObject {
     @Published private(set) var isReady = false
@@ -327,14 +327,18 @@ final class SprayPainter: ObservableObject {
     @Published private(set) var isSelected = false
     /// Why the last move didn't happen, for a moment.
     @Published private(set) var notice: String?
-    /// Which way the chameleon faces, in degrees, for the turn slider.
+    /// How far the chameleon is spun on its surface, in degrees, for the turn slider.
     @Published private(set) var turn: Double = 0
-    /// The joystick: x to the player's right, y away from the player, each -1...1.
+    /// Stuck to a wall, rather than lying on the floor or furniture.
+    @Published private(set) var onWall = false
+    /// The joystick: x is right on screen, y up on screen, each -1...1.
     var joystick = SIMD2<Float>.zero
 
-    static let heights: ClosedRange<Float> = 0.35...1.0
+    static let heights: ClosedRange<Float> = 0.3...0.8
 
-    private(set) var placement: GhostPlacement
+    private(set) var placement: GhostPlacement {
+        didSet { if placement.onWall != onWall { onWall = placement.onWall } }
+    }
     let canvas = PaintCanvas()
     private let ar: ARGameController
     private let body: ChameleonBody
@@ -349,12 +353,9 @@ final class SprayPainter: ObservableObject {
     private var lastBuzz: TimeInterval = 0
     /// How far away the body was while spraying, so the edge of the spray still lands when the + slips off it.
     private var lastDistance: Float?
-    /// Where in its hop the chameleon is while it's being walked, and how high it is.
-    private var hopPhase: Float = 0
-    private var hop: Float = 0
     private let haptics = UIImpactFeedbackGenerator(style: .soft)
     private let gestures = BodyGestures()
-    /// While dragging: from the finger to the feet on screen, so the body doesn't jump to the finger.
+    /// While dragging: from the finger to the body's middle on screen, so the body doesn't jump to the finger.
     private var grab: CGPoint?
     private var pinchStart: Float = 0
     private var lastTwist: Float = 0
@@ -367,6 +368,7 @@ final class SprayPainter: ObservableObject {
         self.placement = placement
         self.body = body
         if let texture = body.initialTexture { canvas.restore(texture) }
+        onWall = placement.onWall
         turn = Self.degrees(of: placement)
         guard !ar.obstacles.blocks(bodyBox(placement, pose: 0)) else { return nil }
     }
@@ -409,17 +411,17 @@ final class SprayPainter: ObservableObject {
     func nextPose() {
         guard isReady else { return }
         let count = body.poses.count
-        guard let next = (1..<count).map({ (pose + $0) % count }).first(where: fits) else { return blocked() }
+        guard let next = (1..<count).map({ (pose + $0) % count }).first(where: poseFits) else { return blocked() }
         switchPose(to: next)
     }
 
     func setPose(id: String) {
         guard isReady, let index = body.index(of: id), index != pose else { return }
-        guard fits(pose: index) else { return blocked() }
+        guard poseFits(index) else { return blocked() }
         switchPose(to: index)
     }
 
-    private func fits(pose: Int) -> Bool { allowed(placement, pose: pose) }
+    private func poseFits(_ pose: Int) -> Bool { allowed(placement, pose: pose) }
 
     private func switchPose(to index: Int) {
         pose = index
@@ -474,7 +476,7 @@ final class SprayPainter: ObservableObject {
         let now = CACurrentMediaTime()
         let elapsed = Float(min(now - (lastTick ?? now), 0.1))
         lastTick = now
-        walk(elapsed)
+        slide(elapsed)
         guard let model, let surface else { return }
         let view = ar.arView
         guard let ray = view.ray(through: CGPoint(x: view.bounds.midX, y: view.bounds.midY)) else { return }
@@ -497,68 +499,56 @@ final class SprayPainter: ObservableObject {
         }
     }
 
-    /// Walks the chameleon from the joystick, hopping as it goes.
-    private func walk(_ elapsed: Float) {
-        guard let preview else { return }
-        let moving = simd_length(joystick) > 0.05
-        if moving, let frame = ar.currentFrame {
-            // Joystick directions follow where the phone is facing, flat along the floor.
-            let camera = frame.camera.transform
-            var ahead = -simd_make_float3(camera.columns.2), right = simd_make_float3(camera.columns.0)
-            ahead.y = 0
-            right.y = 0
-            if simd_length(ahead) > 0.01, simd_length(right) > 0.01 {
-                let step = (simd_normalize(right) * joystick.x + simd_normalize(ahead) * joystick.y) * 0.6 * elapsed
-                let floor = ar.floorHeight(for: frame)
-                // Straight ahead if it's clear, else sliding along whatever's in the way.
-                let tries = [step, SIMD3(step.x, 0, 0), SIMD3(0, 0, step.z)].filter { simd_length($0) > 1e-5 }
-                if !tries.contains(where: { apply(supported(placement.moved(by: $0, turn: 0), floor: floor)) }) {
-                    blocked()
-                }
-            }
+    /// Slides the chameleon along its wall or floor from the joystick, the way the screen points.
+    private func slide(_ elapsed: Float) {
+        guard simd_length(joystick) > 0.05, let camera = ar.currentFrame?.camera.transform else { return }
+        let normal = placement.facing
+        let flat = { (v: SIMD3<Float>) -> SIMD3<Float> in v - normal * simd_dot(v, normal) }
+        let right = flat(simd_make_float3(camera.columns.0))
+        // Up on screen, along the surface. Looking level at the floor, that's away from the player.
+        var screenUp = flat(simd_make_float3(camera.columns.1))
+        if simd_length(screenUp) < 0.3 { screenUp = flat(-simd_make_float3(camera.columns.2)) }
+        guard simd_length(right) > 0.05, simd_length(screenUp) > 0.05 else { return }
+        let across = simd_normalize(right) * joystick.x * 0.4 * elapsed
+        let along = simd_normalize(screenUp) * joystick.y * 0.4 * elapsed
+        // Straight there if it's clear, else sliding along whatever's in the way.
+        if ![across + along, across, along].contains(where: { simd_length($0) > 1e-5 && apply(placement.moved(by: $0)) }) {
+            blocked()
         }
-        if moving {
-            hopPhase += elapsed * 12
-            hop = abs(sin(hopPhase)) * placement.height * 0.12
-        } else {
-            hopPhase = 0
-            hop *= 0.7
-        }
-        var transform = placement.floorTransform
-        transform.columns.3.y += hop
-        preview.transform = Transform(matrix: transform)
-    }
-
-    /// Keeps a walked chameleon on what's under it: up onto low furniture, and down to the floor
-    /// when it walks off the furniture it was on.
-    private func supported(_ candidate: GhostPlacement, floor: Float) -> GhostPlacement {
-        let obstacles = ar.obstacles
-        if let top = obstacles.furnitureTop(under: candidate.origin, step: 0.1) { return candidate.raised(to: top) }
-        if obstacles.furnitureTop(under: placement.origin, step: 0.1) != nil { return candidate.raised(to: floor) }
-        return candidate
     }
 
     // MARK: Moving it by hand
 
-    /// Turns the chameleon to face `degrees` (0 is the house's +Z).
+    /// Spins the chameleon on its surface to `degrees`.
     func setTurn(_ degrees: Double) {
         rotate(by: Float((degrees - Self.degrees(of: placement)) * .pi / 180))
     }
 
-    /// Stands the chameleon on the floor right where it is, stepping off the wall or furniture.
-    func toFloor() {
+    /// Lays the chameleon flat on the floor where it is: feet at the wall and head into the room if
+    /// it was on a wall, else straight down from the furniture it was on.
+    func stickToFloor() {
         guard isReady, let frame = ar.currentFrame else { return }
-        if !apply(freeStanding(placement).raised(to: ar.floorHeight(for: frame))) { blocked() }
+        let floor = ar.floorHeight(for: frame)
+        let candidate: GhostPlacement
+        if placement.onWall {
+            let base = SIMD3(placement.origin.x, floor, placement.origin.z) + placement.facing * 0.03
+            candidate = GhostPlacement(on: base, normal: [0, 1, 0], up: placement.facing, width: placement.width, height: placement.height)
+        } else {
+            guard abs(placement.origin.y - floor) > 0.02 else { return }
+            candidate = GhostPlacement(on: SIMD3(placement.origin.x, floor, placement.origin.z), normal: [0, 1, 0],
+                                       up: placement.up, width: placement.width, height: placement.height)
+        }
+        if !apply(candidate) { blocked() }
     }
 
-    /// Puts the chameleon's back on the closest scanned wall.
-    func againstWall() {
-        guard isReady, let frame = ar.currentFrame else { return }
+    /// Sticks the chameleon flat on the closest scanned wall, upright with its feet just off the floor.
+    func stickToWall() {
+        guard isReady, !placement.onWall, let frame = ar.currentFrame else { return }
         guard let wall = ar.obstacles.nearestWall(to: bodyBox(placement, pose: pose).center, within: 1.5) else {
-            return flash("No scanned wall nearby. Drag it closer to one.")
+            return flash("No scanned wall nearby. Drag it onto one.")
         }
-        let origin = SIMD3(wall.point.x, ar.floorHeight(for: frame), wall.point.z)
-        let candidate = GhostPlacement(origin: origin, facing: wall.normal, onWall: true, width: placement.width, height: placement.height)
+        let origin = SIMD3(wall.point.x, ar.floorHeight(for: frame) + 0.02, wall.point.z)
+        let candidate = GhostPlacement(on: origin, normal: wall.normal, up: [0, 1, 0], width: placement.width, height: placement.height)
         if !apply(candidate) { blocked() }
     }
 
@@ -575,17 +565,23 @@ final class SprayPainter: ObservableObject {
         guard isReady else { return }
         switch state {
         case .began:
-            guard isSelected || isOnBody(point), let feet = ar.arView.project(placement.origin) else { return }
-            grab = CGPoint(x: feet.x - point.x, y: feet.y - point.y)
+            guard isSelected || isOnBody(point), let middle = ar.arView.project(bodyBox(placement, pose: pose).center) else { return }
+            grab = CGPoint(x: middle.x - point.x, y: middle.y - point.y)
             if !isSelected {
                 isSelected = true
                 updateRing()
             }
         case .changed:
-            guard let grab else { return }
-            let target = CGPoint(x: point.x + grab.x, y: point.y + grab.y)
-            guard let moved = ar.chameleonPlacement(at: target, height: placement.height, facing: placement.facing) else { return }
-            if !apply(moved) { blocked() }
+            guard let grab, let spot = ar.surface(at: CGPoint(x: point.x + grab.x, y: point.y + grab.y)) else { return }
+            // Keeps its spin on the same kind of surface; stands the default way on a new one.
+            let sameKind = (spot.normal.y > 0.5) != placement.onWall
+            var up = sameKind ? placement.up - spot.normal * simd_dot(placement.up, spot.normal) : .zero
+            if simd_length(up) < 0.3 { up = ar.defaultUp(on: spot.normal, at: spot.point) }
+            up = simd_normalize(up)
+            let size = bodySize(placement, pose: pose)
+            let candidate = GhostPlacement(on: spot.point - up * (size.y / 2), normal: spot.normal, up: up,
+                                           width: placement.width, height: placement.height)
+            if !apply(candidate) { blocked() }
         default:
             grab = nil
         }
@@ -596,35 +592,33 @@ final class SprayPainter: ObservableObject {
         if state == .began { pinchStart = placement.height }
         guard state == .changed, pinchStart > 0 else { return }
         let height = min(max(pinchStart * scale, Self.heights.lowerBound), Self.heights.upperBound)
-        if abs(height - placement.height) > 0.002, !apply(placement.resized(to: height)) { blocked() }
+        if abs(height - placement.height) > 0.002, !apply(aroundMiddle(placement.resized(to: height))) { blocked() }
     }
 
     private func twisted(_ state: UIGestureRecognizer.State, rotation: Float) {
         guard isReady, isSelected else { return }
         if state == .began { lastTwist = 0 }
         guard state == .changed else { return }
-        // Twisting clockwise on screen turns it clockwise seen from above.
+        // Twisting clockwise on screen spins it clockwise as seen by the player.
         rotate(by: lastTwist - rotation)
         lastTwist = rotation
     }
 
     private func rotate(by angle: Float) {
         guard isReady, abs(angle) > 1e-4 else { return }
-        if !apply(freeStanding(placement).moved(by: .zero, turn: angle)) { blocked() }
+        if !apply(aroundMiddle(placement.turned(by: angle))) { blocked() }
     }
 
-    /// The same spot, but standing on its own: off the wall, where its body already was.
-    private func freeStanding(_ placement: GhostPlacement) -> GhostPlacement {
-        guard placement.flushBack else { return placement }
-        let depth = bodySize(placement, pose: pose).z
-        return GhostPlacement(origin: placement.origin + placement.facing * (0.015 + depth / 2), facing: placement.facing,
-                              onWall: false, width: placement.width, height: placement.height)
+    /// `changed`, slid so the body's middle stays where it is now, so it spins and grows in place.
+    private func aroundMiddle(_ changed: GhostPlacement) -> GhostPlacement {
+        let middle = placement.origin + placement.up * (bodySize(placement, pose: pose).y / 2)
+        return changed.moved(by: middle - changed.up * (bodySize(changed, pose: pose).y / 2) - changed.origin)
     }
 
-    /// Moves the chameleon to `candidate` unless that puts it inside a wall or furniture.
+    /// Moves the chameleon to `candidate` unless that puts it inside a wall or furniture, or off its surface.
     private func apply(_ candidate: GhostPlacement) -> Bool {
         guard allowed(candidate, pose: pose) else { return false }
-        let restand = candidate.height != placement.height || candidate.flushBack != placement.flushBack
+        let restand = candidate.height != placement.height
         placement = candidate
         let degrees = Self.degrees(of: candidate)
         if abs(degrees - turn) > 0.5 { turn = degrees }
@@ -632,15 +626,33 @@ final class SprayPainter: ObservableObject {
             preview?.removeFromParent()
             preview = ar.addPreview(model, placement: candidate)
             updateRing()
+        } else {
+            preview?.transform = Transform(matrix: candidate.floorTransform)
         }
         return true
     }
 
-    /// Whether the chameleon can be there in that pose. Anything goes while it's already stuck
-    /// inside something, so it can always be moved back out.
+    /// Whether the chameleon can be there in that pose. Anything goes while it's already somewhere
+    /// it shouldn't be, so it can always be moved back out.
     private func allowed(_ candidate: GhostPlacement, pose: Int) -> Bool {
+        fits(candidate, pose: pose) || !fits(placement, pose: self.pose)
+    }
+
+    /// Not inside a wall or furniture, not through the floor or ceiling, on a wall that's really
+    /// there, and lying on the floor or on top of furniture rather than in the air.
+    private func fits(_ placement: GhostPlacement, pose: Int) -> Bool {
         let obstacles = ar.obstacles
-        return !obstacles.blocks(bodyBox(candidate, pose: pose)) || obstacles.blocks(bodyBox(placement, pose: self.pose))
+        let box = bodyBox(placement, pose: pose)
+        guard !obstacles.blocks(box) else { return false }
+        let up = SIMD3<Float>(0, 1, 0), reach = box.radius(along: up)
+        if let frame = ar.currentFrame, box.center.y - reach < ar.floorHeight(for: frame) - 0.03 { return false }
+        guard !obstacles.walls.isEmpty else { return true }
+        if let ceiling = obstacles.ceiling, box.center.y + reach > ceiling + 0.03 { return false }
+        if placement.onWall { return obstacles.nearestWall(to: box.center, within: 0.3) != nil }
+        let height = placement.origin.y
+        if let frame = ar.currentFrame, abs(height - ar.floorHeight(for: frame)) < 0.05 { return true }
+        guard let top = obstacles.furnitureTop(under: box.center, step: 0.06) else { return false }
+        return abs(top - height) < 0.06
     }
 
     private func blocked() {
@@ -668,40 +680,46 @@ final class SprayPainter: ObservableObject {
         return false
     }
 
-    /// The body's size in metres in this pose.
+    /// The body's size in metres in this pose: x across, y feet to head, z out of the surface.
     private func bodySize(_ placement: GhostPlacement, pose: Int) -> SIMD3<Float> {
         let bounds = body.bounds[pose]
         // The 3D editor normalizes every character to 1.75 m standing.
         return (bounds.max - bounds.min) * (placement.height / 1.75)
     }
 
-    /// The space the body takes up, where ARGameController stands it: a little smaller, so touching
-    /// isn't overlapping, and lifted off whatever it stands on.
+    /// The space the body takes up where ARGameController puts it, a little smaller so touching
+    /// isn't overlapping.
     private func bodyBox(_ placement: GhostPlacement, pose: Int) -> RoomObstacles.Box {
         let size = bodySize(placement, pose: pose)
-        let center = SIMD3<Float>(0, size.y / 2 + 0.015, placement.flushBack ? 0.015 + size.z / 2 : 0)
         var transform = placement.floorTransform
-        transform.columns.3 = placement.floorTransform * SIMD4(center, 1)
-        return RoomObstacles.Box(transform: transform, halfSize: simd_max(size / 2 - SIMD3(0.02, 0.035, 0.02), SIMD3(repeating: 0.01)))
+        transform.columns.3 = placement.floorTransform * SIMD4(0, size.y / 2, 0.015 + size.z / 2, 1)
+        return RoomObstacles.Box(transform: transform, halfSize: simd_max(size / 2 - 0.02, SIMD3(repeating: 0.01)))
     }
 
-    /// A lime disc under the chameleon while it's selected.
+    /// A lime outline on the surface behind the chameleon while it's selected.
     private func updateRing() {
         ring?.removeFromParent()
         ring = nil
         guard isSelected, let preview else { return }
         let size = bodySize(placement, pose: pose)
-        let radius = max(size.x, size.z) / 2 + 0.06
+        let width = size.x + 0.12, height = size.y + 0.12
         var material = UnlitMaterial(color: UIColor(RallyStyle.lime))
         material.blending = .transparent(opacity: 0.6)
-        let disc = ModelEntity(mesh: .generatePlane(width: radius * 2, depth: radius * 2, cornerRadius: radius), materials: [material])
-        disc.position = SIMD3(0, 0.004, placement.flushBack ? 0.015 + size.z / 2 : 0)
-        preview.addChild(disc)
-        ring = disc
+        let halo = ModelEntity(mesh: .generatePlane(width: width, height: height, cornerRadius: min(width, height) / 2),
+                               materials: [material])
+        // In front of the invisible wall that hides things behind it.
+        halo.position = SIMD3(0, size.y / 2, 0.012)
+        preview.addChild(halo)
+        ring = halo
     }
 
+    /// How far the body is spun from standing straight up on a wall, or from head-away on the floor.
     private static func degrees(of placement: GhostPlacement) -> Double {
-        Double(atan2(placement.facing.x, placement.facing.z) * 180 / .pi)
+        let normal = placement.facing
+        var reference = placement.onWall ? SIMD3<Float>(0, 1, 0) : SIMD3<Float>(0, 0, -1)
+        reference = simd_normalize(reference - normal * simd_dot(reference, normal))
+        let angle = atan2(simd_dot(simd_cross(reference, placement.up), normal), simd_dot(reference, placement.up))
+        return Double(angle * 180 / .pi)
     }
 
     /// Scatters drops through a cone around the + like a spray can. Returns whether any landed.

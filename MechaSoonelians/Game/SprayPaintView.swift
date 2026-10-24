@@ -2,8 +2,9 @@ import SwiftUI
 
 /// The hiding controls over the AR view: a + in the middle, and one big button that picks up the
 /// color under the + from the real room, or sprays while held when the + is on the body. The pose
-/// button cycles poses (hold it for the pose wheel); the chameleon can be dragged, pinched and
-/// twisted in the room, walked with the joystick, turned with a slider, or sent to the floor or a wall.
+/// button cycles poses (hold it for the pose wheel). The chameleon sticks to a wall or lies on the
+/// floor; it can be dragged, pinched and twisted, slid along its surface with the joystick, and spun
+/// with a slider.
 struct SprayPaintView: View {
     @ObservedObject var painter: SprayPainter
     let timeLeft: String
@@ -49,7 +50,7 @@ struct SprayPaintView: View {
     private var hint: String {
         if !painter.isReady { return "Putting your chameleon in the room…" }
         if let notice = painter.notice { return notice }
-        if painter.isSelected { return "Drag it onto the floor, a wall or furniture. Pinch to resize, twist to turn. Tap it to let go." }
+        if painter.isSelected { return "Drag it onto a wall or the floor. Pinch to resize, twist to spin. Tap it to let go." }
         if !painter.hasPickedColor { return "Point the + at the wall behind your chameleon and tap Pick." }
         if painter.isSpraying { return "Move the phone to spray. Step closer for detail, back for big areas." }
         return sprayMode ? "Hold to spray. Point at the wall again for a new color." : "Point the + at your chameleon to spray, or tap Pick for a new color."
@@ -145,21 +146,21 @@ struct SprayPaintView: View {
         .padding(.bottom, 8)
     }
 
-    /// The joystick walks the chameleon across the floor the way the phone faces; the slider turns it.
+    /// The joystick slides the chameleon up, down, left and right along its wall or floor; the slider spins it.
     private var moveControls: some View {
         HStack(alignment: .bottom, spacing: 12) {
             Joystick { painter.joystick = $0 }
             VStack(spacing: 10) {
                 HStack(spacing: 8) {
-                    placeButton("To floor", systemImage: "arrow.down.to.line") { painter.toFloor() }
-                    placeButton("Against wall", systemImage: "rectangle.portrait.and.arrow.right") { painter.againstWall() }
+                    placeButton("Wall", systemImage: "rectangle.portrait", selected: painter.onWall) { painter.stickToWall() }
+                    placeButton("Floor", systemImage: "square.bottomhalf.filled", selected: !painter.onWall) { painter.stickToFloor() }
                 }
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 14, weight: .semibold))
                         .accessibilityHidden(true)
                     Slider(value: Binding(get: { painter.turn }, set: { painter.setTurn($0) }), in: -180...180)
                         .tint(RallyStyle.ink)
-                        .accessibilityLabel("Turn")
+                        .accessibilityLabel("Spin")
                         .accessibilityValue("\(Int(painter.turn)) degrees")
                 }
                 .padding(.horizontal, 12)
@@ -174,17 +175,19 @@ struct SprayPaintView: View {
         .disabled(!painter.isReady)
     }
 
-    private func placeButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+    private func placeButton(_ title: String, systemImage: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
-                .font(RallyStyle.font(13, .semibold))
+                .font(RallyStyle.font(14, .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, minHeight: 40)
-                .background(RallyStyle.surface.opacity(0.92), in: Capsule())
+                .background(selected ? RallyStyle.lime : RallyStyle.surface.opacity(0.92), in: Capsule())
                 .overlay(Capsule().stroke(RallyStyle.ink, lineWidth: 2))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Stick to \(title.lowercased())")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     /// One button for both jobs, so the player never has to look away from the +.
@@ -257,7 +260,7 @@ private struct Joystick: View {
                 .fill(RallyStyle.surface.opacity(0.75))
                 .overlay(Circle().stroke(RallyStyle.ink, lineWidth: 2))
                 .frame(width: radius * 2, height: radius * 2)
-            Image(systemName: "figure.walk")
+            Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(RallyStyle.muted)
                 .offset(y: -radius + 14)
@@ -282,7 +285,7 @@ private struct Joystick: View {
                 onChange(.zero)
             })
         .accessibilityElement()
-        .accessibilityLabel("Move your chameleon")
+        .accessibilityLabel("Slide your chameleon")
         .accessibilityAdjustableAction { direction in
             onChange(SIMD2(0, direction == .increment ? 1 : -1))
             Task { @MainActor in

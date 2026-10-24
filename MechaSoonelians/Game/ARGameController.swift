@@ -85,32 +85,44 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         return floors.min() ?? frame.camera.transform.columns.3.y - 1.3
     }
 
-    /// Where a chameleon goes when the player points at this screen point: on a wall it stands on the
-    /// floor with its back to the wall; on the floor or furniture it faces `facing`, else the player.
-    func chameleonPlacement(at point: CGPoint, height: Float = ChameleonStore.height, facing: SIMD3<Float>? = nil) -> GhostPlacement? {
+    /// The wall, floor or furniture top under a screen point: a spot on it and the way out of it
+    /// toward the player. Walls line up with the scanned ones. Ceilings don't count.
+    func surface(at point: CGPoint) -> (point: SIMD3<Float>, normal: SIMD3<Float>)? {
         guard isRelocalized, let frame = currentFrame,
               let hit = arView.raycast(from: point, allowing: .estimatedPlane, alignment: .any).first else { return nil }
-        let position = simd_make_float3(hit.worldTransform.columns.3)
+        var position = simd_make_float3(hit.worldTransform.columns.3)
         let camera = simd_make_float3(frame.camera.transform.columns.3)
         // A raycast result's Y axis is the surface normal.
         var normal = simd_make_float3(hit.worldTransform.columns.1)
-        let onWall = abs(normal.y) < 0.5
-        var origin = position
-        var facing = facing ?? camera - position
-        if onWall {
-            normal.y = 0
-            facing = simd_dot(normal, camera - position) < 0 ? -normal : normal
-            // Line up with the scanned wall, so the body is just in front of it rather than in it.
-            if let wall = obstacles.nearestWall(to: position, within: 0.25), simd_dot(wall.normal, facing) > 0.7 {
-                origin = wall.point
-                facing = wall.normal
-            }
-            origin.y = floorHeight(for: frame)
+        if simd_dot(normal, camera - position) < 0 { normal = -normal }
+        if normal.y > 0.5 { return (position, [0, 1, 0]) }
+        guard abs(normal.y) < 0.5 else { return nil }
+        normal.y = 0
+        normal = simd_normalize(normal)
+        // Just in front of the scanned wall rather than in it.
+        if let wall = obstacles.nearestWall(to: position, within: 0.25), simd_dot(wall.normal, normal) > 0.7 {
+            position = wall.point
+            normal = wall.normal
         }
-        facing.y = 0
-        guard simd_length(facing) > 0.01 else { return nil }
-        return GhostPlacement(origin: origin, facing: simd_normalize(facing), onWall: onWall,
-                              width: height / 2, height: height)
+        return (position, normal)
+    }
+
+    /// The way a body stuck to a surface with this normal stands by default: upright on a wall,
+    /// head away from the player on the floor.
+    func defaultUp(on normal: SIMD3<Float>, at point: SIMD3<Float>) -> SIMD3<Float> {
+        guard normal.y > 0.5 else { return [0, 1, 0] }
+        var away = point - (currentFrame.map { simd_make_float3($0.camera.transform.columns.3) } ?? point + [0, 0, 1])
+        away.y = 0
+        return simd_length(away) > 0.01 ? simd_normalize(away) : [0, 0, -1]
+    }
+
+    /// A chameleon stuck to the wall or floor the player taps, centered on the spot (and no lower than the floor).
+    func chameleonPlacement(at point: CGPoint, height: Float = ChameleonStore.height) -> GhostPlacement? {
+        guard let frame = currentFrame, let spot = surface(at: point) else { return nil }
+        let up = defaultUp(on: spot.normal, at: spot.point)
+        var origin = spot.point - up * (height / 2)
+        if spot.normal.y < 0.5 { origin.y = max(origin.y, floorHeight(for: frame) + 0.02) }
+        return GhostPlacement(on: origin, normal: spot.normal, up: up, width: height / 2, height: height)
     }
 
     /// While set, a tap places a chameleon instead of tagging a ghost.
