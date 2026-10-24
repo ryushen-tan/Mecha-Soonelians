@@ -20,6 +20,7 @@ struct GameView: View {
     @State private var useTimer = true
     @State private var captureError: String?
     @State private var confirmingLeave = false
+    @State private var confirmingSkip = false
     /// A few seconds of "who's the seeker / go hide" when a phase starts.
     @State private var splash: Splash?
 
@@ -88,6 +89,12 @@ struct GameView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(session.isHost ? "Everyone goes back to the lobby." : "You'll leave the room.")
+        }
+        .alert("Start seeking now?", isPresented: $confirmingSkip) {
+            Button("Start seeking", role: .destructive) { session.skipPhase() }
+            Button("Keep hiding", role: .cancel) {}
+        } message: {
+            Text("Hiding ends for everyone, even players still placing their ghost.")
         }
         .alert("Something went wrong", isPresented: Binding(get: { session.error != nil }, set: { if !$0 { session.error = nil } })) {
             Button("OK") {}
@@ -313,15 +320,19 @@ struct GameView: View {
                 if !ar.isRelocalized {
                     Text(ar.trackingMessage).font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
                 }
+                if session.placing {
+                    HStack(spacing: 10) { ProgressView(); Text("Hiding your ghost…").font(RallyStyle.font(15, .semibold)) }
+                }
                 Button { startPlacingChameleon() } label: {
                     ActionLabel(text: session.myGhost == nil ? "Place my chameleon" : "Hide somewhere else")
                 }
                 .buttonStyle(PushButtonStyle())
-                .disabled(!ar.isRelocalized)
+                .disabled(!ar.isRelocalized || session.placing)
             }
             if session.isHost {
-                Button("Start seeking now") { session.skipPhase() }
+                Button("Start seeking now") { confirmingSkip = true }
                     .font(RallyStyle.font(14, .semibold))
+                    .disabled(session.placing)
             }
         }
     }

@@ -14,6 +14,8 @@ final class GameSession: ObservableObject {
     @Published private(set) var reconnecting = false
     /// The room is gone (the host closed it, or this player was removed).
     @Published private(set) var roomGone = false
+    /// A ghost is uploading; the hide buttons wait for it.
+    @Published private(set) var placing = false
     @Published var error: String?
 
     let me: Player
@@ -134,7 +136,9 @@ final class GameSession: ObservableObject {
         state.ghosts.removeAll { $0.ownerID == me.id }
         state.ghosts.append(ghost)
         let placed = ghost
+        placing = true
         Task {
+            defer { placing = false }
             do {
                 let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(placed))
                 let urls: GhostUploadURLs = try await call("ar/ghosts", method: "POST", body: ["ghost": object])

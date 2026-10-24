@@ -127,10 +127,25 @@ export function validateGhost(ghost, member) {
   if (!valid) fail(400, 'That ghost is not valid.');
 }
 
-export function placeGhost(room, member, ghost, time) {
+// A hide that began while hiding (its upload links were issued then) still counts if hiding ends
+// while its files upload, so a slow connection or the host skipping ahead never loses a ghost.
+export const PLACE_GRACE = 120_000;
+
+export function beginUpload(room, member, ghostID, time) {
   const ar = requireAR(room);
   advanceAR(room, time);
   if (ar.phase !== 'hiding') fail(409, 'Ghosts can only be placed while hiding.');
+  if (ar.roles[member.id] === 'seeker') fail(403, 'The seeker does not hide.');
+  ar.pending ??= {};
+  ar.pending[member.id] = { id: String(ghostID).toLowerCase(), at: time };
+}
+
+export function placeGhost(room, member, ghost, time) {
+  const ar = requireAR(room);
+  advanceAR(room, time);
+  const pending = ar.pending?.[member.id];
+  const late = ar.phase === 'seeking' && pending && pending.id === String(ghost?.id).toLowerCase() && time - pending.at < PLACE_GRACE;
+  if (ar.phase !== 'hiding' && !late) fail(409, 'Ghosts can only be placed while hiding.');
   if (ar.roles[member.id] === 'seeker') fail(403, 'The seeker does not hide.');
   validateGhost(ghost, member);
   if (ar.ghosts.some(other => other.id === ghost.id.toLowerCase() && other.ownerID !== member.id)) fail(409, 'That ghost belongs to someone else.');
@@ -140,6 +155,7 @@ export function placeGhost(room, member, ghost, time) {
     flushBack: ghost.flushBack, hasModel: ghost.hasModel, modelFormat: ghost.hasModel ? ghost.modelFormat : null,
     paintedBody: ghost.paintedBody === true, pose: ghost.pose ?? null, width: ghost.width, height: ghost.height, foundBy: null
   });
+  if (ar.pending) delete ar.pending[member.id];
 }
 
 export function tagGhost(room, member, ghostID, time) {

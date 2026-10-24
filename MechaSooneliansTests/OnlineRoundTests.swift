@@ -19,6 +19,15 @@ final class OnlineRoundTests: XCTestCase {
     }
 
     func testAHidersGhostReachesTheSeekerAndIsDrawnThenCanBeFound() async throws {
+        try await playRound(skipWhileUploading: false)
+    }
+
+    /// The host ends hiding while a hider's ghost is still uploading: the ghost must still count.
+    func testAHideStillLandsWhenHidingEndsMidUpload() async throws {
+        try await playRound(skipWhileUploading: true)
+    }
+
+    private func playRound(skipWhileUploading: Bool) async throws {
         let api = LobbyAPI(baseURL: server)
         let houseID = try XCTUnwrap(HouseStore.bundledID, "The house should be bundled in the app.")
         let host: JoinResponse = try await api.request("rooms", method: "POST", body: ["name": "Test host", "avatar": 0])
@@ -49,6 +58,7 @@ final class OnlineRoundTests: XCTestCase {
         XCTAssertTrue(hider.myRole == .hider && seeker.myRole == .seeker)
 
         // A real spray-painted chameleon, exactly as the hiding screen exports it.
+        // The host skips to seeking the moment the hide starts uploading (the reported bug).
         let body = try XCTUnwrap(ChameleonBody.shared)
         let poseIndex = try XCTUnwrap(body.index(of: "crouch"))
         let id = UUID()
@@ -61,6 +71,9 @@ final class OnlineRoundTests: XCTestCase {
         hider.placeGhost(Ghost(id: id, ownerID: hider.me.id, transform: spot.floats, floorTransform: spot.floats, flushBack: false,
             hasModel: true, paintedBody: true, pose: "crouch", width: 0.875, height: 1.75, foundBy: nil), image: paint, model: bodyFile)
         XCTAssertNil(hider.error)
+        if skipWhileUploading { hostSession.skipPhase() }
+        try await eventually("the hide finishes uploading") { !hider.placing }
+        XCTAssertNil(hider.error, "The hide must still land after hiding ends: \(hider.error ?? "")")
 
         // The server must really have it (not just the hider's own screen).
         let hiderView: ARReply = try await {
@@ -72,9 +85,10 @@ final class OnlineRoundTests: XCTestCase {
             XCTFail("The server never saved the ghost: \(hider.error ?? "no error")"); throw CancellationError()
         }()
         XCTAssertEqual(hiderView.ar?.ghosts.first?.id, id)
-        XCTAssertEqual(seeker.state.ghosts.count, 0, "The seeker can't see ghosts while everyone hides")
-
-        hostSession.skipPhase()
+        if !skipWhileUploading {
+            XCTAssertEqual(seeker.state.ghosts.count, 0, "The seeker can't see ghosts while everyone hides")
+            hostSession.skipPhase()
+        }
         try await eventually("seeking starts") { seeker.state.phase == .seeking && hider.state.phase == .seeking }
         try await eventually("the seeker's phone lists the ghost") { seeker.state.ghosts.count == 1 }
         try await eventually("the ghost's picture and 3D body arrive on the seeker's phone") { seeker.ghostImages[id] != nil && seeker.ghostModels[id] != nil }

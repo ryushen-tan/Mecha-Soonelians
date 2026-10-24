@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { acceptDisguise, snapshotGame, visibleOwners, startGame, shoot, taunt, recordView, emergencyEject } from './game.mjs';
 import { createMemoryRoomStore } from './room-store.mjs';
-import { arPaths, HOUSE_FILES, startAR, beginRound, skipPhase, setReady, placeGhost, tagGhost, snapshotAR, canSeeGhost, clearAR, validateGhost, advanceAR } from './ar.mjs';
+import { arPaths, HOUSE_FILES, startAR, beginRound, skipPhase, beginUpload, setReady, placeGhost, tagGhost, snapshotAR, canSeeGhost, clearAR, validateGhost, advanceAR } from './ar.mjs';
 
 const LIMIT = 4096;
 const UPLOAD = 20 * 1024 * 1024;
@@ -148,11 +148,9 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
     }
     if (kind === 'ghosts') {
       if (req.method === 'POST') {
-        advanceAR(room, time);
-        if (!room.ar || room.ar.phase !== 'hiding') fail(409, 'Ghosts can only be placed while hiding.');
-        if (room.ar.roles[member.id] === 'seeker') fail(403, 'The seeker does not hide.');
         validateGhost({ ...body.ghost, id: body.ghost?.id, ownerID: member.id }, member);
         const ghost = body.ghost;
+        beginUpload(room, member, ghost.id, time);
         return [200, null, undefined, async () => ({
           image: await store.signUpload(arPaths.ghostImage(roomID, member.id, ghost.id.toLowerCase())),
           model: ghost.hasModel
