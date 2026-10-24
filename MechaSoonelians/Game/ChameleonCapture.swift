@@ -49,7 +49,10 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
     private static let longestSpin = 16.0
 
     @Published private(set) var stage = Stage.framing
-    @Published private(set) var fullBodyInView = false
+    enum Framing { case notInView, armsDown, ready }
+
+    @Published private(set) var framing = Framing.notInView
+    var fullBodyInView: Bool { framing == .ready }
     @Published private(set) var views: [ChameleonView] = []
 
     let session = AVCaptureSession()
@@ -73,7 +76,7 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
     func start() {
         stage = .framing
         views = []
-        fullBodyInView = false
+        framing = .notInView
         queue.async { [self] in
             guard session.inputs.isEmpty else { session.startRunning(); return }
             session.beginConfiguration()
@@ -104,7 +107,7 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
         framingTask = Task { @MainActor [weak self] in
             var inViewStreak = 0
             while !Task.isCancelled, let self, self.stage == .framing {
-                self.fullBodyInView = await self.checkFraming()
+                self.framing = await self.checkFraming()
                 // The player is across the room, so start by itself once they've been fully in view
                 // for about two seconds.
                 inViewStreak = self.fullBodyInView ? inViewStreak + 1 : 0
@@ -150,17 +153,27 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
         camera.unlockForConfiguration()
     }
 
-    /// The whole body has to be in the frame with a little room at the top and bottom.
-    private func checkFraming() async -> Bool {
-        guard let image = latestImage(scale: 0.5) else { return false }
+    /// Ready when the whole body is in the frame (with a little room at the top and bottom) and the
+    /// arms are held out from the sides, matching the chameleon body's pose.
+    private func checkFraming() async -> Framing {
+        guard let image = latestImage(scale: 0.5) else { return .notInView }
         return await Task.detached {
-            let request = VNGeneratePersonSegmentationRequest()
-            request.qualityLevel = .fast
-            guard (try? VNImageRequestHandler(cgImage: image).perform([request])) != nil,
-                  let mask = request.results?.first?.pixelBuffer,
-                  let box = ChameleonCapture.maskBounds(mask) else { return false }
+            let segmentation = VNGeneratePersonSegmentationRequest()
+            segmentation.qualityLevel = .fast
+            let pose = VNDetectHumanBodyPoseRequest()
+            guard (try? VNImageRequestHandler(cgImage: image).perform([segmentation, pose])) != nil,
+                  let mask = segmentation.results?.first?.pixelBuffer,
+                  let box = ChameleonCapture.maskBounds(mask) else { return .notInView }
             let height = CGFloat(CVPixelBufferGetHeight(mask))
-            return box.minY > height * 0.03 && box.maxY < height * 0.97 && box.height > height * 0.45
+            guard box.minY > height * 0.03, box.maxY < height * 0.97, box.height > height * 0.45 else { return .notInView }
+            // Wrists well out from the hips, sideways (normalized image coordinates; the frame is portrait).
+            guard let body = pose.results?.first,
+                  let root = try? body.recognizedPoint(.root), root.confidence > 0.3,
+                  let left = try? body.recognizedPoint(.leftWrist), left.confidence > 0.3,
+                  let right = try? body.recognizedPoint(.rightWrist), right.confidence > 0.3 else { return .armsDown }
+            let bodyWidth = box.height / CGFloat(CVPixelBufferGetWidth(mask))
+            let out = min(abs(left.location.x - root.location.x), abs(right.location.x - root.location.x))
+            return out > bodyWidth * 0.18 ? .ready : .armsDown
         }.value
     }
 
@@ -192,10 +205,10 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
                 }
                 if face == nil {
                     faceGoneSince = faceGoneSince ?? time
-                    if time - faceGoneSince! > 1.2 { wentAround = true }
+                    if time - faceGoneSince! > 0.8 { wentAround = true }
                 } else {
                     faceGoneSince = nil
-                    if wentAround, let yaw = face?.yaw, yaw < 20, time > 4 { break }
+                    if wentAround, let yaw = face?.yaw, yaw < 30, time > 3 { break }
                 }
             }
             if time > Self.longestSpin { break }
@@ -205,7 +218,7 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
         say("Got it!")
         stage = .processing
         stop()
-        views = await Task.detached { Self.process(frames, wentAround: wentAround) }.value
+        views = await Task.detached { Self.process(frames) }.value
         stage = views.count >= 8 ? .done : .failed("Couldn't follow your spin. Spin slowly, keep your whole body in view, and try again.")
     }
 
@@ -225,32 +238,47 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
         return (yaw, Double(face.boundingBox.midX))
     }
 
+    /// The spin's shape from the face: the longest stretch without a face is the back turned to the
+    /// camera; the spin ends when the face comes back to the front. Nil if there's no such stretch.
+    private static func spinBounds(_ frames: [Frame]) -> (backStart: Int, backEnd: Int, end: Int)? {
+        var best: (start: Int, end: Int)?
+        var runStart: Int?
+        for (index, frame) in frames.enumerated() {
+            if frame.faceYaw == nil {
+                runStart = runStart ?? index
+            } else if let start = runStart {
+                if best == nil || frames[index].time - frames[start].time > frames[best!.end].time - frames[best!.start].time {
+                    best = (start, index)
+                }
+                runStart = nil
+            }
+        }
+        guard let best, frames[best.end].time - frames[best.start].time > 0.6 else { return nil }
+        let end = frames[best.end...].firstIndex(where: { ($0.faceYaw ?? 90) < 30 })
+            ?? frames[best.end...].lastIndex(where: { $0.faceYaw != nil }) ?? best.end
+        return (best.start, best.end, end)
+    }
+
     /// How far round each frame is. The face pins down the front half: at the start its turn grows
     /// from 0° to about 90°, and at the end it shrinks back from about 270° to 360°. Between those,
     /// while the back is to the camera, the spin is assumed steady.
-    private static func yaws(for frames: [Frame], wentAround: Bool) -> [Double] {
-        guard let last = frames.last, last.time > 0 else { return frames.map { _ in 0 } }
-        guard wentAround,
-              let firstGone = frames.firstIndex(where: { $0.faceYaw == nil }),
-              let back = frames[firstGone...].firstIndex(where: { $0.faceYaw != nil }) else {
-            return frames.map { 360 * $0.time / last.time }
-        }
+    private static func yaws(for frames: [Frame], backStart: Int, backEnd: Int) -> [Double] {
         var anchors: [(time: Double, yaw: Double)] = [(frames[0].time, 0)]
         var lastYaw = 0.0
-        for frame in frames[..<firstGone] {
+        for frame in frames[..<backStart] {
             guard let yaw = frame.faceYaw, yaw > lastYaw else { continue }
             lastYaw = min(yaw, 85)
             anchors.append((frame.time, lastYaw))
         }
         var tail: [(time: Double, yaw: Double)] = []
         var nextYaw = 360.0
-        for frame in frames[back...].reversed() {
+        for frame in frames[backEnd...].reversed() {
             guard let yaw = frame.faceYaw, 360 - yaw < nextYaw else { continue }
             nextYaw = max(360 - yaw, 275)
             tail.insert((frame.time, nextYaw), at: 0)
         }
         anchors += tail
-        if anchors.last!.time < last.time { anchors.append((last.time, 360)) }
+        if anchors.last!.time < frames.last!.time { anchors.append((frames.last!.time, 360)) }
         return frames.map { frame in
             guard let after = anchors.firstIndex(where: { $0.time >= frame.time }) else { return 360 }
             if after == 0 { return anchors[0].yaw }
@@ -261,15 +289,20 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
     }
 
     /// Keeps the frame nearest each 15° step, cuts the person out and finds their hips.
-    private static func process(_ frames: [Frame], wentAround: Bool) -> [ChameleonView] {
-        guard !frames.isEmpty else { return [] }
+    private static func process(_ allFrames: [Frame]) -> [ChameleonView] {
+        guard let bounds = spinBounds(allFrames) else {
+            saveLog(allFrames, yaws: nil)
+            return []
+        }
+        let frames = Array(allFrames[...bounds.end])
+        var yaws = yaws(for: frames, backStart: bounds.backStart, backEnd: bounds.backEnd)
         // They were told to turn right; if the face drifted the other way, they turned left.
-        var yaws = yaws(for: frames, wentAround: wentAround)
         let early = frames.prefix(while: { $0.time < 1.2 }).compactMap(\.faceX)
         if let first = early.first, let lastX = early.last, lastX - first > 0.03 {
             // Turning right swings the face toward the camera's left (smaller x). It went right instead.
             yaws = yaws.map { $0 == 0 ? 0 : 360 - $0 }
         }
+        saveLog(allFrames, yaws: yaws)
         var views: [ChameleonView] = []
         for target in stride(from: 0.0, to: 360, by: step) {
             guard let best = yaws.indices.min(by: { angleGap(yaws[$0], target) < angleGap(yaws[$1], target) }),
@@ -289,6 +322,22 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
             views.append(ChameleonView(png: png, yaw: yaws[best].truncatingRemainder(dividingBy: 360), centerX: centerX))
         }
         return views
+    }
+
+    /// What the face detector saw and the angles worked out, for debugging a bad spin later
+    /// (Documents/Chameleon/last-spin.json).
+    private static func saveLog(_ frames: [Frame], yaws: [Double]?) {
+        let entries = frames.enumerated().map { index, frame -> [String: Any] in
+            var entry: [String: Any] = ["time": frame.time]
+            if let yaw = frame.faceYaw { entry["faceYaw"] = yaw }
+            if let x = frame.faceX { entry["faceX"] = x }
+            if let yaws, index < yaws.count { entry["yaw"] = yaws[index] }
+            return entry
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: ["frames": entries], options: .prettyPrinted) else { return }
+        let directory = ChameleonStore.modelURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? data.write(to: directory.appendingPathComponent("last-spin.json"))
     }
 
     private static func angleGap(_ a: Double, _ b: Double) -> Double {

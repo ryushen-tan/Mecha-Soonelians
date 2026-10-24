@@ -81,7 +81,7 @@ struct ChameleonStudioView: View {
                 VStack(spacing: 12) {
                     switch capture.stage {
                     case .framing:
-                        Text(capture.fullBodyInView ? "Got you! Hold still, it starts by itself." : "Walk back until your whole body fits. It starts by itself.")
+                        Text(framingHint)
                             .font(RallyStyle.font(17, .bold))
                         Button { Task { await capture.run() } } label: { ActionLabel(text: "Start now") }
                             .buttonStyle(PushButtonStyle())
@@ -105,6 +105,14 @@ struct ChameleonStudioView: View {
                 .background(RallyStyle.surface, in: RoundedRectangle(cornerRadius: 24))
                 .padding(16)
             }
+        }
+    }
+
+    private var framingHint: String {
+        switch capture.framing {
+        case .ready: "Got you! Hold still, it starts by itself."
+        case .armsDown: "Hold your arms out a little, like the outline."
+        case .notInView: "Walk back until your whole body fits. It starts by itself."
         }
     }
 
