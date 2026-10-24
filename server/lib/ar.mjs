@@ -23,6 +23,16 @@ export const arPaths = {
 };
 export const HOUSE_FILES = { structure: 'structure.json', worldmap: 'worldmap.arexperience' };
 
+// Which house the round is in. "bundled": every phone already has the same scan inside the app, so
+// nothing is uploaded or downloaded and the id says which scan. "uploaded": the host sent their own.
+export function houseRef(house) {
+  if (house == null) return { kind: 'uploaded', id: null };
+  if (house.kind === 'bundled' && typeof house.id === 'string' && /^[0-9a-f]{8,64}$/i.test(house.id)) {
+    return { kind: 'bundled', id: house.id.toLowerCase() };
+  }
+  fail(400, 'That house is not valid.');
+}
+
 export function startAR(room, body, time, random = n => randomInt(n)) {
   if (room.members.length < 2 || !room.members.every(member => member.ready)) {
     fail(409, 'At least two players must be in the room and everyone must be ready.');
@@ -35,7 +45,7 @@ export function startAR(room, body, time, random = n => randomInt(n)) {
     seekSeconds: bounded(body.seekSeconds, AR_LIMITS.seek, AR_LIMITS.defaultSeek),
     seekerID: seeker.id,
     roles: Object.fromEntries(room.members.map(member => [member.id, member.id === seeker.id ? 'seeker' : 'hider'])),
-    ready: {}, ghosts: [], startedAt: time
+    ready: {}, ghosts: [], startedAt: time, house: houseRef(body.house)
   };
   room.status = 'started';
   room.locked = true;
@@ -162,6 +172,7 @@ export function snapshotAR(room, member, time) {
   return {
     phase, secondsLeft: ar.phaseEnds ? Math.max(0, Math.ceil((ar.phaseEnds - time) / 1000)) : 0,
     hideSeconds: ar.hideSeconds, seekSeconds: ar.seekSeconds, seekerID: ar.seekerID, startedAt: ar.startedAt,
+    house: ar.house ?? { kind: 'uploaded', id: null },
     players: room.members.map(({ id, name, avatar }) => ({
       id, name, avatar, role: ar.roles[id] ?? 'hider', isReady: ar.ready[id] === true
     })),

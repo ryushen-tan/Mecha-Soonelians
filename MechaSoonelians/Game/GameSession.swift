@@ -18,8 +18,9 @@ final class GameSession: ObservableObject {
 
     let me: Player
     let isHost: Bool
-    let mapURL: URL
-    let structureURL: URL
+    /// Where the world map and room structure are read from; set before `hasMap` turns true.
+    private(set) var mapURL: URL
+    private(set) var structureURL: URL
 
     private let connection: GameConnection
     private var poller: Task<Void, Never>?
@@ -37,9 +38,9 @@ final class GameSession: ObservableObject {
         self.connection = connection
         isHost = connection.isHost
         me = Player(id: UUID(uuidString: connection.memberID) ?? UUID(), name: name, avatar: avatar, role: .hider, isReady: false)
-        mapURL = isHost ? HouseStore.worldMapURL : Self.joinedDir.appendingPathComponent("worldmap.arexperience")
-        structureURL = isHost ? HouseStore.structureURL : Self.joinedDir.appendingPathComponent("structure.json")
-        hasMap = isHost && HouseStore.hasHouse
+        mapURL = isHost ? HouseStore.activeWorldMapURL : Self.joinedDir.appendingPathComponent("worldmap.arexperience")
+        structureURL = isHost ? HouseStore.activeStructureURL : Self.joinedDir.appendingPathComponent("structure.json")
+        hasMap = isHost && HouseStore.source != .none
         try? FileManager.default.removeItem(at: Self.ghostModelsDir)
         try? FileManager.default.createDirectory(at: Self.ghostModelsDir, withIntermediateDirectories: true)
         if !isHost {
@@ -106,7 +107,9 @@ final class GameSession: ObservableObject {
     func skipPhase() { act(["action": "skip"]) }
     /// Host: another round, with a newly picked seeker.
     func playAgain() {
-        act(["action": "start", "hideSeconds": state.hideSeconds, "seekSeconds": state.seekSeconds])
+        var body: [String: Any] = ["action": "start", "hideSeconds": state.hideSeconds, "seekSeconds": state.seekSeconds]
+        if let house = state.house, house.kind == "bundled", let id = house.id { body["house"] = ["kind": "bundled", "id": id] }
+        act(body)
     }
 
     private func act(_ body: [String: Any]) {
@@ -153,6 +156,18 @@ final class GameSession: ObservableObject {
 
     private func loadHouseIfNeeded() async {
         guard !hasMap, !loadingHouse, !isHost else { return }
+        if let house = state.house, house.kind == "bundled" {
+            // Every build carries the same scan, so there is nothing to download.
+            if let id = house.id, id == HouseStore.bundledID,
+               let map = HouseStore.bundledWorldMapURL, let structure = HouseStore.bundledStructureURL {
+                mapURL = map
+                structureURL = structure
+                hasMap = true
+            } else {
+                error = "This game is in a different house than your app has. Update Mecha Soonelians and try again."
+            }
+            return
+        }
         loadingHouse = true
         defer { loadingHouse = false }
         do {

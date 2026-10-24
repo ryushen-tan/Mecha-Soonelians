@@ -42,6 +42,11 @@ struct Ghost: Codable, Identifiable, Equatable {
     var modelFormat: String?
 }
 
+struct HouseRef: Codable, Equatable {
+    let kind: String
+    let id: String?
+}
+
 struct GameState: Codable, Equatable {
     var phase = Phase.lobby
     var players: [Player] = []
@@ -51,6 +56,8 @@ struct GameState: Codable, Equatable {
     var seekSeconds = 300
     /// The one player picked at random to seek this round.
     var seekerID: UUID?
+    /// Which house the round is in: the one inside the app, or one the host uploaded.
+    var house: HouseRef?
 
     func player(_ id: UUID?) -> Player? {
         players.first { $0.id == id }

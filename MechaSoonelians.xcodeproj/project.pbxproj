@@ -78,6 +78,7 @@
 		F52D814B2C79AB10F25475AC /* human-rgb.png in Resources */ = {isa = PBXBuildFile; fileRef = 0ABE41D7846B7EE0C68B2F1B /* human-rgb.png */; };
 		F57E21ADFF6E76FD88072716 /* SprayPaintView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD9A8B3A361FC622CEC3D641 /* SprayPaintView.swift */; };
 		F9204A235897A2ED8DFF6324 /* RoomObstacles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6094388F83BF57E6079B4861 /* RoomObstacles.swift */; };
+		FB5A8AAD2978FB4B25E0FD8D /* House in Resources */ = {isa = PBXBuildFile; fileRef = E15E063EA7A42A682C85C80D /* House */; };
 		FB79186CB13FA6F01ACB4321 /* ATTRIBUTION.txt in Resources */ = {isa = PBXBuildFile; fileRef = DBAC0F8CF5D53ED50877620D /* ATTRIBUTION.txt */; };
 		FE0A713ACBAEF88C7C2B6016 /* JellyExperienceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 460CD4447A575109D65E4D08 /* JellyExperienceView.swift */; };
 		FFB9CB703797C597B76310B5 /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 0DFC1CCB54AF1A1C3F824DCE /* Settings.bundle */; };
@@ -170,6 +171,7 @@
 		DA96F47D2EC5DDCEDDA8739C /* ChameleonBody.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonBody.swift; sourceTree = "<group>"; };
 		DBAC0F8CF5D53ED50877620D /* ATTRIBUTION.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ATTRIBUTION.txt; sourceTree = "<group>"; };
 		E11B9D42A99699E3C385DA1C /* MechaSooneliansTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MechaSooneliansTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E15E063EA7A42A682C85C80D /* House */ = {isa = PBXFileReference; lastKnownFileType = folder; path = House; sourceTree = SOURCE_ROOT; };
 		E16C1DC548212D03EC0E7CFB /* MechaSooneliansUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MechaSooneliansUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E2EE05025550A1C0ADC6A58D /* HouseStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseStore.swift; sourceTree = "<group>"; };
 		E3294E82FD29FEEEC513AD55 /* JellyAssets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JellyAssets; path = MechaSoonelians/Lobby/JellyAssets; sourceTree = SOURCE_ROOT; };
@@ -342,6 +344,7 @@
 			isa = PBXGroup;
 			children = (
 				1F44385A370DDF7499F11D84 /* CharacterViewer */,
+				E15E063EA7A42A682C85C80D /* House */,
 				E3294E82FD29FEEEC513AD55 /* JellyAssets */,
 				494600CE207A3382938DA097 /* ProfilePhotos */,
 				AEC46699F272610EF29FDF78 /* Character3D */,
@@ -474,6 +477,7 @@
 				FB79186CB13FA6F01ACB4321 /* ATTRIBUTION.txt in Resources */,
 				5882C03887E6A4ADB13E7BF9 /* Assets.xcassets in Resources */,
 				B922DE10EA1C2AEE804CC1E0 /* CharacterViewer in Resources */,
+				FB5A8AAD2978FB4B25E0FD8D /* House in Resources */,
 				09DE02A586177281FE87B8C5 /* JellyAssets in Resources */,
 				145D1BF8B11BD44D49BA5FC3 /* LICENSE.txt in Resources */,
 				25B4119841C50B2F2409D767 /* ProfilePhotos in Resources */,

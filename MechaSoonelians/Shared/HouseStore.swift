@@ -1,4 +1,5 @@
 import ARKit
+import CryptoKit
 import RoomPlan
 
 /// On-device storage. Everything lives in Documents so it shows up in the Files app.
@@ -17,6 +18,36 @@ enum HouseStore {
     static var testCubesURL: URL { houseDir.appendingPathComponent("test-cubes.json") }
 
     static var hasHouse: Bool { FileManager.default.fileExists(atPath: worldMapURL.path) }
+
+    // MARK: The house that ships inside the app
+
+    /// The scan in the repository's House folder, copied into every build, so no phone has to scan,
+    /// upload or download it.
+    static var bundledDir: URL? { Bundle.main.url(forResource: "House", withExtension: nil) }
+    static var bundledWorldMapURL: URL? { bundledDir?.appendingPathComponent("worldmap.arexperience") }
+    static var bundledStructureURL: URL? { bundledDir?.appendingPathComponent("structure.json") }
+
+    /// Names the bundled scan (the start of its world map's SHA-256), so a game can tell whether every
+    /// phone has the same one.
+    static let bundledID: String? = bundledWorldMapURL.flatMap(fingerprint)
+
+    private static func fingerprint(_ url: URL) -> String? {
+        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
+        return SHA256.hash(data: data).prefix(8).map { String(format: "%02x", $0) }.joined()
+    }
+
+    enum Source { case bundled, custom, none }
+
+    /// Which house this phone plays in. A phone's own scan is "custom" unless it is the very same scan as
+    /// the bundled one (then nothing needs to be uploaded). Without any scan, the bundled house is used.
+    static var source: Source {
+        if hasHouse, let id = bundledID, fingerprint(worldMapURL) != id { return .custom }
+        if bundledID != nil { return .bundled }
+        return hasHouse ? .custom : .none
+    }
+
+    static var activeWorldMapURL: URL { source == .bundled ? bundledWorldMapURL ?? worldMapURL : worldMapURL }
+    static var activeStructureURL: URL { source == .bundled ? bundledStructureURL ?? structureURL : structureURL }
 
     static func saveHouse(structure: CapturedStructure, rooms: [CapturedRoom], worldMap: ARWorldMap) throws {
         let fm = FileManager.default

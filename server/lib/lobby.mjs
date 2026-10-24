@@ -140,6 +140,7 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
       }
       if (req.method !== 'GET') fail(405, 'Unsupported house action.');
       if (!room.ar) fail(404, 'No round is running in this room.');
+      if (room.ar.house?.kind === 'bundled') fail(404, 'This round uses the house that comes with the app.');
       return [200, null, undefined, async () => ({
         structure: await store.signDownload(arPaths.house(roomID, HOUSE_FILES.structure)),
         worldmap: await store.signDownload(arPaths.house(roomID, HOUSE_FILES.worldmap))
@@ -255,6 +256,7 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
     });
     if (body.action === 'start') {
       if (!owner.host) return false;
+      if (body.house?.kind === 'bundled') return true; // Nothing to upload: the scan is inside the app.
       return store.exist(Object.values(HOUSE_FILES).map(name => arPaths.house(owner.roomID, name)));
     }
     const ghost = body.ghost;

@@ -22,6 +22,9 @@ targets:
       - path: MechaSoonelians/Lobby/ProfilePhotos
         type: folder
         buildPhase: resources
+      - path: House
+        type: folder
+        buildPhase: resources
       - path: TestFixtures/LiDAR/room/rgb.jpg
         buildPhase: resources
       - path: TestFixtures/LiDAR/room/depth-preview.png
