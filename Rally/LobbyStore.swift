@@ -20,7 +20,7 @@ final class LobbyStore: ObservableObject {
         }
         nickname = UserDefaults.standard.string(forKey: "nickname") ?? ""
         avatar = min(5, max(0, UserDefaults.standard.integer(forKey: "avatar")))
-        serverAddress = UserDefaults.standard.string(forKey: "server") ?? "http://localhost:3000"
+        serverAddress = UserDefaults.standard.string(forKey: "server") ?? "https://mecha-soonelians.vercel.app"
         if let index = args.firstIndex(of: "-server-url"), args.indices.contains(index + 1) {
             serverAddress = args[index + 1]
         }

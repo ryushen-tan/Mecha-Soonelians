@@ -243,7 +243,7 @@ final class RallyUITests: XCTestCase {
 
     @MainActor private func jellyApp() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-ui-testing", "-jelly-still"]
+        app.launchArguments = ["-ui-testing", "-jelly-still", "-server-url", "http://localhost:3000"]
         app.launch()
         XCTAssertTrue(app.buttons["playButton"].waitForExistence(timeout: 5))
         return app

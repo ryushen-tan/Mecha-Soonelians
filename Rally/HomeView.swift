@@ -161,7 +161,7 @@ struct ServerSettingsView: View {
                         .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                         .accessibilityLabel("Server address")
                 } header: { Text("Server address") } footer: {
-                    Text("Everyone needs the same server. In Simulator, use http://localhost:3000. On an iPhone, use your Mac’s Wi-Fi address printed by the server.")
+                    Text("Everyone needs the same server. The default is https://mecha-soonelians.vercel.app. For a local server, use http://localhost:3000 in Simulator or your Mac’s Wi-Fi address on an iPhone.")
                 }
                 if let error { Section { ErrorNotice(message: error) } }
                 Button {

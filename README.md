@@ -18,7 +18,7 @@ Requires Xcode 26 or later (Studio uses the glass API); supports iOS 18 and late
 
 2. Open `Rally.xcodeproj`, choose the **Rally** scheme, and select an iPhone Simulator or connected iPhone. For a physical iPhone, select your development team under Signing & Capabilities.
 3. Start the 3D service with `cd server && npm run start:3d` and the root `.env` containing `TRIPO_API_KEY`. On first launch, complete **Scan & create my 3D self** (or choose a full-body photo). Setup automatically cuts out the person, generates and rigs the Tripo model, and saves it. See **First-launch character setup** below for iPhone connection settings.
-4. Once setup finishes, Simulator's lobby defaults to `http://localhost:3000`. On a physical iPhone, open **Settings → Apps → Rally → Server address** and enter `http://<your-Mac-Wi-Fi-IP>:3000`. Everyone needs the same lobby server. A failed connection also exposes **Connection settings** in Rally.
+4. Once setup finishes, the lobby defaults to the hosted server at `https://mecha-soonelians.vercel.app`. To use a local server instead, open **Settings → Apps → Rally → Server address** and enter `http://localhost:3000` (Simulator) or `http://<your-Mac-Wi-Fi-IP>:3000` (iPhone), or launch with `-server-url <address>`. Everyone needs the same lobby server. A failed connection also exposes **Connection settings** in Rally.
 5. Tap **PLAY → host a game**, enter a nickname, pick a color, and create the room. On another device, tap **PLAY**, enter that room's code, and complete your profile. Guests are ready on entry and can toggle readiness. **Studio** opens from the landing viewfinder button or the lobby's **…** menu, and works without joining a lobby.
 
 Drag and throw the landing figurines, or enable tilt on a physical phone. **Pour again** restarts the scene. The soundtrack starts after the pour; **Sound on/off** controls music and keyboard clicks together. Audio respects Silent Mode and pauses in the background or Studio. Reduce Motion presents a static pile with PLAY immediately available.
@@ -154,7 +154,7 @@ xcodebuild -project Rally.xcodeproj -target Rally -sdk iphonesimulator \
   -configuration Debug CODE_SIGNING_ALLOWED=NO build
 ```
 
-Build output and screenshots are ignored by Git. App Store signing and server hosting are not configured in this repository.
+Build output and screenshots are ignored by Git. App Store signing is not configured in this repository. The lobby server is deployed to Vercel (`https://mecha-soonelians.vercel.app`) from `server/` with `vercel deploy --prod`; rooms live in memory, so they can be lost when Vercel starts or recycles instances.
 
 ### Verification in this checkout
 
