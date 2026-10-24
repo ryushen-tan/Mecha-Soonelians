@@ -44,7 +44,7 @@ export function createSfx({ bgmSrc, bgmVolume = 0.5 } = {}) {
 
   // every button / link-button gets a click, typing in inputs gets key taps (delegated: covers the lobby too)
   const SEL = 'button, [role="button"], input[type="submit"], a[href]';
-  window.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest(SEL)) key('click'); }, true);
+  window.addEventListener('pointerdown', (e) => { const b = e.target.closest && e.target.closest(SEL); if (b) key(b.dataset.sfx || 'click'); }, true);   // data-sfx="enter" on Join / Create, like the app
   window.addEventListener('keydown', (e) => {
     if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
     const el = e.target, inField = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
