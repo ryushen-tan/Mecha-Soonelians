@@ -22,14 +22,23 @@ final class OnlineRoundTests: XCTestCase {
         try await playRound(skipWhileUploading: false)
     }
 
+    func testRepositoryRoomUsesTheSameMapForHostAndGuest() async throws {
+        let previous = UserDefaults.standard.string(forKey: HouseStore.selectedRoomKey)
+        defer { UserDefaults.standard.set(previous, forKey: HouseStore.selectedRoomKey) }
+        let room = try XCTUnwrap(HouseStore.bundledRooms.first { $0.name == "Main" })
+        try HouseStore.select(room)
+        try await playRound(skipWhileUploading: false, room: room)
+    }
+
     /// The host ends hiding while a hider's ghost is still uploading: the ghost must still count.
     func testAHideStillLandsWhenHidingEndsMidUpload() async throws {
         try await playRound(skipWhileUploading: true)
     }
 
-    private func playRound(skipWhileUploading: Bool) async throws {
+    private func playRound(skipWhileUploading: Bool, room: SavedRoom? = nil) async throws {
         let api = LobbyAPI(baseURL: server)
-        let houseID = try XCTUnwrap(HouseStore.bundledID, "The house should be bundled in the app.")
+        let houseID = try XCTUnwrap(room.flatMap { HouseStore.bundledMapID(for: $0) } ?? HouseStore.bundledID,
+                                   "The house should be bundled in the app.")
         let host: JoinResponse = try await api.request("rooms", method: "POST", body: ["name": "Test host", "avatar": 0])
         let code = host.room.code
         let guest: JoinResponse = try await api.request("rooms/\(code)/join", method: "POST", body: ["name": "Test guest", "avatar": 1])
@@ -52,7 +61,12 @@ final class OnlineRoundTests: XCTestCase {
         let hiderToken = seekerIsHost ? guest.token : host.token
 
         try await eventually("the guest has the bundled house") { guestSession.hasMap }
-        XCTAssertEqual(guestSession.mapURL, HouseStore.bundledWorldMapURL)
+        XCTAssertEqual(guestSession.mapURL, room?.worldMapURL ?? HouseStore.bundledWorldMapURL)
+        XCTAssertEqual(guestSession.structureURL, room?.structureURL ?? HouseStore.bundledStructureURL)
+        if let room {
+            XCTAssertEqual(hostSession.mapURL, room.worldMapURL)
+            XCTAssertEqual(hostSession.structureURL, room.structureURL)
+        }
         hostSession.setReady(true); guestSession.setReady(true)
         try await eventually("hiding starts") { hider.state.phase == .hiding && seeker.state.phase == .hiding }
         XCTAssertTrue(hider.myRole == .hider && seeker.myRole == .seeker)

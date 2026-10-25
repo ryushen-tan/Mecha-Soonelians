@@ -8,6 +8,7 @@ final class ScanController: NSObject, ObservableObject, RoomCaptureViewDelegate 
     @Published var rooms: [CapturedRoom] = []
     @Published var isScanning = false
     @Published var isSaving = false
+    @Published var isProcessingRoom = false
     @Published var message: String?
 
     let arSession = ARSession()
@@ -22,18 +23,22 @@ final class ScanController: NSObject, ObservableObject, RoomCaptureViewDelegate 
     func encode(with coder: NSCoder) {}
 
     func startRoom() {
+        guard !isScanning, !isSaving, !isProcessingRoom else { return }
         message = nil
         captureView.captureSession.run(configuration: RoomCaptureSession.Configuration())
         isScanning = true
     }
 
     func finishRoom() {
+        guard isScanning else { return }
+        isProcessingRoom = true
         // Keep the ARSession running so the next room stays in the same coordinates.
         captureView.captureSession.stop(pauseARSession: false)
         isScanning = false
     }
 
-    func finishHouse(onSaved: @escaping () -> Void) {
+    func finishHouse(name: String, onSaved: @escaping () -> Void) {
+        guard !rooms.isEmpty, !isScanning, !isSaving, !isProcessingRoom else { return }
         if let status = arSession.currentFrame?.worldMappingStatus, status == .notAvailable || status == .limited {
             message = "Not enough of the house mapped yet. Walk around a bit more, then try again."
             return
@@ -46,7 +51,7 @@ final class ScanController: NSObject, ObservableObject, RoomCaptureViewDelegate 
                 // Maps saved while it was still running never relocalized in testing.
                 arSession.pause()
                 let worldMap = try await currentWorldMap()
-                try HouseStore.saveHouse(structure: structure, rooms: rooms, worldMap: worldMap)
+                try HouseStore.saveHouse(structure: structure, rooms: rooms, worldMap: worldMap, name: name)
                 onSaved()
                 message = "Saved \(rooms.count) room(s)."
             } catch {
@@ -80,6 +85,7 @@ final class ScanController: NSObject, ObservableObject, RoomCaptureViewDelegate 
     }
 
     func captureView(didPresent processedResult: CapturedRoom, error: Error?) {
+        isProcessingRoom = false
         if let error {
             message = "Room failed: \(error.localizedDescription)"
             return
@@ -89,9 +95,11 @@ final class ScanController: NSObject, ObservableObject, RoomCaptureViewDelegate 
 }
 
 struct ScanView: View {
+    var roomName = "My room"
     var onSaved: () -> Void
 
     @StateObject private var controller = ScanController()
+    @StateObject private var audio = JellyAudio()
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -100,46 +108,54 @@ struct ScanView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
-                Eyebrow(text: "MAP YOUR PLAYGROUND")
+                JellyEyebrow(text: "SCAN YOUR PLAY ROOM")
                 if let message = controller.message {
-                    ErrorNotice(message: message)
+                    JellyNotice(message: message)
                 }
 
                 if controller.isSaving {
-                    ProgressView("Saving house…")
+                    ProgressView("Saving room…")
                         .padding()
                         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                } else if controller.isProcessingRoom {
+                    ProgressView("Building the interior…").padding()
                 } else if controller.isScanning {
                     Button("Done with this room") { controller.finishRoom() }
-                        .buttonStyle(PushButtonStyle())
+                        .buttonStyle(JellyButtonStyle(fullWidth: true))
                 } else {
                     Text(controller.rooms.isEmpty
                          ? "Stand in the first room and tap Scan."
                          : "Walk into the next room with the app open, then tap Scan.")
-                        .font(RallyStyle.font(14))
-                        .foregroundStyle(RallyStyle.muted)
-                    HStack {
+                        .font(JellyStyle.body(14))
+                        .foregroundStyle(JellyStyle.muted)
+                    VStack(spacing: 10) {
                         Button("Scan room \(controller.rooms.count + 1)") { controller.startRoom() }
-                            .buttonStyle(PushButtonStyle())
+                            .buttonStyle(JellyButtonStyle(fullWidth: true))
                         if !controller.rooms.isEmpty {
-                            Button("Finish house") {
-                                controller.finishHouse {
+                            Button("Save play room") {
+                                controller.finishHouse(name: roomName) {
                                     onSaved()
                                     dismiss()
                                 }
                             }
-                            .buttonStyle(PushButtonStyle(dark: true))
+                            .buttonStyle(JellyButtonStyle(kind: .dark, fullWidth: true))
                         }
                     }
                 }
             }
             .padding(20)
-            .background(RallyStyle.paper, in: RoundedRectangle(cornerRadius: 24))
+            .background(JellyStyle.paper, in: RoundedRectangle(cornerRadius: 24))
+            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(JellyStyle.ink, lineWidth: 2))
             .padding(24).frame(maxWidth: 540)
         }
-        .foregroundStyle(RallyStyle.ink).tint(RallyStyle.ink).preferredColorScheme(.light)
-        .navigationTitle("Scan your house")
+        .foregroundStyle(JellyStyle.ink).tint(JellyStyle.blue).preferredColorScheme(.light)
+        .environmentObject(audio)
+        .navigationTitle(roomName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .topBarTrailing) {
+            Button("Cancel") { dismiss() }.disabled(controller.isSaving)
+        } }
+        .interactiveDismissDisabled(controller.isSaving)
         .onDisappear { controller.stop() }
     }
 }

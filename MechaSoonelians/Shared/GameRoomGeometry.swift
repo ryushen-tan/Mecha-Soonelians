@@ -18,7 +18,7 @@ struct GameRoomGeometry: Codable {
     let surfaces: [Surface]
 
     static func scannedHouse() -> GameRoomGeometry? {
-        guard let data = try? Data(contentsOf: HouseStore.structureURL),
+        guard let data = try? Data(contentsOf: HouseStore.activeStructureURL),
               let structure = try? JSONDecoder().decode(CapturedStructure.self, from: data) else { return nil }
         var surfaces: [Surface] = []
         for room in structure.rooms {
@@ -49,7 +49,7 @@ struct GameRoomGeometry: Codable {
                     transform: flatten(window.transform), color: "#b6d7e2"))
             }
         }
-        return GameRoomGeometry(name: "Your scanned house", source: "roomplan", surfaces: surfaces)
+        return GameRoomGeometry(name: HouseStore.selectedRoom?.name ?? "Your scanned house", source: "roomplan", surfaces: surfaces)
     }
 
     private static func flatten(_ matrix: simd_float4x4) -> [Float] {

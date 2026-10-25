@@ -2,6 +2,26 @@
 // Pre-emit critique: P5 H4 E4 S5 R4 V4. Native adaptation; source fidelity takes priority.
 import SwiftUI
 
+struct JellyWordmark: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("MECCHA").font(JellyStyle.body(11)).tracking(4)
+            (Text("SOON").foregroundColor(JellyStyle.blue) + Text("ELIANS").foregroundColor(JellyStyle.ink))
+                .font(JellyStyle.display(30))
+                .lineLimit(1).minimumScaleFactor(0.6)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("MecchaSoonelians")
+    }
+}
+
+struct JellyEyebrow: View {
+    let text: String
+    var body: some View {
+        Text(text).font(JellyStyle.body(11)).tracking(2)
+    }
+}
+
 struct JellyButtonStyle: ButtonStyle {
     enum Kind { case primary, ghost, dark, danger }
     var kind: Kind = .primary

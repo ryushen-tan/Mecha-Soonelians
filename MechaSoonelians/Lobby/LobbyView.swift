@@ -8,6 +8,8 @@ struct LobbyView: View {
     @State private var confirmingLeave = false
     @State private var copied = false
     @State private var removing: LobbyPlayer?
+    @State private var choosingPlayRoom = false
+    @State private var playRoom = HouseStore.selectedRoom
 
     var body: some View {
         JellyCard {
@@ -74,6 +76,20 @@ struct LobbyView: View {
             }
             if let error = store.error { JellyNotice(message: error) }
             if store.isHost && !room.started {
+                Button { choosingPlayRoom = true } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "house").foregroundStyle(JellyStyle.blue)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Play room").font(JellyStyle.display(20))
+                            Text(playRoom?.name ?? "Choose a room to play in")
+                                .font(JellyStyle.body(13)).foregroundStyle(JellyStyle.muted)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                    }
+                }
+                .buttonStyle(JellyButtonStyle(kind: .ghost, fullWidth: true))
+                .disabled(store.busy || store.reconnecting).accessibilityIdentifier("choosePlayRoomButton")
                 Stepper("Hide time · \(store.hideMinutes) min", value: $store.hideMinutes, in: 1...10)
                     .font(JellyStyle.body(14))
                 Stepper("Seek time · \(store.seekMinutes) min", value: $store.seekMinutes, in: 1...15)
@@ -94,6 +110,11 @@ struct LobbyView: View {
                 VStack(spacing: 10) { roomActions }
             }
         }
+        .sheet(isPresented: $choosingPlayRoom) {
+            PlayRoomPicker { playRoom = HouseStore.selectedRoom }
+                .environmentObject(audio)
+        }
+        .onAppear { playRoom = HouseStore.selectedRoom }
         .alert(store.isHost ? "End this room?" : "Leave this room?", isPresented: $confirmingLeave) {
             Button(store.isHost ? "End room" : "Leave room", role: .destructive) { Task { await store.leave() } }
             Button("Cancel", role: .cancel) {}
@@ -121,7 +142,7 @@ struct LobbyView: View {
                     HStack { Text("Start game"); if store.busy { ProgressView().tint(.white) } }
                 }
                 .buttonStyle(JellyButtonStyle(fullWidth: true))
-                .disabled(!room.canStart || store.busy || store.reconnecting)
+                .disabled(!room.canStart || store.busy || store.reconnecting || playRoom == nil)
                 .accessibilityIdentifier("startSessionButton")
             } else {
                 Button { Task { await store.setReady() } } label: {

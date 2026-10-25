@@ -97,10 +97,9 @@ final class LobbyStore: ObservableObject {
 
     /// Uploads the host's scanned house, then the server picks a seeker at random and starts the AR round.
     func start() async {
-        guard let session = membership, !busy else { return }
-        let house = HouseStore.source
-        guard house != .none else {
-            error = "Scan your house first (Studio → Scan your house) so there's somewhere to hide."
+        guard let session = membership, isHost, !busy else { return }
+        guard let house = HouseStore.selectedRoom else {
+            error = "Choose a play room or add a new room before starting."
             return
         }
         busy = true
@@ -108,17 +107,18 @@ final class LobbyStore: ObservableObject {
         generation += 1
         defer { busy = false; startingStatus = nil }
         do {
+            try house.validate()
             let api = LobbyAPI(baseURL: session.server)
             let path = "rooms/\(session.code)"
             var body: [String: Any] = ["action": "start", "hideSeconds": hideMinutes * 60, "seekSeconds": seekMinutes * 60]
-            if house == .bundled, let id = HouseStore.bundledID {
+            if let id = HouseStore.bundledMapID(for: house) {
                 // The house is inside every copy of the app: nothing to upload.
                 body["house"] = ["kind": "bundled", "id": id]
             } else {
                 startingStatus = "Uploading your house…"
                 let urls: HouseUploadURLs = try await api.request("\(path)/ar/house", method: "POST", token: session.token)
-                try await upload(HouseStore.structureURL, to: urls.structure.url)
-                try await upload(HouseStore.worldMapURL, to: urls.worldmap.url)
+                try await upload(house.structureURL, to: urls.structure.url)
+                try await upload(house.worldMapURL, to: urls.worldmap.url)
             }
             startingStatus = "Choosing a seeker…"
             let _: EmptyReply = try await api.request("\(path)/ar", method: "POST", token: session.token, body: body)

@@ -24,6 +24,7 @@
 		331E1FE4BD86D07DD19B84F3 /* CaptureEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF79F3BBCC9CA2AC029477CB /* CaptureEditorView.swift */; };
 		3679102808061347474DCF6C /* OnlineRoundTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04BDD119F25B3D5B6FB8E4F3 /* OnlineRoundTests.swift */; };
 		38EB2D34B38FEAEA9BACB9ED /* Design.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7EBEDCF57512A68370EC152 /* Design.swift */; };
+		3CE7CBE30A7AA8EEE5EC2E6E /* PlayRoomTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF1651F856B94C4E3A79C6CE /* PlayRoomTests.swift */; };
 		4107B9CBB99AE55C1EB502A4 /* Character3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D99F9A560431B9C94F58D80E /* Character3DView.swift */; };
 		41523905A7AC596D58AD1F51 /* HouseStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EE05025550A1C0ADC6A58D /* HouseStore.swift */; };
 		43B120B16E2AC2849FEC50E3 /* JellyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61F5F90064265EE3BB0A094D /* JellyTests.swift */; };
@@ -67,6 +68,7 @@
 		C33A82B1E913742F4D7CD7F2 /* LobbyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9459A9CA1035D4F2E3F793F6 /* LobbyStore.swift */; };
 		C66FBCC1C4F22EC959F33A7B /* GameSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72EA1D5DC5972D7C62DD623 /* GameSession.swift */; };
 		C9B7072906BBC77C9FF367DD /* human-2-cutout.png in Resources */ = {isa = PBXBuildFile; fileRef = 35EFF5D7AD79BD5498F13036 /* human-2-cutout.png */; };
+		CC4870E0C8A4B9B7C0AB87A2 /* PlayRoomPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E28ADDB08E196142E98C5BE /* PlayRoomPicker.swift */; };
 		D3AEDA1013AA53DDAC5CC361 /* human-2-mask.png in Resources */ = {isa = PBXBuildFile; fileRef = E981861409898200BC9CCBF6 /* human-2-mask.png */; };
 		D546689ECAB0C3F7F1912FE9 /* Ghost3DView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BDB2E1BCEB1FCFDA269353B /* Ghost3DView.swift */; };
 		D6FA24E44C694A306F2179CE /* GameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BE9FA0E1173D95D05C52BBA /* GameView.swift */; };
@@ -137,6 +139,7 @@
 		6094388F83BF57E6079B4861 /* RoomObstacles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomObstacles.swift; sourceTree = "<group>"; };
 		61F5F90064265EE3BB0A094D /* JellyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JellyTests.swift; sourceTree = "<group>"; };
 		6C2D535BD41EC0F0EBED9996 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
+		6E28ADDB08E196142E98C5BE /* PlayRoomPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayRoomPicker.swift; sourceTree = "<group>"; };
 		718BBB5FCB3DF03AA6CBF88B /* GameModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModels.swift; sourceTree = "<group>"; };
 		72DAACAF2F70200E7F265971 /* CharacterStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterStudioView.swift; sourceTree = "<group>"; };
 		832C5186DE797FF76CF6DA3F /* ChameleonStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChameleonStudioView.swift; sourceTree = "<group>"; };
@@ -180,6 +183,7 @@
 		E659EBB21F9FE43758369A7B /* human-1-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-1-mask.png"; sourceTree = "<group>"; };
 		E7EBEDCF57512A68370EC152 /* Design.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Design.swift; sourceTree = "<group>"; };
 		E981861409898200BC9CCBF6 /* human-2-mask.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "human-2-mask.png"; sourceTree = "<group>"; };
+		EF1651F856B94C4E3A79C6CE /* PlayRoomTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayRoomTests.swift; sourceTree = "<group>"; };
 		F51E65ADE5E00819B806A976 /* PaintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaintView.swift; sourceTree = "<group>"; };
 		FD9A8B3A361FC622CEC3D641 /* SprayPaintView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SprayPaintView.swift; sourceTree = "<group>"; };
 		FF79F3BBCC9CA2AC029477CB /* CaptureEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureEditorView.swift; sourceTree = "<group>"; };
@@ -195,6 +199,7 @@
 				88D2E957FDE6B2C5D9BD3CBA /* LobbyTests.swift */,
 				04BDD119F25B3D5B6FB8E4F3 /* OnlineRoundTests.swift */,
 				C7D20FEE66D76AC0214E3DA5 /* PersonalBodyTests.swift */,
+				EF1651F856B94C4E3A79C6CE /* PlayRoomTests.swift */,
 				372EF0FC80E70635D0266ACB /* ProfilePhotoTests.swift */,
 				BFC6AF8476328BEC413492FA /* StudioTests.swift */,
 			);
@@ -316,6 +321,7 @@
 				9459A9CA1035D4F2E3F793F6 /* LobbyStore.swift */,
 				5C483075B49F2B7A8043B119 /* LobbyView.swift */,
 				C98C0AA3451C18D256864A6B /* Models.swift */,
+				6E28ADDB08E196142E98C5BE /* PlayRoomPicker.swift */,
 				8AC12CB1908D508442976CC9 /* ProfileAvatarButton.swift */,
 				0534AA838FD7A4A1CDC52F05 /* ProfileAvatarMesh.swift */,
 				1C23F41FC6FAF7524F185362 /* ProfilePhoto.swift */,
@@ -520,6 +526,7 @@
 				2779BFFE128731932E01EBCD /* LobbyTests.swift in Sources */,
 				3679102808061347474DCF6C /* OnlineRoundTests.swift in Sources */,
 				C1B9208AB9F3A3F33851ECA8 /* PersonalBodyTests.swift in Sources */,
+				3CE7CBE30A7AA8EEE5EC2E6E /* PlayRoomTests.swift in Sources */,
 				89DFA4187DA317244EE84B5D /* ProfilePhotoTests.swift in Sources */,
 				77D68A48F70360B89A1C11DB /* StudioTests.swift in Sources */,
 			);
@@ -574,6 +581,7 @@
 				A585826199C65097DF0704C3 /* Models.swift in Sources */,
 				A4C53F0F7411917B9C70F84E /* PaintView.swift in Sources */,
 				B67C1B83A11790E5D686ECF3 /* PersonCameraView.swift in Sources */,
+				CC4870E0C8A4B9B7C0AB87A2 /* PlayRoomPicker.swift in Sources */,
 				216D3DA2E0C913B9D88C727D /* PoseCanvas.swift in Sources */,
 				4764E2008E6960FC8B8E797B /* ProfileAvatarButton.swift in Sources */,
 				7A33D928FB4FC9BC11924116 /* ProfileAvatarMesh.swift in Sources */,

@@ -178,11 +178,10 @@ final class GameSession: ObservableObject {
     private func loadHouseIfNeeded() async {
         guard !hasMap, !loadingHouse, !isHost else { return }
         if let house = state.house, house.kind == "bundled" {
-            // Every build carries the same scan, so there is nothing to download.
-            if let id = house.id, id == HouseStore.bundledID,
-               let map = HouseStore.bundledWorldMapURL, let structure = HouseStore.bundledStructureURL {
-                mapURL = map
-                structureURL = structure
+            // Resolve the exact room selected by the host, never the phone's default room.
+            if let id = house.id, let room = HouseStore.bundledRoom(withMapID: id) {
+                mapURL = room.worldMapURL
+                structureURL = room.structureURL
                 hasMap = true
             } else {
                 error = "This game is in a different house than your app has. Update Mecha Soonelians and try again."
