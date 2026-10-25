@@ -236,7 +236,9 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     // MARK: Ghosts
 
     /// Makes the scene show exactly these ghosts: the 3D model once it has arrived, else the flat cutout.
-    func show(_ ghosts: [Ghost], images: [UUID: Data], models: [UUID: URL]) {
+    /// `burstWhenFound`: a ghost found right now bursts into colour and disappears (during seeking);
+    /// otherwise found ghosts stay, marked in green (the results).
+    func show(_ ghosts: [Ghost], images: [UUID: Data], models: [UUID: URL], burstWhenFound: Bool = false) {
         let ids = Set(ghosts.map(\.id))
         shownGhosts = ids
         for (id, entity) in ghostEntities where !ids.contains(id) {
@@ -268,6 +270,10 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
             }
             if ghost.foundBy != nil, !foundGhosts.contains(ghost.id), let entity = ghostEntities[ghost.id] {
                 foundGhosts.insert(ghost.id)
+                if burstWhenFound { burst(entity) } else { markFound(entity, height: ghost.height) }
+            } else if ghost.foundBy != nil, !burstWhenFound, let entity = ghostEntities[ghost.id], !entity.isEnabled {
+                // Burst during seeking; back on show (marked found) for the results.
+                entity.isEnabled = true
                 markFound(entity, height: ghost.height)
             }
         }
@@ -362,6 +368,28 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         return ghostEntity
     }
 
+    /// The found ghost explodes into a shower of bright pieces and disappears.
+    private func burst(_ entity: Entity) {
+        let center = entity.visualBounds(relativeTo: houseAnchor).center
+        entity.isEnabled = false
+        let shower = Entity()
+        shower.position = center
+        houseAnchor.addChild(shower)
+        for _ in 0..<70 {
+            let color = UIColor(hue: .random(in: 0...1), saturation: 0.85, brightness: 1, alpha: 1)
+            let size = Float.random(in: 0.025...0.07)
+            let piece = ModelEntity(mesh: .generateBox(size: size, cornerRadius: size * 0.25), materials: [UnlitMaterial(color: color)])
+            piece.orientation = simd_quatf(angle: Float.random(in: 0...(2 * .pi)), axis: simd_normalize(SIMD3<Float>(Float.random(in: -1...1), 1, Float.random(in: -1...1))))
+            shower.addChild(piece)
+            let direction = simd_normalize(SIMD3<Float>(.random(in: -1...1), .random(in: -0.3...1.3), .random(in: -1...1)))
+            let landing = Transform(scale: SIMD3(repeating: 0.15),
+                                    rotation: simd_quatf(angle: Float.random(in: 2...8), axis: simd_normalize(SIMD3<Float>(1, Float.random(in: -1...1), 0.5))),
+                                    translation: direction * Float.random(in: 0.5...1.5) - SIMD3<Float>(0, Float.random(in: 0...0.4), 0))
+            piece.move(to: landing, relativeTo: shower, duration: .random(in: 0.9...1.5), timingFunction: .easeOut)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) { shower.removeFromParent() }
+    }
+
     /// Tints a found cutout green; a found 3D ghost gets a green marker over its head instead.
     private func markFound(_ entity: Entity, height: Float) {
         var tinted = false
@@ -385,6 +413,7 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         var entity = arView.entity(at: gesture.location(in: arView))
         while let current = entity {
             if let id = UUID(uuidString: current.name), ghostEntities[id] != nil {
+                guard !foundGhosts.contains(id) else { return }
                 onTapGhost?(id)
                 return
             }

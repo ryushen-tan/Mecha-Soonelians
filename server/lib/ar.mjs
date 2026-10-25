@@ -229,8 +229,10 @@ export function placeGhost(room, member, ghost, time) {
 export function tagGhost(room, member, ghostID, time) {
   const ar = requireAR(room);
   advanceAR(room, time);
-  if (ar.phase !== 'seeking') fail(409, 'Ghosts can only be found while seeking.');
   if (ar.roles[member.id] !== 'seeker') fail(403, 'Only the seeker can find ghosts.');
+  // A second tap on the last ghost arrives after the round has ended: nothing left to do.
+  if (ar.phase === 'results') return;
+  if (ar.phase !== 'seeking') fail(409, 'Ghosts can only be found while seeking.');
   const ghost = ar.ghosts.find(item => item.id === String(ghostID).toLowerCase());
   if (!ghost) fail(404, 'That ghost is not here.');
   if (!ghost.foundBy) ghost.foundBy = member.id;

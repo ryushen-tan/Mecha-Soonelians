@@ -22,6 +22,7 @@ struct GameView: View {
     @State private var confirmingLeave = false
     @State private var confirmingSkip = false
     @State private var chirpSentAt: Date?
+    @State private var showingSpots = false
     @State private var chirpNotice: Date?
     /// A few seconds of "who's the seeker / go hide" when a phase starts.
     @State private var splash: Splash?
@@ -105,7 +106,11 @@ struct GameView: View {
         }
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
-            ar.onTapGhost = { session.tag($0) }
+            ar.onTapGhost = { id in
+                guard state.phase == .seeking, session.amSeeking else { return }
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                session.tag(id)
+            }
             session.start()
             startARIfReady()
         }
@@ -131,6 +136,7 @@ struct GameView: View {
         .onChange(of: session.ghostModels) { syncGhosts() }
         .onChange(of: state.phase) {
             announcePhase()
+            showingSpots = false
             if state.phase != .hiding {
                 sculptor?.cancel()
                 sculptor = nil
@@ -223,7 +229,7 @@ struct GameView: View {
         case .seeking: visible = session.amSeeking ? state.ghosts : state.ghosts.filter { $0.ownerID == session.me.id }
         case .results: visible = state.ghosts
         }
-        ar.show(visible, images: session.ghostImages, models: session.ghostModels)
+        ar.show(visible, images: session.ghostImages, models: session.ghostModels, burstWhenFound: state.phase == .seeking)
     }
 
     // MARK: Panels
@@ -278,7 +284,16 @@ struct GameView: View {
                 }
             }
         case .results:
-            cameraCard { resultsPanel }
+            if showingSpots {
+                cameraCard {
+                    Eyebrow(text: "EVERYONE'S HIDING SPOTS")
+                    Text("Look around: found ghosts are marked green.").font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                    Button { showingSpots = false } label: { ActionLabel(text: "Back to results") }
+                        .buttonStyle(PushButtonStyle(dark: true))
+                }
+            } else {
+                resultsPage
+            }
         }
     }
 
@@ -421,38 +436,64 @@ struct GameView: View {
         }
     }
 
-    private var resultsPanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Eyebrow(text: "RESULTS")
-            Text(winnerLine).font(RallyStyle.font(22, .heavy))
-            Text("Everyone's hiding spot is showing. Look around!")
-                .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
-            ForEach(state.ghosts) { ghost in
-                let owner = state.player(ghost.ownerID)
-                let won = state.winnerIDs?.contains(ghost.ownerID) == true
-                HStack(spacing: 10) {
-                    AvatarView(index: owner?.avatar ?? 0, size: 32).accessibilityHidden(true)
-                    if let finder = state.player(ghost.foundBy)?.name {
-                        Text("\(owner?.name ?? "Someone") was found by \(finder)").font(RallyStyle.font(15, .semibold))
-                    } else {
-                        Text("\(owner?.name ?? "Someone") stayed hidden\(won ? " 🏆" : "")").font(RallyStyle.font(15, .bold))
-                    }
-                    Spacer()
-                    Text("\(owner?.points ?? 0) pts").font(.system(size: 14, weight: .semibold, design: .monospaced))
+    /// The end of the round: who won, everyone's points, and what's next.
+    private var resultsPage: some View {
+        let hiders = state.players.filter { $0.role == .hider }.sorted { a, b in
+            let aHidden = state.ghosts.first { $0.ownerID == a.id }?.foundBy == nil
+            let bHidden = state.ghosts.first { $0.ownerID == b.id }?.foundBy == nil
+            return aHidden != bHidden ? aHidden : (a.points ?? 0) > (b.points ?? 0)
+        }
+        let found = state.ghosts.filter { $0.foundBy != nil }.count
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Brand()
+                Eyebrow(text: "ROUND OVER")
+                Text(winnerLine).font(RallyStyle.font(34, .heavy)).tracking(-1)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let seeker = session.seeker {
+                    resultRow(seeker, detail: "Seeker · found \(found) of \(state.ghosts.count)",
+                              won: state.winnerIDs?.contains(seeker.id) == true, points: nil)
+                }
+                ForEach(hiders) { hider in
+                    let ghost = state.ghosts.first { $0.ownerID == hider.id }
+                    let detail = ghost == nil ? "Didn't hide" : ghost?.foundBy != nil
+                        ? "Found by \(state.player(ghost?.foundBy)?.name ?? "the seeker")" : "Stayed hidden"
+                    resultRow(hider, detail: detail, won: state.winnerIDs?.contains(hider.id) == true, points: hider.points ?? 0)
+                }
+                Text("Hiders earn 10 points a second while the seeker can see them without finding them. If anyone stays hidden, the most points wins; the seeker wins by finding everyone.")
+                    .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+                Button { showingSpots = true } label: { ActionLabel(text: "See everyone's hiding spots") }
+                    .buttonStyle(PushButtonStyle(dark: true))
+                if session.isHost {
+                    Button { session.playAgain() } label: { ActionLabel(text: "Play again") }
+                        .buttonStyle(PushButtonStyle())
+                    Button("Back to lobby") { onExit() }.font(RallyStyle.font(15, .semibold))
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Label("Waiting for the host to play again", systemImage: "clock").font(RallyStyle.font(14, .semibold))
+                    Button("Leave game") { confirmingLeave = true }.font(RallyStyle.font(15, .semibold))
+                        .frame(maxWidth: .infinity)
                 }
             }
-            if state.ghosts.isEmpty {
-                Text("Nobody placed a ghost this round.").font(RallyStyle.font(15, .semibold))
-            }
-            if session.isHost {
-                Button { session.playAgain() } label: { ActionLabel(text: "Play again") }
-                    .buttonStyle(PushButtonStyle())
-                Button { onExit() } label: { ActionLabel(text: "Back to lobby") }
-                    .buttonStyle(PushButtonStyle(dark: true))
-            } else {
-                Label("Waiting for the host", systemImage: "clock").font(RallyStyle.font(14, .semibold))
-            }
+            .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
         }
+        .background(RallyStyle.paper.ignoresSafeArea())
+    }
+
+    private func resultRow(_ player: Player, detail: String, won: Bool, points: Int?) -> some View {
+        HStack(spacing: 12) {
+            AvatarView(index: player.avatar, size: 44).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(player.name + (player.id == session.me.id ? " (you)" : "") + (won ? " 🏆" : ""))
+                    .font(RallyStyle.font(17, .bold))
+                Text(detail).font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
+            }
+            Spacer()
+            if let points { Text("\(points) pts").font(.system(size: 17, weight: .bold, design: .monospaced)) }
+        }
+        .padding(14)
+        .background(won ? RallyStyle.lime : RallyStyle.surface, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(RallyStyle.line, lineWidth: 1))
     }
 
     private var timerTicket: some View {

@@ -119,6 +119,14 @@ final class OnlineRoundTests: XCTestCase {
         seeker.tag(id)
         try await eventually("the ghost is found and the round ends") { seeker.state.phase == .results && seeker.state.ghosts.first?.foundBy == seeker.me.id }
         XCTAssertEqual(seeker.state.winnerIDs, [seeker.me.id], "Finding everyone wins it for the seeker")
+        // A double tap on the last ghost reaches the server after the round ended: it must be ignored.
+        let seekerToken = seekerIsHost ? host.token : guest.token
+        struct Reply: Decodable {}
+        let _: Reply = try await api.request("rooms/\(code)/ar", method: "POST", token: seekerToken,
+            body: ["action": "tag", "ghostID": id.uuidString.lowercased()])
+        seeker.tag(id)
+        try await Task.sleep(for: .seconds(1))
+        XCTAssertNil(seeker.error, "A late tap must not show an error")
     }
 }
 

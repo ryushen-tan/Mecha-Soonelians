@@ -29,6 +29,7 @@ final class GameSession: ObservableObject {
     private var loadingGhosts: Set<UUID> = []
     private var loadingHouse = false
     private var optimisticGhost: Ghost?
+    private var tagged: Set<UUID> = []
 
     /// Where a joining phone keeps the host's house, separate from its own scan.
     private static var joinedDir: URL { HouseStore.documents.appendingPathComponent("Joined", isDirectory: true) }
@@ -111,7 +112,13 @@ final class GameSession: ObservableObject {
     func chirp() { act(["action": "chirp"]) }
     /// When my last chirp went out (for the cooldown on the button).
     var myLastChirpAge: Double? { state.chirps?.filter { $0.ownerID == me.id }.map(\.age).min() }
-    func tag(_ ghostID: UUID) { act(["action": "tag", "ghostID": ghostID.uuidString.lowercased()]) }
+    /// Seeker: found this ghost. Extra taps on it (or after the round ends) do nothing.
+    func tag(_ ghostID: UUID) {
+        guard state.phase == .seeking, !tagged.contains(ghostID),
+              state.ghosts.first(where: { $0.id == ghostID })?.foundBy == nil else { return }
+        tagged.insert(ghostID)
+        act(["action": "tag", "ghostID": ghostID.uuidString.lowercased()])
+    }
     /// Host: start hiding without waiting for everyone to find the house.
     func startRound() { act(["action": "begin"]) }
     /// Host: hiding -> seeking, or seeking -> results, ahead of the clock.
