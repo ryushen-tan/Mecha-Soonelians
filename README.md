@@ -1,4 +1,4 @@
-# Rally
+# Mecca Soonelians
 
 Open `MechaSoonelians.xcodeproj` for the app: the online lobby (room codes, invite links, profile avatars), RoomPlan scanning, and the human capture/pose Studio. `project.yml` generates it. The earlier nearby-Wi-Fi AR game (`MechaSoonelians/Game`, `MapTest`) is still in the repository and compiles, but the app no longer opens it.
 
@@ -25,7 +25,7 @@ Drag and throw the landing figurines, or enable tilt on a physical phone. **Pour
 
 The host can copy/share the code, lock the room, remove players, and start once at least two players are present and everyone is ready. Guests can toggle readiness and leave. Ending a room returns everyone to Join. A started session is a shared status screen; quiz questions and gameplay are outside this lobby app's scope.
 
-Invite links use `rally://join/123456`. They fill the Join screen with the code; both devices still need the same server configured.
+Invite links use `mecca-soonelians://join/123456`. They fill the Join screen with the code; both devices still need the same server configured.
 
 ## Capture Studio
 
