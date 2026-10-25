@@ -62,6 +62,7 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
     @Published private(set) var views: [ChameleonView] = []
 
     let session = AVCaptureSession()
+    private var captureRotation: CameraCaptureRotation?
     private let queue = DispatchQueue(label: "chameleon.camera")
     private let lock = NSLock()
     private var latest: CVPixelBuffer?
@@ -93,7 +94,7 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
             // Upright portrait frames, not mirrored: the mapping relies on the person's left
             // appearing on the image's right, as the camera really sees them.
             if let connection = output.connection(with: .video) {
-                if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
+                captureRotation = CameraCaptureRotation(device: device, connections: [connection], queue: queue)
                 connection.automaticallyAdjustsVideoMirroring = false
                 connection.isVideoMirrored = false
             }
@@ -289,22 +290,12 @@ final class ChameleonCapture: NSObject, ObservableObject, AVCaptureVideoDataOutp
 struct TurnaroundPreview: UIViewRepresentable {
     let session: AVCaptureSession
 
-    func makeUIView(context: Context) -> PreviewView {
-        let view = PreviewView()
-        view.previewLayer.session = session
+    func makeUIView(context: Context) -> CameraPreviewUIView {
+        let view = CameraPreviewUIView()
+        view.configure(session: session)
         view.previewLayer.videoGravity = .resizeAspectFill
         return view
     }
 
-    func updateUIView(_ uiView: PreviewView, context: Context) {}
-
-    final class PreviewView: UIView {
-        override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
-        var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
-
-        override func layoutSubviews() {
-            super.layoutSubviews()
-            if let connection = previewLayer.connection, connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
-        }
-    }
+    func updateUIView(_ uiView: CameraPreviewUIView, context: Context) {}
 }
