@@ -9,6 +9,8 @@ final class GameSession: ObservableObject {
     @Published private(set) var state = GameState()
     @Published private(set) var ghostImages: [UUID: Data] = [:]
     @Published private(set) var ghostModels: [UUID: URL] = [:]
+    /// When a hider's ghost last failed to download; cleared once every ghost has arrived.
+    @Published private(set) var ghostLoadTrouble: Date?
     @Published private(set) var hasMap: Bool
     @Published private(set) var mapProgress = 0.0
     @Published private(set) var reconnecting = false
@@ -240,8 +242,10 @@ final class GameSession: ObservableObject {
                         _ = keepGhostModel(ghost.id, from: name, move: true)
                     }
                     ghostImages[ghost.id] = image
+                    if state.ghosts.allSatisfy({ ghostImages[$0.id] != nil }) { ghostLoadTrouble = nil }
                 } catch {
-                    // It stays missing and is tried again on the next poll.
+                    // It stays missing and is tried again on the next poll, and the seeker is told while it does.
+                    ghostLoadTrouble = Date()
                 }
             }
         }
@@ -275,7 +279,18 @@ final class GameSession: ObservableObject {
             method: method, token: connection.token, body: body)
     }
 
+    /// A dropped connection mid-upload is common on cellular, so each file gets three tries before the hide fails.
     private func upload(_ data: Data, to url: URL) async throws {
+        var lastError: Error = LobbyError(status: 0, message: "The upload didn't go through. Try again.")
+        for attempt in 0..<3 {
+            if attempt > 0 { try await Task.sleep(for: .seconds(Double(attempt) * 2)) }
+            do { return try await uploadOnce(data, to: url) }
+            catch { lastError = error }
+        }
+        throw lastError
+    }
+
+    private func uploadOnce(_ data: Data, to url: URL) async throws {
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
         request.timeoutInterval = 120

@@ -543,6 +543,12 @@ struct GameView: View {
             Text("Found \(found) of \(state.ghosts.count)").font(JellyStyle.display(23))
             Text(ar.isRelocalized ? "Aim + at a hidden figure and press Shoot." : ar.trackingMessage)
                 .font(JellyStyle.body(14)).foregroundStyle(JellyStyle.muted)
+            let loaded = state.ghosts.filter { session.ghostImages[$0.id] != nil }.count
+            if loaded < state.ghosts.count {
+                Text(session.ghostLoadTrouble == nil ? "Loading hiders… \(loaded) of \(state.ghosts.count)"
+                                                     : "Still loading hiders (\(loaded) of \(state.ghosts.count)). Check your connection.")
+                    .font(JellyStyle.body(12)).foregroundStyle(session.ghostLoadTrouble == nil ? JellyStyle.muted : JellyStyle.error)
+            }
             Button(action: shoot) {
                 HStack(spacing: 10) {
                     Circle().fill(JellyStyle.success).frame(width: 18, height: 18)

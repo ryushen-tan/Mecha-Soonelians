@@ -76,8 +76,21 @@ final class ChameleonBody {
         data.append(archive.data[start..<(start + poseSize)])
         let info = CharacterBodyArchive.Info(vertexCount: archive.info.vertexCount, triangleCount: archive.info.triangleCount, poses: [poses[pose]])
         var transfer = CharacterBodyArchive(info: info, data: data)
-        transfer.originalTexture = initialTexture.flatMap { UIImage(cgImage: $0).pngData() }
+        transfer.originalTexture = initialTexture.flatMap(Self.compressedSkin)
         return try JSONEncoder().encode(transfer)
+    }
+
+    /// The original skin as it travels with a ghost: at most 512 px, as a JPEG (~100 KB) instead of the full PNG
+    /// (~1 MB), so a hide uploads and a seeker downloads in seconds on a slow connection. Never enlarged.
+    private static func compressedSkin(_ image: CGImage) -> Data? {
+        let scale = min(1, 512 / CGFloat(max(image.width, image.height)))
+        let size = CGSize(width: max(1, (CGFloat(image.width) * scale).rounded()), height: max(1, (CGFloat(image.height) * scale).rounded()))
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: size, format: format).jpegData(withCompressionQuality: 0.85) { _ in
+            UIImage(cgImage: image).draw(in: CGRect(origin: .zero, size: size))
+        }
     }
 
     func index(of id: String?) -> Int? { poses.firstIndex { $0.id == id } }
