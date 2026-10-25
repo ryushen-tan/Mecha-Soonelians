@@ -7,7 +7,6 @@ struct LobbyView: View {
     let room: Room
     @State private var confirmingLeave = false
     @State private var copied = false
-    @State private var showsStudio = false
     @State private var removing: LobbyPlayer?
 
     var body: some View {
@@ -18,8 +17,6 @@ struct LobbyView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
                 Menu {
-                    Button { showsStudio = true } label: { Label("Studio", systemImage: "viewfinder") }
-                        .accessibilityIdentifier("lobbyStudioButton")
                     ShareLink(item: "Join my room: \(room.displayCode)\nrally://join/\(room.code)") {
                         Label("Share invite", systemImage: "square.and.arrow.up")
                     }
@@ -83,8 +80,6 @@ struct LobbyView: View {
                     .font(JellyStyle.body(14))
             }
             if room.started {
-                Button { showsStudio = true } label: { Label("Open Studio", systemImage: "viewfinder") }
-                    .buttonStyle(JellyButtonStyle(fullWidth: true)).accessibilityIdentifier("openStudioButton")
                 if store.isHost {
                     Button("Back to lobby") { Task { await store.reset() } }
                         .buttonStyle(JellyButtonStyle(kind: .ghost, fullWidth: true))
@@ -99,14 +94,6 @@ struct LobbyView: View {
                 VStack(spacing: 10) { roomActions }
             }
         }
-        .fullScreenCover(isPresented: $showsStudio) {
-            NavigationStack {
-                StudioView().toolbar {
-                    ToolbarItem(placement: .topBarTrailing) { Button("Done") { showsStudio = false } }
-                }
-            }.buttonStyle(HoverButtonStyle()).tint(RallyStyle.ink)
-        }
-        .onChange(of: showsStudio) { _, visible in audio.setActive(!visible) }
         .alert(store.isHost ? "End this room?" : "Leave this room?", isPresented: $confirmingLeave) {
             Button(store.isHost ? "End room" : "Leave room", role: .destructive) { Task { await store.leave() } }
             Button("Cancel", role: .cancel) {}
@@ -160,6 +147,14 @@ struct LobbyView: View {
                 Image(systemName: player.ready ? "checkmark.circle.fill" : "clock")
                     .foregroundStyle(player.ready ? JellyStyle.success : JellyStyle.muted)
                     .accessibilityLabel(player.ready ? "Ready" : "Getting ready")
+            }
+            if store.isHost && !player.host {
+                Button { removing = player } label: {
+                    Image(systemName: "xmark").font(.system(size: 14, weight: .heavy)).foregroundStyle(JellyStyle.muted)
+                        .frame(width: 32, height: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).disabled(store.busy)
+                .accessibilityLabel("Remove \(player.name)")
             }
         }
         .padding(.horizontal, 12).frame(minHeight: 52)

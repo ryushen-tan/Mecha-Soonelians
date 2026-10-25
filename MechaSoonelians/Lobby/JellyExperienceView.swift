@@ -9,7 +9,6 @@ struct JellyExperienceView: View {
     @StateObject private var sceneState = JellySceneState()
     @StateObject private var audio = JellyAudio()
     @State private var entry = JellyEntry.landing
-    @State private var showsStudio = false
 
     private var reduced: Bool { reduceMotion || ProcessInfo.processInfo.arguments.contains("-jelly-still") }
     private var hasCard: Bool { entry != .landing || store.membership != nil }
@@ -46,18 +45,10 @@ struct JellyExperienceView: View {
         .foregroundStyle(JellyStyle.ink).tint(JellyStyle.blue)
         .animation(reduced ? nil : .easeOut(duration: 0.25), value: hasCard)
         .environmentObject(audio)
-        .fullScreenCover(isPresented: $showsStudio) {
-            NavigationStack {
-                StudioView().toolbar {
-                    ToolbarItem(placement: .topBarTrailing) { Button("Done") { showsStudio = false } }
-                }
-            }.buttonStyle(HoverButtonStyle()).tint(RallyStyle.ink)
-        }
         .onChange(of: sceneState.filled) { _, filled in if filled { audio.startMusic() } }
         .onAppear(perform: configureScene)
         .onChange(of: phase, initial: true) { _, _ in configureScene() }
         .onChange(of: reduced) { _, _ in configureScene() }
-        .onChange(of: showsStudio) { _, _ in configureScene() }
         .onChange(of: store.membership?.token) { previous, current in
             if previous != nil && current == nil { entry = .code }
         }
@@ -68,7 +59,7 @@ struct JellyExperienceView: View {
     }
 
     private func configureScene() {
-        let active = phase == .active && !showsStudio
+        let active = phase == .active
         sceneState.scene.configure(reducedMotion: reduced, suspended: !active)
         audio.setActive(active)
     }
@@ -78,8 +69,6 @@ struct JellyExperienceView: View {
             HStack {
                 JellyCount(state: sceneState)
                 Spacer()
-                Button { showsStudio = true } label: { Image(systemName: "viewfinder") }
-                    .accessibilityLabel("Studio").accessibilityIdentifier("studioTab")
                 Button { audio.toggleMute() } label: {
                     Label(audio.muted ? "Sound off" : "Sound on", systemImage: audio.muted ? "speaker.slash" : "music.note")
                 }
