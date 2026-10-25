@@ -103,6 +103,24 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     // MARK: Chirps
 
     private var heardChirps: Set<String> = []
+    /// Where the latest chirp came from (house coordinates) and when, for the on-screen arrow.
+    @Published private(set) var lastChirp: (position: SIMD3<Float>, at: Date)?
+
+    /// Which way to turn toward the latest chirp, for about 6 s after it: `angle` in radians, 0 straight
+    /// ahead and positive to the left (on the floor plane), and how far away it is in metres.
+    func chirpDirection(now: Date = Date()) -> (angle: Double, distance: Float)? {
+        guard let chirp = lastChirp, now.timeIntervalSince(chirp.at) < 6, let frame = currentFrame else { return nil }
+        let camera = frame.camera.transform
+        var forward = -simd_make_float3(camera.columns.2)
+        var toward = chirp.position - simd_make_float3(camera.columns.3)
+        forward.y = 0
+        toward.y = 0
+        let distance = simd_length(toward)
+        guard simd_length(forward) > 0.01, distance > 0.01 else { return (0, distance) }
+        forward = simd_normalize(forward)
+        let angle = atan2(Double(simd_cross(forward, toward).y), Double(simd_dot(forward, toward)))
+        return (angle, distance)
+    }
     private lazy var chirpSound: AudioFileResource? = Self.makeChirpSound()
 
     /// Plays a chirp from where this ghost hides, as 3D sound: it gets louder as you get closer and comes
@@ -110,12 +128,18 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     func play(_ chirp: Chirp, ghost: Ghost) {
         guard !heardChirps.contains(chirp.id), chirp.age < 6_000 else { return }
         heardChirps.insert(chirp.id)
-        guard let sound = chirpSound, let floor = simd_float4x4(floats: ghost.floorTransform) else { return }
+        guard let floor = simd_float4x4(floats: ghost.floorTransform) else { return }
+        guard let sound = chirpSound else {
+            // No sound available: still point the way.
+            lastChirp = (simd_make_float3(floor.columns.3) + SIMD3(0, ghost.height * 0.8, 0), Date())
+            return
+        }
         let source = Entity()
         source.transform = Transform(matrix: floor)
         source.position.y += ghost.height * 0.8
         source.components.set(SpatialAudioComponent(gain: 6, directLevel: 0, reverbLevel: -6))
         houseAnchor.addChild(source)
+        lastChirp = (source.position, Date())
         source.playAudio(sound)
         // A second, louder call a moment later makes the direction easier to place.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { source.playAudio(sound) }

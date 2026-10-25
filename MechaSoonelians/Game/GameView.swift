@@ -23,6 +23,7 @@ struct GameView: View {
     @State private var confirmingSkip = false
     @State private var chirpSentAt: Date?
     @State private var showingSpots = false
+    @State private var announcedChirps: Set<String> = []
     @State private var chirpNotice: Date?
     /// A few seconds of "who's the seeker / go hide" when a phase starts.
     @State private var splash: Splash?
@@ -72,6 +73,9 @@ struct GameView: View {
                 }
                 .transition(.opacity)
                 .onTapGesture { self.splash = nil }
+            }
+            if state.phase == .seeking, session.amSeeking, ar.lastChirp != nil {
+                chirpCompass
             }
             if let countdown {
                 Text("\(countdown)")
@@ -175,14 +179,45 @@ struct GameView: View {
         .frame(maxWidth: 320)
     }
 
+    /// For a few seconds after a chirp, a big arrow shows the seeker which way it came from, turning as
+    /// they turn. It gives the direction and a rough distance, not the exact spot.
+    private var chirpCompass: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20)) { context in
+            if let direction = ar.chirpDirection(now: context.date) {
+                let degrees = abs(direction.angle) * 180 / .pi
+                let side = degrees < 30 ? "ahead" : degrees > 140 ? "behind you" : direction.angle > 0 ? "to your left" : "to your right"
+                let range = direction.distance < 2 ? "close" : direction.distance < 5 ? "nearby" : "far"
+                VStack(spacing: 6) {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 64, weight: .black))
+                        .rotationEffect(.radians(-direction.angle))
+                        .animation(.easeOut(duration: 0.15), value: direction.angle)
+                    Text("Chirp \(side)").font(RallyStyle.font(20, .heavy))
+                    Text(range).font(RallyStyle.font(14, .semibold)).foregroundStyle(RallyStyle.muted)
+                }
+                .padding(.horizontal, 24).padding(.vertical, 18)
+                .background(RallyStyle.lime.opacity(0.92), in: RoundedRectangle(cornerRadius: 28))
+                .foregroundStyle(RallyStyle.ink)
+                .padding(.top, 120)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .allowsHitTesting(false)
+                .transition(.opacity)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("A hider chirped \(side), \(range)")
+            }
+        }
+    }
+
     /// Plays every new chirp on the seeker's phone, from where that hider's ghost is.
     private func playChirps() {
         guard state.phase == .seeking, session.myRole == .seeker else { return }
         for chirp in state.chirps ?? [] {
             guard let ghost = state.ghosts.first(where: { $0.id == chirp.ghostID }) else { continue }
-            if ar.isRelocalized {
+            if ar.isRelocalized, chirp.age < 6_000, !announcedChirps.contains(chirp.id) {
+                announcedChirps.insert(chirp.id)
                 ar.play(chirp, ghost: ghost)
-                if chirp.age < 3_000 { chirpNotice = Date() }
+                chirpNotice = Date()
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
             }
         }
     }
