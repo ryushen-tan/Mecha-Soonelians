@@ -7,7 +7,7 @@ final class PlayRoomTests: XCTestCase {
         let previous = UserDefaults.standard.string(forKey: HouseStore.selectedRoomKey)
         defer { UserDefaults.standard.set(previous, forKey: HouseStore.selectedRoomKey) }
         let original = try XCTUnwrap(HouseStore.bundledRooms.first { $0.id == "bundled" })
-        let main = try XCTUnwrap(HouseStore.bundledRooms.first { $0.name == "Main" })
+        let main = try XCTUnwrap(HouseStore.bundledRooms.first { $0.id == "969A274E-DF9F-4119-9770-16808C7A5668" })
         try original.validate()
         try main.validate()
         let originalID = try XCTUnwrap(HouseStore.bundledMapID(for: original))

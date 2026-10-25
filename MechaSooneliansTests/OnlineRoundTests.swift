@@ -25,7 +25,7 @@ final class OnlineRoundTests: XCTestCase {
     func testRepositoryRoomUsesTheSameMapForHostAndGuest() async throws {
         let previous = UserDefaults.standard.string(forKey: HouseStore.selectedRoomKey)
         defer { UserDefaults.standard.set(previous, forKey: HouseStore.selectedRoomKey) }
-        let room = try XCTUnwrap(HouseStore.bundledRooms.first { $0.name == "Main" })
+        let room = try XCTUnwrap(HouseStore.bundledRooms.first { $0.id == "969A274E-DF9F-4119-9770-16808C7A5668" })
         try HouseStore.select(room)
         try await playRound(skipWhileUploading: false, room: room)
     }

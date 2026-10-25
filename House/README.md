@@ -4,12 +4,12 @@ Both play spaces are backed up in this private repository:
 
 | Room | Files |
 | --- | --- |
-| Original play room | This folder's `house.usdz`, `structure.json`, `worldmap.arexperience`, and `rooms/` |
-| Main | [`SavedRooms/969A274E-DF9F-4119-9770-16808C7A5668`](SavedRooms/969A274E-DF9F-4119-9770-16808C7A5668) |
+| Soonhack — Basement | The original small scan: this folder's `house.usdz`, `structure.json`, `worldmap.arexperience`, and `rooms/` |
+| Soonhack — 1st floor | [`SavedRooms/969A274E-DF9F-4119-9770-16808C7A5668`](SavedRooms/969A274E-DF9F-4119-9770-16808C7A5668), previously named “Main” |
 
-Main was copied from Bok's saved room library on October 24, 2026. Its room ID,
-name, model, structure, individual room scan, and complete AR world map are
-preserved together. The original scan remains unchanged.
+The first-floor scan was copied from Bok's saved room library on October 24, 2026.
+Both rooms are named for their floor in Soonhack. Their room IDs, models,
+structures, individual room scans, and complete AR world maps remain unchanged.
 
 The current app loads this folder as an Xcode folder resource. Pull the repo,
 build the app, and open **Host a game → Play room** to choose an interior. The

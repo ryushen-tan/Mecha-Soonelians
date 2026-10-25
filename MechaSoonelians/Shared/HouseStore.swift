@@ -80,7 +80,7 @@ enum HouseStore {
     /// Keep the original ID and default for existing games and older app versions.
     static let bundledRooms: [SavedRoom] = {
         guard let directory = bundledDir else { return [] }
-        let original = SavedRoom(id: "bundled", name: "Original play room", directory: directory, isBundled: true)
+        let original = SavedRoom(id: "bundled", name: "Soonhack — Basement", directory: directory, isBundled: true)
         let library = savedRooms(in: directory.appendingPathComponent("SavedRooms"), isBundled: true)
         return (original.isAvailable ? [original] : []) + library
     }()
