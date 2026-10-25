@@ -43,6 +43,7 @@ final class ChameleonBody {
     init?(archive: CharacterBodyArchive) {
         guard archive.isValid else { return nil }
         self.archive = archive
+        initialTexture = archive.originalTexture.flatMap { UIImage(data: $0)?.cgImage }
         let info = archive.info, data = archive.data
         let vertices: Int = info.vertexCount, triangleCount: Int = info.triangleCount
         let expectedSize: Int = vertices * 8 + triangleCount * 12 + info.poses.count * vertices * 12
@@ -74,7 +75,9 @@ final class ChameleonBody {
         let start = headerSize + pose * poseSize
         data.append(archive.data[start..<(start + poseSize)])
         let info = CharacterBodyArchive.Info(vertexCount: archive.info.vertexCount, triangleCount: archive.info.triangleCount, poses: [poses[pose]])
-        return try JSONEncoder().encode(CharacterBodyArchive(info: info, data: data))
+        var transfer = CharacterBodyArchive(info: info, data: data)
+        transfer.originalTexture = initialTexture.flatMap { UIImage(cgImage: $0).pngData() }
+        return try JSONEncoder().encode(transfer)
     }
 
     func index(of id: String?) -> Int? { poses.firstIndex { $0.id == id } }

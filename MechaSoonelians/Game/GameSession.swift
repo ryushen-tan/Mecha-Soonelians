@@ -54,6 +54,15 @@ final class GameSession: ObservableObject {
 
     deinit { poller?.cancel() }
 
+    #if DEBUG
+    /// Offline fixtures for rendering the real round panels without starting AR or polling.
+    convenience init(previewState: GameState, player: Player, host: Bool) {
+        self.init(connection: GameConnection(server: URL(string: "https://preview.invalid")!, code: "000000",
+            memberID: player.id.uuidString, token: "preview", isHost: host), name: player.name, avatar: player.avatar)
+        state = previewState
+    }
+    #endif
+
     var myRole: Role { state.player(me.id)?.role ?? .hider }
     var amSeeking: Bool { state.isSeeking(me.id) }
     var myGhost: Ghost? { state.ghosts.first { $0.ownerID == me.id } }
@@ -114,10 +123,16 @@ final class GameSession: ObservableObject {
     var myLastChirpAge: Double? { state.chirps?.filter { $0.ownerID == me.id }.map(\.age).min() }
     /// Seeker: found this ghost. Extra taps on it (or after the round ends) do nothing.
     func tag(_ ghostID: UUID) {
-        guard state.phase == .seeking, !tagged.contains(ghostID),
-              state.ghosts.first(where: { $0.id == ghostID })?.foundBy == nil else { return }
+        guard state.phase == .seeking, amSeeking, !tagged.contains(ghostID),
+              let ghost = state.ghosts.first(where: { $0.id == ghostID }), ghost.foundBy == nil else { return }
         tagged.insert(ghostID)
-        act(["action": "tag", "ghostID": ghostID.uuidString.lowercased()])
+        Task {
+            defer { tagged.remove(ghostID) }
+            do {
+                let reply: RoundReply = try await call("ar", method: "POST", body: ["action": "tag", "ghostID": ghostID.uuidString.lowercased()])
+                if let next = reply.ar { state = next }
+            } catch { self.error = Self.describe(error) }
+        }
     }
     /// Host: start hiding without waiting for everyone to find the house.
     func startRound() { act(["action": "begin"]) }

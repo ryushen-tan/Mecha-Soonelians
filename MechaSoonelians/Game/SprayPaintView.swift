@@ -1,96 +1,142 @@
+// Hallmark · native AR controls · design-system: design.md
+// Pre-emit critique: P5 H4 E4 S5 R5 V4. Fixed controls keep the camera view central.
 import SwiftUI
 
-/// The hiding controls over the AR view: a + in the middle, and one big button that picks up the
-/// color under the + from the real room, or sprays while held when the + is on the body. The pose
-/// button cycles poses (hold it for the pose wheel); the chameleon can be dragged, pinched and
-/// twisted in the room, walked with the joystick, turned with a slider, or sent to the floor or a wall.
+/// Persistent movement, pose, color picking and spraying controls over the live AR view.
 struct SprayPaintView: View {
     @ObservedObject var painter: SprayPainter
     let timeLeft: String
     var onHide: () -> Void
     var onCancel: () -> Void
 
-    /// Whether the current press is spraying (it started on the body) rather than picking.
-    @State private var pressing = false
-    @State private var showsWheel = false
-    @State private var wheelPage = 0
-    @State private var highlightedPose: String?
+    #if DEBUG
+    var previewPoses = false
+    #endif
 
-    private var sprayMode: Bool { painter.isSpraying || painter.aimingAtBody }
+    @State private var pressing = false
+    @State private var showsPoses = false
+
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var sprayMode: Bool { painter.isSpraying || (!pressing && painter.aimingAtBody) }
 
     var body: some View {
-        ZStack {
-            crosshair
-            VStack(spacing: 0) {
-                topBar
-                Spacer()
-                moveControls
-                bottomPanel
+        GeometryReader { geometry in
+            let compact = geometry.size.height < 650
+            ZStack {
+                crosshair
+                VStack(spacing: 0) {
+                    topBar(compact: compact)
+                    Spacer(minLength: 0)
+                    bottomPanel(compact: compact)
+                }
+                .allowsHitTesting(!showsPoses)
+                .accessibilityHidden(showsPoses)
+                if showsPoses { posePicker }
             }
-            if showsWheel { poseWheel }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .foregroundStyle(JellyStyle.ink)
+        .onAppear {
+            #if DEBUG
+            if previewPoses { openPoses() }
+            #endif
+        }
+        .onDisappear { stopMovingAndSpraying() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { stopMovingAndSpraying() }
         }
     }
 
-    private var poseWheel: some View {
+    private var posePicker: some View {
         ZStack {
-            RallyStyle.ink.opacity(0.22).ignoresSafeArea()
-                .onTapGesture { showsWheel = false }
-                .accessibilityLabel("Close pose wheel")
+            JellyStyle.ink.opacity(0.22).ignoresSafeArea()
+                .onTapGesture { showsPoses = false }
+                .accessibilityLabel("Close poses")
                 .accessibilityAddTraits(.isButton)
-            PoseWheel(page: $wheelPage, highlighted: $highlightedPose, current: painter.poseID, pages: painter.posePages) { id in
-                painter.setPose(id: id)
-                showsWheel = false
+            VStack(spacing: 12) {
+                HStack {
+                    Text("All \(painter.poseChoices.count) poses").font(JellyStyle.body(20))
+                    Spacer()
+                    roundButton("xmark", label: "Close poses") { showsPoses = false }
+                }
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                        ForEach(painter.poseChoices) { choice in
+                            let selected = painter.poseID == choice.id
+                            let available = painter.canSelectPose(id: choice.id)
+                            Button {
+                                guard painter.canSelectPose(id: choice.id) else { return }
+                                painter.setPose(id: choice.id)
+                                showsPoses = false
+                            } label: {
+                                VStack(spacing: 5) {
+                                    Image(systemName: choice.icon).font(.system(size: 24))
+                                    Text(choice.name).font(JellyStyle.body(12))
+                                        .lineLimit(1).minimumScaleFactor(0.75)
+                                    Text(selected ? "Selected" : available ? "" : "Needs space")
+                                        .font(JellyStyle.body(10)).lineLimit(1).minimumScaleFactor(0.75)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 76)
+                                .foregroundStyle(selected ? JellyStyle.paper : available ? JellyStyle.ink : JellyStyle.muted)
+                                .background(selected ? JellyStyle.blue : JellyStyle.field, in: RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JellyStyle.ink, lineWidth: selected ? 2 : 1))
+                                .contentShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!available)
+                            .accessibilityLabel("Pose: \(choice.name)")
+                            .accessibilityValue(selected ? "Selected" : available ? "Available" : "Needs more space")
+                            .accessibilityIdentifier("poseChoice_\(choice.id)")
+                        }
+                    }
+                }
+                .frame(maxHeight: 420)
+                Text("Some poses need more space. Move your figure away from walls or furniture to use them.")
+                    .font(JellyStyle.body(12)).foregroundStyle(JellyStyle.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: 340)
-            .padding(24)
+            .padding(16)
+            .background(JellyStyle.paper, in: RoundedRectangle(cornerRadius: 22))
+            .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(JellyStyle.ink, lineWidth: 2))
+            .frame(maxWidth: 400)
+            .padding(16)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
+        .accessibilityAddTraits(.isModal)
     }
 
     private var hint: String {
         if !painter.isReady { return "Putting your chameleon in the room…" }
         if let notice = painter.notice { return notice }
-        if painter.isSelected { return "Drag it onto the floor, a wall or furniture. Pinch to resize, twist to turn. Tap it to let go." }
-        if !painter.hasPickedColor { return "Point the + at the wall behind your chameleon and tap Pick." }
-        if painter.isSpraying { return "Move the phone to spray. Step closer for detail, back for big areas." }
-        return sprayMode ? "Hold to spray. Point at the wall again for a new color." : "Point the + at your chameleon to spray, or tap Pick for a new color."
+        if painter.isSelected { return "Drag to move. Pinch to resize. Tap to let go." }
+        if !painter.hasPickedColor { return "Aim + at the room, then tap Pick." }
+        if painter.isSpraying { return "Keep + on your figure while spraying." }
+        return "Aim + at your figure. Hold Spray to paint."
     }
 
-    private var topBar: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Eyebrow(text: "SPRAY PAINT · \(timeLeft)")
-                Text(hint)
-                    .font(RallyStyle.font(14, .semibold))
-                    .fixedSize(horizontal: false, vertical: true)
+    private func topBar(compact: Bool) -> some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    JellyEyebrow(text: "SPRAY PAINT · \(timeLeft)")
+                    Text(hint)
+                        .font(JellyStyle.body(13))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                roundButton("arrow.uturn.backward", label: "Undo") { painter.undo() }
+                    .disabled(!painter.canUndo)
+                    .opacity(painter.canUndo ? 1 : 0.4)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            roundButton("arrow.uturn.backward", label: "Undo") { painter.undo() }
-                .disabled(!painter.canUndo)
-                .opacity(painter.canUndo ? 1 : 0.4)
-            VStack(spacing: 2) {
-                Image(systemName: painter.poseIcon).font(.system(size: 20, weight: .semibold))
-                Text(painter.poseName).font(RallyStyle.font(10, .semibold)).lineLimit(1)
-            }
-            .frame(width: 64, height: 50)
-            .background(RallyStyle.lime, in: RoundedRectangle(cornerRadius: 14))
-            .contentShape(RoundedRectangle(cornerRadius: 14))
-            .onTapGesture { painter.nextPose() }
-            .onLongPressGesture(minimumDuration: 0.35) {
-                guard painter.isReady else { return }
-                highlightedPose = nil
-                showsWheel = true
-            }
-            .accessibilityElement()
-            .accessibilityLabel("Pose: \(painter.poseName)")
-            .accessibilityHint("Switches to the next pose. Hold for every pose.")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { painter.nextPose() }
-            .accessibilityAction(named: "All poses") { showsWheel = true }
+            if compact { sliders }
         }
-        .padding(14)
-        .background(RallyStyle.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: 18))
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(JellyStyle.paper, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(JellyStyle.ink, lineWidth: 2))
         .padding(.horizontal, 12)
         .padding(.top, 8)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private var crosshair: some View {
@@ -112,94 +158,115 @@ struct SprayPaintView: View {
         .accessibilityHidden(true)
     }
 
-    private var bottomPanel: some View {
-        VStack(spacing: 12) {
-            if let error = painter.error { ErrorNotice(message: error) }
-            HStack(spacing: 10) {
-                Image(systemName: "circle.fill").font(.system(size: 6)).accessibilityHidden(true)
-                Slider(value: $painter.spread, in: 0...1).tint(RallyStyle.ink)
-                    .accessibilityLabel("Spray size")
-                Image(systemName: "circle.fill").font(.system(size: 18)).accessibilityHidden(true)
-            }
+    private func bottomPanel(compact: Bool) -> some View {
+        VStack(spacing: 10) {
+            if let error = painter.error { JellyNotice(message: error) }
             HStack(spacing: 12) {
-                Circle()
-                    .fill(Color(painter.color))
-                    .frame(width: 56, height: 56)
-                    .overlay(Circle().stroke(RallyStyle.ink, lineWidth: 2))
-                    .accessibilityLabel(painter.hasPickedColor ? "Current color" : "No color picked yet")
-                actionButton
+                Joystick { painter.joystick = $0 }
+                VStack(spacing: 8) {
+                    poseButton
+                    paintButton
+                }
             }
+            .disabled(!painter.isReady)
+            .opacity(painter.isReady ? 1 : 0.5)
+            if !compact { sliders }
             HStack {
                 Button("Cancel", action: onCancel)
-                    .font(RallyStyle.font(14, .semibold))
+                    .font(JellyStyle.body(14))
+                    .frame(minWidth: 60, minHeight: 44)
                 Spacer()
-                Button { onHide() } label: { ActionLabel(text: "Hide here") }
-                    .buttonStyle(PushButtonStyle(dark: true))
-                    .frame(maxWidth: 200)
+                Button {
+                    stopMovingAndSpraying()
+                    onHide()
+                } label: {
+                    HStack(spacing: 16) {
+                        Text("Hide here")
+                        Image(systemName: "arrow.right")
+                    }
+                }
+                    .buttonStyle(JellyButtonStyle(kind: .dark))
                     .disabled(!painter.isReady)
             }
         }
-        .padding(16)
-        .background(RallyStyle.surface.opacity(0.94), in: RoundedRectangle(cornerRadius: 22))
+        .padding(12)
+        .background(JellyStyle.paper, in: RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(JellyStyle.ink, lineWidth: 2))
+        .frame(maxWidth: 480)
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    /// The joystick walks the chameleon across the floor the way the phone faces; the slider turns it.
-    private var moveControls: some View {
-        HStack(alignment: .bottom, spacing: 12) {
-            Joystick { painter.joystick = $0 }
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    placeButton("To floor", systemImage: "arrow.down.to.line") { painter.toFloor() }
-                    placeButton("Against wall", systemImage: "rectangle.portrait.and.arrow.right") { painter.againstWall() }
-                }
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 14, weight: .semibold))
-                        .accessibilityHidden(true)
-                    Slider(value: Binding(get: { painter.turn }, set: { painter.setTurn($0) }), in: -180...180)
-                        .tint(RallyStyle.ink)
-                        .accessibilityLabel("Turn")
-                        .accessibilityValue("\(Int(painter.turn)) degrees")
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(RallyStyle.surface.opacity(0.92), in: Capsule())
-                .overlay(Capsule().stroke(RallyStyle.ink, lineWidth: 2))
+    private var sliders: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("Rotation").frame(width: 70, alignment: .leading)
+                Slider(value: Binding(get: { painter.turn }, set: { painter.setTurn($0) }), in: -180...180)
+                    .accessibilityLabel("Rotation")
+                    .accessibilityValue("\(Int(painter.turn)) degrees")
+                Text("\(Int(painter.turn))°").monospacedDigit().lineLimit(1).minimumScaleFactor(0.7).frame(width: 42, alignment: .trailing)
             }
+            .frame(minHeight: 44)
+            HStack(spacing: 8) {
+                Text("Spray size").frame(width: 70, alignment: .leading)
+                Slider(value: $painter.spread, in: 0...1)
+                    .accessibilityLabel("Spray size")
+                    .accessibilityValue("\(Int(painter.spread * 100)) percent")
+                Text("\(Int(painter.spread * 100))%").monospacedDigit().lineLimit(1).minimumScaleFactor(0.7).frame(width: 42, alignment: .trailing)
+            }
+            .frame(minHeight: 44)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
-        .opacity(painter.isReady ? 1 : 0.5)
+        .font(JellyStyle.body(12))
+        .tint(JellyStyle.blue)
         .disabled(!painter.isReady)
     }
 
-    private func placeButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(RallyStyle.font(13, .semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .background(RallyStyle.surface.opacity(0.92), in: Capsule())
-                .overlay(Capsule().stroke(RallyStyle.ink, lineWidth: 2))
+    private var poseButton: some View {
+        HStack(spacing: 6) {
+            Image(systemName: painter.poseIcon)
+            Text("Pose · \(painter.poseName)").lineLimit(1).minimumScaleFactor(0.75)
+            Spacer(minLength: 0)
+            Image(systemName: "square.grid.3x3.fill").font(.system(size: 14, weight: .bold))
         }
-        .buttonStyle(.plain)
+        .font(JellyStyle.body(13))
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .background(JellyStyle.field, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JellyStyle.ink, lineWidth: 2))
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .onTapGesture { openPoses() }
+        .onLongPressGesture(minimumDuration: 0.35) { openPoses() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Pose: \(painter.poseName)")
+        .accessibilityHint("Opens all \(painter.poseChoices.count) poses. Poses that need more space are marked.")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { openPoses() }
+        .accessibilityAction(named: "Next available pose") { if painter.isReady { painter.nextPose() } }
     }
 
-    /// One button for both jobs, so the player never has to look away from the +.
-    private var actionButton: some View {
-        HStack(spacing: 10) {
-            Image(systemName: sprayMode ? "paintbrush.pointed.fill" : "eyedropper.halffull")
+    private func openPoses() {
+        guard painter.isReady else { return }
+        stopMovingAndSpraying()
+        showsPoses = true
+    }
+
+    private func toolLabel(_ title: String, icon: String) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
                 .font(.system(size: 22, weight: .semibold))
-            Text(painter.isSpraying ? "Spraying…" : sprayMode ? "Hold to spray" : "Pick")
-                .font(RallyStyle.font(20, .bold))
+            Text(title).font(JellyStyle.body(14)).lineLimit(1)
         }
-        .frame(maxWidth: .infinity, minHeight: 64)
-        .foregroundStyle(RallyStyle.ink)
-        .background(sprayMode ? RallyStyle.lime : RallyStyle.cyan, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(RallyStyle.ink, lineWidth: 2))
-        .opacity(painter.isReady ? 1 : 0.5)
+        .frame(maxWidth: .infinity, minHeight: 62)
+        .contentShape(Rectangle())
+    }
+
+    private var paintButton: some View {
+        toolLabel(painter.isSpraying ? "Spraying…" : sprayMode ? "Hold to spray" : "Pick color",
+                  icon: sprayMode ? "paintbrush.pointed.fill" : "eyedropper.halffull")
+        .foregroundStyle(sprayMode ? JellyStyle.paper : JellyStyle.ink)
+        .background(painter.isSpraying ? JellyStyle.ink : sprayMode ? JellyStyle.blue : JellyStyle.paleBlue, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(JellyStyle.ink, lineWidth: 2))
         .contentShape(Rectangle())
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { _ in
@@ -217,19 +284,28 @@ struct SprayPaintView: View {
             })
         .accessibilityElement()
         .accessibilityLabel(sprayMode ? "Spray" : "Pick color")
-        .accessibilityHint(sprayMode ? "Hold to spray where the plus points." : "Picks the color under the plus.")
+        .accessibilityValue(painter.isSpraying ? "Spraying" : "Not spraying")
+        .accessibilityHint(sprayMode ? "Hold to spray your figure where the plus points." : "Picks the room color under the plus. The ring shows your color.")
+        .accessibilityIdentifier("sprayPickOrPaint")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction {
-            if painter.aimingAtBody {
-                painter.isSpraying = true
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(600))
-                    painter.isSpraying = false
-                }
-            } else {
+            guard painter.isReady else { return }
+            guard painter.aimingAtBody else {
                 painter.pickColor()
+                return
+            }
+            painter.isSpraying = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(600))
+                painter.isSpraying = false
             }
         }
+    }
+
+    private func stopMovingAndSpraying() {
+        pressing = false
+        painter.isSpraying = false
+        painter.joystick = .zero
     }
 
     private func roundButton(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {
@@ -237,7 +313,7 @@ struct SprayPaintView: View {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .semibold))
                 .frame(width: 44, height: 44)
-                .background(RallyStyle.line.opacity(0.5), in: Circle())
+                .background(JellyStyle.field, in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -249,25 +325,26 @@ struct SprayPaintView: View {
 private struct Joystick: View {
     var onChange: (SIMD2<Float>) -> Void
     @State private var knob = CGSize.zero
-    private let radius: CGFloat = 52
+    private let radius: CGFloat = 48
 
     var body: some View {
         ZStack {
             Circle()
-                .fill(RallyStyle.surface.opacity(0.75))
-                .overlay(Circle().stroke(RallyStyle.ink, lineWidth: 2))
+                .fill(JellyStyle.field)
+                .overlay(Circle().stroke(JellyStyle.ink, lineWidth: 2))
                 .frame(width: radius * 2, height: radius * 2)
-            Image(systemName: "figure.walk")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(RallyStyle.muted)
-                .offset(y: -radius + 14)
+            Text("MOVE")
+                .font(JellyStyle.body(9))
+                .foregroundStyle(JellyStyle.muted)
+                .offset(y: -radius + 15)
                 .accessibilityHidden(true)
             Circle()
-                .fill(RallyStyle.lime)
-                .overlay(Circle().stroke(RallyStyle.ink, lineWidth: 2))
-                .frame(width: 46, height: 46)
+                .fill(JellyStyle.blue)
+                .overlay(Circle().stroke(JellyStyle.ink, lineWidth: 2))
+                .frame(width: 40, height: 40)
                 .offset(knob)
         }
+        .frame(width: radius * 2, height: radius * 2)
         .contentShape(Circle())
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { drag in

@@ -14,6 +14,7 @@ enum JellyStyle {
     static let ink = Color(hex: 0x141414)
     static let paper = Color(hex: 0xfbfbfb)
     static let blue = Color(hex: 0x4a63ff)
+    static let paleBlue = Color(hex: 0xdde3ff)
     static let muted = Color(hex: 0x6b7080)
     static let field = Color(hex: 0xf1f2f6)
     static let success = Color(hex: 0x1f8f5f)

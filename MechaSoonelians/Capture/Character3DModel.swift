@@ -376,6 +376,8 @@ struct CharacterBodyArchive: Codable {
     }
     let info: Info
     let data: Data
+    /// Optional for older peers; preserves the unpainted appearance for the seeker's reveal.
+    var originalTexture: Data? = nil
 
     var isValid: Bool {
         let vertices = info.vertexCount, triangles = info.triangleCount
@@ -415,10 +417,13 @@ enum CharacterProfile {
     }
 
     static var ready: CharacterAsset? {
-        guard let asset = candidate(), asset.rigged, asset.hasValidModel,
-              CharacterBodyArchive.load(from: asset.directory) != nil,
-              UIImage(contentsOfFile: asset.directory.appendingPathComponent("body-texture.png").path) != nil else { return nil }
+        guard let asset = candidate(), isReady(asset) else { return nil }
         return asset
+    }
+
+    static func isReady(_ asset: CharacterAsset) -> Bool {
+        asset.rigged && asset.hasValidModel && CharacterBodyArchive.load(from: asset.directory) != nil &&
+            UIImage(contentsOfFile: asset.directory.appendingPathComponent("body-texture.png").path) != nil
     }
 
     static func remember(_ asset: CharacterAsset, defaults: UserDefaults = .standard) {

@@ -77,7 +77,12 @@ final class OnlineRoundTests: XCTestCase {
         let poseIndex = try XCTUnwrap(body.index(of: "crouch"))
         let id = UUID()
         let bodyFile = FileManager.default.temporaryDirectory.appendingPathComponent("ghost-\(id.uuidString).body")
-        try body.exportedPose(poseIndex).write(to: bodyFile)
+        var archive = try JSONDecoder().decode(CharacterBodyArchive.self, from: body.exportedPose(poseIndex))
+        archive.originalTexture = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).image { context in
+            UIColor.magenta.setFill(); context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        }.pngData()
+        try JSONEncoder().encode(archive).write(to: bodyFile)
+        defer { try? FileManager.default.removeItem(at: bodyFile) }
         let paint = try XCTUnwrap(UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).jpegData(withCompressionQuality: 0.8) { context in
             UIColor.green.setFill(); context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
         })
@@ -107,6 +112,8 @@ final class OnlineRoundTests: XCTestCase {
         try await eventually("the seeker's phone lists the ghost") { seeker.state.ghosts.count == 1 }
         try await eventually("the ghost's picture and 3D body arrive on the seeker's phone") { seeker.ghostImages[id] != nil && seeker.ghostModels[id] != nil }
         XCTAssertEqual(seeker.ghostModels[id]?.pathExtension, "body")
+        let receivedArchive = try JSONDecoder().decode(CharacterBodyArchive.self, from: Data(contentsOf: XCTUnwrap(seeker.ghostModels[id])))
+        XCTAssertEqual(receivedArchive.originalTexture, archive.originalTexture, "Original skin must reach the other phone unchanged.")
 
         // Drawn exactly as the game screen does it.
         let ar = ARGameController()

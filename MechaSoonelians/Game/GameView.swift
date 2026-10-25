@@ -1,12 +1,17 @@
 import SwiftUI
 
+// Hallmark · playful · blue Jelly palette · design-system: design.md.
+// Round roster, centered waiting state, and results list. Critique: P5 H4 E4 S5 R4 V4.
+
 /// One screen for the whole round. The AR view stays alive underneath so the phone keeps
 /// knowing where it is; each phase puts its own panel on top.
 struct GameView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject var session: GameSession
     /// Leaving mid-round: the host closes the round for everyone, anyone else leaves the room.
     var onExit: () -> Void
     @StateObject private var ar = ARGameController()
+    @StateObject private var audio = JellyAudio()
 
     @State private var capture: GhostCapture?
     /// Building and painting a 3D ghost; nil means painting the flat cutout.
@@ -22,29 +27,56 @@ struct GameView: View {
     @State private var confirmingLeave = false
     @State private var confirmingSkip = false
     @State private var chirpSentAt: Date?
-    @State private var showingSpots = false
     @State private var announcedChirps: Set<String> = []
     @State private var chirpNotice: Date?
+    @State private var foundFeedback: UUID?
+    @State private var lastShotAt = Date.distantPast
     /// A few seconds of "who's the seeker / go hide" when a phase starts.
     @State private var splash: Splash?
 
     private struct Splash: Equatable { let title: String; let detail: String }
 
     private var state: GameState { session.state }
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+    private var columns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize ? [GridItem(.flexible())] : [GridItem(.adaptive(minimum: 160), spacing: 12)]
+    }
 
-    var body: some View {
+    #if DEBUG
+    var previewOnly = false
+    var previewFound = false
+    /// Renders production panels for visual QA without the camera, timers, or server side effects.
+    var previewPanel: some View {
+        ZStack {
+            if state.phase == .lobby { lobby } else { phasePanel }
+            if state.phase == .seeking && session.amSeeking { seekingAim(found: previewFound) }
+        }
+        .environmentObject(audio)
+        .font(JellyStyle.body(15))
+        .foregroundStyle(JellyStyle.ink)
+        .tint(JellyStyle.blue)
+    }
+    #endif
+
+    @ViewBuilder var body: some View {
+        #if DEBUG
+        if previewOnly { previewPanel } else { liveBody }
+        #else
+        liveBody
+        #endif
+    }
+
+    private var liveBody: some View {
         ZStack {
             ARGameViewContainer(controller: ar)
                 .ignoresSafeArea()
 
             if !session.hasMap {
                 paperCover {
-                    Brand()
-                    Text("Getting the house map").font(RallyStyle.font(24, .bold))
-                    ProgressView(value: session.mapProgress).tint(RallyStyle.limeEdge).frame(maxWidth: 260)
+                    JellyWordmark()
+                    Text("Getting the house map").font(JellyStyle.display(24))
+                    ProgressView(value: session.mapProgress).tint(JellyStyle.blue).frame(maxWidth: 260)
                     Text("It's a big file, so this can take a minute.")
-                        .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                        .font(JellyStyle.body(14)).foregroundStyle(JellyStyle.muted)
                 }
             } else if let spray {
                 SprayPaintView(painter: spray, timeLeft: timeLeft, onHide: {
@@ -61,15 +93,22 @@ struct GameView: View {
                 }, onRetake: {
                     self.capture = nil
                 })
+            } else if foundFeedback != nil && state.phase == .results {
+                // Keep the last reveal visible briefly before presenting the results.
+                Color.clear
             } else {
                 phasePanel
             }
 
+            if (state.phase == .seeking && session.amSeeking) || foundFeedback != nil {
+                seekingAim(found: foundFeedback != nil)
+            }
+
             if let splash {
                 paperCover {
-                    AvatarView(index: session.me.avatar, size: 125).rotationEffect(.degrees(-7)).accessibilityHidden(true)
-                    Text(splash.title).font(RallyStyle.font(44, .heavy)).multilineTextAlignment(.center)
-                    Text(splash.detail).font(RallyStyle.font(17)).foregroundStyle(RallyStyle.muted).multilineTextAlignment(.center)
+                    PlayerAvatar(name: session.me.name, color: session.me.avatar, size: 112).accessibilityHidden(true)
+                    Text(splash.title).font(JellyStyle.display(44)).multilineTextAlignment(.center)
+                    Text(splash.detail).font(JellyStyle.body(17)).foregroundStyle(JellyStyle.muted).multilineTextAlignment(.center)
                 }
                 .transition(.opacity)
                 .onTapGesture { self.splash = nil }
@@ -79,12 +118,15 @@ struct GameView: View {
             }
             if let countdown {
                 Text("\(countdown)")
-                    .font(RallyStyle.font(140, .heavy))
-                    .foregroundStyle(RallyStyle.lime)
-                    .shadow(color: RallyStyle.ink.opacity(0.5), radius: 10)
+                    .font(JellyStyle.display(140))
+                    .foregroundStyle(JellyStyle.blue)
+                    .shadow(color: JellyStyle.ink.opacity(0.5), radius: 10)
             }
         }
-        .foregroundStyle(RallyStyle.ink)
+        .environmentObject(audio)
+        .font(JellyStyle.body(15))
+        .tint(JellyStyle.blue)
+        .foregroundStyle(JellyStyle.ink)
         .toolbar(.hidden, for: .navigationBar)
         .alert("Couldn't place your ghost", isPresented: Binding(get: { captureError != nil }, set: { if !$0 { captureError = nil } })) {
             Button("OK") {}
@@ -110,11 +152,6 @@ struct GameView: View {
         }
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
-            ar.onTapGhost = { id in
-                guard state.phase == .seeking, session.amSeeking else { return }
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                session.tag(id)
-            }
             session.start()
             startARIfReady()
         }
@@ -126,7 +163,22 @@ struct GameView: View {
         }
         .onChange(of: session.hasMap) { startARIfReady() }
         .onChange(of: ar.isRelocalized) { session.setReady(ar.isRelocalized) }
-        .onChange(of: state) { syncGhosts(); playChirps() }
+        .onChange(of: state) { previous, next in
+            if previous.phase == .seeking,
+               next.ghosts.contains(where: { ghost in
+                   ghost.foundBy == session.me.id && previous.ghosts.contains { $0.id == ghost.id && $0.foundBy == nil }
+               }) {
+                foundFeedback = UUID()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+            syncGhosts()
+            playChirps()
+        }
+        .task(id: foundFeedback) {
+            guard foundFeedback != nil else { return }
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            foundFeedback = nil
+        }
         .task(id: state.phase == .seeking && session.myRole == .seeker) {
             // The seeker tells the server which hiders are on screen, once a second.
             guard state.phase == .seeking, session.myRole == .seeker else { return }
@@ -140,7 +192,6 @@ struct GameView: View {
         .onChange(of: session.ghostModels) { syncGhosts() }
         .onChange(of: state.phase) {
             announcePhase()
-            showingSpots = false
             if state.phase != .hiding {
                 sculptor?.cancel()
                 sculptor = nil
@@ -156,9 +207,9 @@ struct GameView: View {
     private var winnerLine: String {
         let winners = (state.winnerIDs ?? []).compactMap { state.player($0) }
         guard !winners.isEmpty else { return "Round over" }
-        if winners.count == 1, winners[0].id == state.seekerID { return "\(winners[0].name) found everyone and wins! 🔍" }
+        if winners.count == 1, winners[0].id == state.seekerID { return "\(winners[0].name) found everyone and wins!" }
         let names = winners.map(\.name).joined(separator: " & ")
-        return winners.count == 1 ? "\(names) wins with \(winners[0].points ?? 0) points! 🏆" : "\(names) tie with \(winners[0].points ?? 0) points! 🏆"
+        return winners.count == 1 ? "\(names) wins with \(winners[0].points ?? 0) points!" : "\(names) tie with \(winners[0].points ?? 0) points!"
     }
 
     /// Hider: makes the ghost chirp from its hiding spot. Braver hiders give the seeker a clue.
@@ -170,9 +221,10 @@ struct GameView: View {
                 session.chirp()
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             } label: {
-                ActionLabel(text: cooling ? "Chirped! 🐦" : "Chirp 🐦")
+                Label(cooling ? "Chirped!" : "Chirp", systemImage: "speaker.wave.2.fill")
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(PushButtonStyle())
+            .buttonStyle(JellyButtonStyle(fullWidth: true))
             .disabled(cooling)
             .accessibilityHint("Your ghost makes a sound the seeker can follow.")
         }
@@ -192,12 +244,12 @@ struct GameView: View {
                         .font(.system(size: 64, weight: .black))
                         .rotationEffect(.radians(-direction.angle))
                         .animation(.easeOut(duration: 0.15), value: direction.angle)
-                    Text("Chirp \(side)").font(RallyStyle.font(20, .heavy))
-                    Text(range).font(RallyStyle.font(14, .semibold)).foregroundStyle(RallyStyle.muted)
+                    Text("Chirp \(side)").font(JellyStyle.body(20))
+                    Text(range).font(JellyStyle.body(14)).foregroundStyle(JellyStyle.muted)
                 }
                 .padding(.horizontal, 24).padding(.vertical, 18)
-                .background(RallyStyle.lime.opacity(0.92), in: RoundedRectangle(cornerRadius: 28))
-                .foregroundStyle(RallyStyle.ink)
+                .background(JellyStyle.blue.opacity(0.92), in: RoundedRectangle(cornerRadius: 28))
+                .foregroundStyle(JellyStyle.ink)
                 .padding(.top, 120)
                 .frame(maxHeight: .infinity, alignment: .top)
                 .allowsHitTesting(false)
@@ -232,7 +284,7 @@ struct GameView: View {
                 : Splash(title: "Go hide!", detail: "\(seekerName) is the seeker. Place your ghost before the timer runs out.")
         case .seeking:
             splash = session.myRole == .seeker
-                ? Splash(title: "Go seek!", detail: "Tap a hider when you spot them.")
+                ? Splash(title: "Go seek!", detail: "Aim at a hidden figure and press Shoot.")
                 : nil
         default:
             splash = nil
@@ -264,7 +316,7 @@ struct GameView: View {
         case .seeking: visible = session.amSeeking ? state.ghosts : state.ghosts.filter { $0.ownerID == session.me.id }
         case .results: visible = state.ghosts
         }
-        ar.show(visible, images: session.ghostImages, models: session.ghostModels, burstWhenFound: state.phase == .seeking)
+        ar.show(visible, images: session.ghostImages, models: session.ghostModels)
     }
 
     // MARK: Panels
@@ -277,19 +329,19 @@ struct GameView: View {
                 lobby
             } else {
                 cameraCard {
-                    Eyebrow(text: "BEFORE YOU PLAY")
-                    Text("Find the house").font(RallyStyle.font(23, .bold))
-                    Text(ar.trackingMessage).font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                    JellyEyebrow(text: "BEFORE YOU PLAY")
+                    Text("Find the house").font(JellyStyle.display(23))
+                    Text(ar.trackingMessage).font(JellyStyle.body(14)).foregroundStyle(JellyStyle.muted)
                     Text("Walk around slowly and point your phone at the room the host scanned.")
-                        .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+                        .font(JellyStyle.body(12)).foregroundStyle(JellyStyle.muted)
                 }
             }
         case .hiding:
             if session.myRole == .seeker && state.players.contains(where: { $0.role == .seeker }) {
                 paperCover {
-                    AvatarView(index: session.me.avatar, size: 125).rotationEffect(.degrees(-7)).accessibilityHidden(true)
-                    Text("Eyes closed!").font(RallyStyle.font(40, .heavy))
-                    Text("Hiders are hiding.").foregroundStyle(RallyStyle.muted)
+                    PlayerAvatar(name: session.me.name, color: session.me.avatar, size: 112).accessibilityHidden(true)
+                    Text("Eyes closed!").font(JellyStyle.display(40))
+                    Text("Hiders are hiding.").foregroundStyle(JellyStyle.muted)
                     timerTicket
                 }
             } else {
@@ -300,60 +352,53 @@ struct GameView: View {
                 cameraCard { seekingPanel }
             } else {
                 paperCover {
-                    AvatarView(index: session.me.avatar, size: 125).rotationEffect(.degrees(-7)).accessibilityHidden(true)
-                    Text("Stay sneaky").font(RallyStyle.font(40, .heavy))
+                    PlayerAvatar(name: session.me.name, color: session.me.avatar, size: 112).accessibilityHidden(true)
+                    Text("Stay sneaky").font(JellyStyle.display(40))
                     Text(session.myGhost?.foundBy == nil ? "Seekers are looking. Your ghost is still hidden."
                                                          : "You've been found!")
-                        .foregroundStyle(RallyStyle.muted).multilineTextAlignment(.center)
+                        .foregroundStyle(JellyStyle.muted).multilineTextAlignment(.center)
                     timerTicket
                     if let ghost = session.myGhost, ghost.foundBy == nil {
                         let me = state.player(session.me.id)
-                        Text(me?.seenNow == true ? "👀 The seeker can see you! +10 a second" : "Points: \(me?.points ?? 0)")
-                            .font(RallyStyle.font(17, .bold))
-                            .foregroundStyle(me?.seenNow == true ? RallyStyle.coral : RallyStyle.ink)
+                        Text(me?.seenNow == true ? "The seeker can see you! +10 a second" : "Points: \(me?.points ?? 0)")
+                            .font(JellyStyle.body(17))
+                            .foregroundStyle(me?.seenNow == true ? JellyStyle.blue : JellyStyle.ink)
                         if me?.seenNow == true {
-                            Text("Points: \(me?.points ?? 0)").font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                            Text("Points: \(me?.points ?? 0)").font(JellyStyle.body(14)).foregroundStyle(JellyStyle.muted)
                         }
                         chirpButton
                     }
                 }
             }
         case .results:
-            if showingSpots {
-                cameraCard {
-                    Eyebrow(text: "EVERYONE'S HIDING SPOTS")
-                    Text("Look around: found ghosts are marked green.").font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
-                    Button { showingSpots = false } label: { ActionLabel(text: "Back to results") }
-                        .buttonStyle(PushButtonStyle(dark: true))
-                }
-            } else {
-                resultsPage
-            }
+            resultsPage
         }
     }
 
     private var lobby: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Brand()
+                JellyWordmark()
                 VStack(spacing: 14) {
-                    Eyebrow(text: "THE SEEKER IS")
+                    JellyEyebrow(text: "THE SEEKER IS").foregroundStyle(.white.opacity(0.85))
                     Text(session.seeker?.name ?? "…")
-                        .font(RallyStyle.font(40, .heavy)).tracking(-1)
+                        .font(JellyStyle.display(40)).tracking(-1)
                         .minimumScaleFactor(0.6).lineLimit(1)
-                    Rectangle().fill(RallyStyle.limeEdge.opacity(0.7)).frame(height: 1)
+                    Rectangle().fill(.white.opacity(0.35)).frame(height: 1)
                     Label("\(state.players.filter(\.isReady).count) of \(state.players.count) found the house",
                           systemImage: "house")
-                        .font(RallyStyle.font(12, .semibold))
+                        .font(JellyStyle.body(12))
                 }
                 .padding(20).frame(maxWidth: .infinity)
-                .background(RallyStyle.lime, in: RoundedRectangle(cornerRadius: 22))
+                .foregroundStyle(.white)
+                .background(JellyStyle.blue, in: RoundedRectangle(cornerRadius: 22))
+                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(JellyStyle.ink, lineWidth: 2))
 
                 HStack(spacing: 8) {
-                    Text("Players").font(RallyStyle.font(23, .bold)).accessibilityAddTraits(.isHeader)
+                    Text("Players").font(JellyStyle.display(23)).accessibilityAddTraits(.isHeader)
                     Text("\(state.players.count)")
-                        .font(.system(size: 12, design: .monospaced)).foregroundStyle(RallyStyle.muted)
-                        .padding(6).background(RallyStyle.line.opacity(0.35), in: Capsule())
+                        .font(.system(size: 12, design: .monospaced)).foregroundStyle(JellyStyle.muted)
+                        .padding(6).background(JellyStyle.field, in: Capsule())
                 }
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(state.players) { playerTile($0) }
@@ -362,190 +407,248 @@ struct GameView: View {
                     hostControls
                 } else {
                     Label("Hiding starts when everyone has found the house", systemImage: "clock")
-                        .font(RallyStyle.font(14, .semibold)).frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16).background(RallyStyle.line.opacity(0.3), in: RoundedRectangle(cornerRadius: 14))
+                        .font(JellyStyle.body(14)).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16).background(JellyStyle.field, in: RoundedRectangle(cornerRadius: 14))
                 }
                 Button(session.isHost ? "End game" : "Leave game") { confirmingLeave = true }
-                    .buttonStyle(PushButtonStyle(destructive: true))
+                    .buttonStyle(JellyButtonStyle(kind: .danger, fullWidth: true))
             }
             .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
         }
-        .background(RallyStyle.paper.ignoresSafeArea())
+        .background(JellyStyle.background.ignoresSafeArea())
     }
 
     private func playerTile(_ player: Player) -> some View {
         let isHostPlayer = player.id == state.players.first?.id
         return VStack(spacing: 8) {
-            AvatarView(index: player.avatar, size: 36).accessibilityHidden(true)
+            PlayerAvatar(name: player.name, color: player.avatar, size: 48).accessibilityHidden(true)
             HStack(spacing: 3) {
-                Text(player.name).font(RallyStyle.font(14, .bold)).lineLimit(1)
-                if player.id == session.me.id { Text("(you)").font(RallyStyle.font(10)).foregroundStyle(RallyStyle.muted) }
+                Text(player.name).font(JellyStyle.body(14)).fixedSize(horizontal: false, vertical: true)
+                if player.id == session.me.id { Text("(you)").font(JellyStyle.body(10)).foregroundStyle(JellyStyle.muted) }
             }
             Label(player.isReady ? "Found the house" : "Finding the house",
                   systemImage: isHostPlayer ? "crown" : player.isReady ? "checkmark" : "clock")
-                .font(RallyStyle.font(11)).foregroundStyle(player.isReady ? RallyStyle.success : RallyStyle.muted)
-            Text(player.role == .seeker ? "🔍 Seeker" : "🫥 Hider")
-                .font(RallyStyle.font(12, .bold))
+                .font(JellyStyle.body(11)).foregroundStyle(player.isReady ? JellyStyle.success : JellyStyle.muted)
+            Label(player.role == .seeker ? "Seeker" : "Hider", systemImage: player.role == .seeker ? "magnifyingglass" : "person.fill")
+                .font(JellyStyle.body(12))
                 .padding(.horizontal, 10).padding(.vertical, 4)
-                .background(player.role == .seeker ? RallyStyle.coral.opacity(0.35) : RallyStyle.cyan.opacity(0.5), in: Capsule())
+                .foregroundStyle(player.role == .seeker ? JellyStyle.blue : JellyStyle.ink)
+                .background(player.role == .seeker ? JellyStyle.blue.opacity(0.1) : JellyStyle.field, in: Capsule())
                 .accessibilityLabel("\(player.name) is the \(player.role.rawValue)")
         }
         .padding(12).frame(maxWidth: .infinity, minHeight: 132)
-        .background(RallyStyle.surface, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(RallyStyle.line, lineWidth: 1))
+        .background(JellyStyle.paper, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(JellyStyle.ink, lineWidth: 2))
     }
 
     private var hostControls: some View {
         VStack(spacing: 14) {
-            Rectangle().fill(RallyStyle.line).frame(height: 1)
+            Rectangle().fill(JellyStyle.ink).frame(height: 1)
             Text("Hiding starts by itself once everyone has found the house. Hiders get \(state.hideSeconds / 60) min to hide; the seeker gets \(state.seekSeconds / 60) min to find them.")
-                .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+                .font(JellyStyle.body(12)).foregroundStyle(JellyStyle.muted)
             Button { session.startRound() } label: { ActionLabel(text: "Start hiding now") }
-                .buttonStyle(PushButtonStyle())
+                .buttonStyle(JellyButtonStyle(fullWidth: true))
         }
     }
 
     private var hidingPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Eyebrow(text: "HIDE · \(timeLeft)")
+            JellyEyebrow(text: "HIDE · \(timeLeft)")
             if placingChameleon {
-                Text("Tap where to hide").font(RallyStyle.font(23, .bold))
+                Text("Tap where to hide").font(JellyStyle.display(23))
                 Text("Tap a wall to stand with your back to it, or the floor to stand there facing you.")
-                    .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                    .font(JellyStyle.body(14)).foregroundStyle(JellyStyle.muted)
                 Button("Cancel") {
                     placingChameleon = false
                     ar.onTapPlace = nil
                 }
-                .font(RallyStyle.font(14, .semibold))
+                .font(JellyStyle.body(14))
             } else {
                 if session.myGhost != nil {
-                    Text("Hidden ✅").font(RallyStyle.font(23, .bold))
+                    Text("Hidden").font(JellyStyle.display(23))
                     Text("You can walk around now. Redo it any time before hiding ends.")
-                        .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                        .font(JellyStyle.body(14)).foregroundStyle(JellyStyle.muted)
                 } else {
-                    Text("Find your spot").font(RallyStyle.font(23, .bold))
+                    Text("Find your spot").font(JellyStyle.display(23))
                     Text("Place your scanned 3D self, pick a pose, then paint it to blend in.")
-                        .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                        .font(JellyStyle.body(14)).foregroundStyle(JellyStyle.muted)
                 }
                 if !ar.isRelocalized {
-                    Text(ar.trackingMessage).font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
+                    Text(ar.trackingMessage).font(JellyStyle.body(12)).foregroundStyle(JellyStyle.muted)
                 }
                 if session.placing {
-                    HStack(spacing: 10) { ProgressView(); Text("Hiding your ghost…").font(RallyStyle.font(15, .semibold)) }
+                    HStack(spacing: 10) { ProgressView(); Text("Hiding your ghost…").font(JellyStyle.body(15)) }
                 }
                 Button { startPlacingChameleon() } label: {
                     ActionLabel(text: session.myGhost == nil ? "Place my chameleon" : "Hide somewhere else")
                 }
-                .buttonStyle(PushButtonStyle())
+                .buttonStyle(JellyButtonStyle(kind: session.myGhost == nil ? .primary : .ghost, fullWidth: true))
                 .disabled(!ar.isRelocalized || session.placing)
             }
             if session.isHost {
-                Button("Start seeking now") { confirmingSkip = true }
-                    .font(RallyStyle.font(14, .semibold))
+                if session.myGhost != nil && !placingChameleon {
+                    Button { confirmingSkip = true } label: {
+                        ActionLabel(text: "Ready to be found")
+                    }
+                    .buttonStyle(JellyButtonStyle(fullWidth: true))
                     .disabled(session.placing)
+                } else {
+                    Button("Start seeking now") { confirmingSkip = true }
+                        .font(JellyStyle.body(14))
+                        .disabled(session.placing)
+                }
             }
         }
+    }
+
+    private func seekingAim(found: Bool) -> some View {
+        ZStack {
+            Circle().stroke(JellyStyle.paper, lineWidth: 6).frame(width: 44, height: 44)
+            Circle().stroke(JellyStyle.success, lineWidth: 3).frame(width: 44, height: 44)
+            Image(systemName: "plus").font(.system(size: 24, weight: .bold))
+                .foregroundStyle(JellyStyle.paper).shadow(color: JellyStyle.ink, radius: 2)
+            if found {
+                Text("Found Ya!").font(JellyStyle.display(26))
+                    .foregroundStyle(JellyStyle.ink)
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(JellyStyle.paper, in: Capsule())
+                    .overlay(Capsule().strokeBorder(JellyStyle.success, lineWidth: 3))
+                    .offset(y: -66)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(found ? "Found Ya!" : "Aim at a hidden figure")
+    }
+
+    private func shoot() {
+        guard state.phase == .seeking, session.amSeeking, ar.isRelocalized,
+              Date().timeIntervalSince(lastShotAt) >= 0.25 else { return }
+        lastShotAt = Date()
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if let id = ar.shoot() { session.tag(id) }
     }
 
     private var seekingPanel: some View {
         let found = state.ghosts.filter { $0.foundBy != nil }.count
         return VStack(alignment: .leading, spacing: 10) {
-            Eyebrow(text: "SEEK · \(timeLeft)")
+            JellyEyebrow(text: "SEEK · \(timeLeft)")
             if let chirpNotice, Date().timeIntervalSince(chirpNotice) < 4 {
                 Label("A hider chirped. Listen and turn toward it!", systemImage: "speaker.wave.3.fill")
-                    .font(RallyStyle.font(14, .bold)).foregroundStyle(RallyStyle.coral)
+                    .font(JellyStyle.body(14)).foregroundStyle(JellyStyle.blue)
             }
-            Text("Found \(found) of \(state.ghosts.count)").font(RallyStyle.font(23, .bold))
-            Text(ar.isRelocalized ? "Tap a hider when you spot them." : ar.trackingMessage)
-                .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
-            // What the phone has, so a missing ghost can be told apart: not downloaded, not in the scene, or not in the house yet.
-            let loaded = state.ghosts.filter { session.ghostImages[$0.id] != nil }.count
-            Text("Loaded \(loaded) of \(state.ghosts.count) · in the scene \(ar.shownGhostCount) · \(ar.isRelocalized ? "in the house" : "not in the house yet")")
-                .font(.system(size: 11, design: .monospaced)).foregroundStyle(RallyStyle.muted)
+            Text("Found \(found) of \(state.ghosts.count)").font(JellyStyle.display(23))
+            Text(ar.isRelocalized ? "Aim + at a hidden figure and press Shoot." : ar.trackingMessage)
+                .font(JellyStyle.body(14)).foregroundStyle(JellyStyle.muted)
+            Button(action: shoot) {
+                HStack(spacing: 10) {
+                    Circle().fill(JellyStyle.success).frame(width: 18, height: 18)
+                    Text("Shoot")
+                    Spacer()
+                    Image(systemName: "scope")
+                }
+            }
+            .buttonStyle(JellyButtonStyle(fullWidth: true))
+            .disabled(!ar.isRelocalized)
+            .accessibilityHint("Fires green paint at the plus. Hitting a hider reveals their original appearance.")
             Button("Camera black? Restart it") { ar.restartCamera() }
-                .font(RallyStyle.font(13, .semibold))
+                .font(JellyStyle.body(13))
             if session.isHost {
                 Button("End round") { session.skipPhase() }
-                    .font(RallyStyle.font(14, .semibold))
+                    .font(JellyStyle.body(14))
             }
         }
     }
 
-    /// The end of the round: who won, everyone's points, and what's next.
+    /// Running totals for this room, with this round's gain shown separately.
     private var resultsPage: some View {
-        let hiders = state.players.filter { $0.role == .hider }.sorted { a, b in
-            let aHidden = state.ghosts.first { $0.ownerID == a.id }?.foundBy == nil
-            let bHidden = state.ghosts.first { $0.ownerID == b.id }?.foundBy == nil
-            return aHidden != bHidden ? aHidden : (a.points ?? 0) > (b.points ?? 0)
-        }
         let found = state.ghosts.filter { $0.foundBy != nil }.count
         return ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Brand()
-                Eyebrow(text: "ROUND OVER")
-                Text(winnerLine).font(RallyStyle.font(34, .heavy)).tracking(-1)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let seeker = session.seeker {
-                    resultRow(seeker, detail: "Seeker · found \(found) of \(state.ghosts.count)",
-                              won: state.winnerIDs?.contains(seeker.id) == true, points: nil)
+                JellyWordmark()
+                JellyEyebrow(text: "ROUND \(state.roundNumber ?? 1) COMPLETE")
+                Text("Leaderboard").font(JellyStyle.display(34)).tracking(-1)
+                    .lineLimit(1).minimumScaleFactor(0.5)
+                Text("Total points · blue shows this round's gain")
+                    .font(JellyStyle.body(13)).foregroundStyle(JellyStyle.muted)
+                ForEach(state.leaderboard) { player in
+                    let ghost = state.ghosts.first { $0.ownerID == player.id }
+                    let detail = player.role == .seeker ? "Seeker · found \(found) of \(state.ghosts.count)"
+                        : ghost == nil ? "Didn't hide" : ghost?.foundBy != nil ? "Found" : "Stayed hidden"
+                    resultRow(player, rank: state.rank(of: player), detail: detail)
                 }
-                ForEach(hiders) { hider in
-                    let ghost = state.ghosts.first { $0.ownerID == hider.id }
-                    let detail = ghost == nil ? "Didn't hide" : ghost?.foundBy != nil
-                        ? "Found by \(state.player(ghost?.foundBy)?.name ?? "the seeker")" : "Stayed hidden"
-                    resultRow(hider, detail: detail, won: state.winnerIDs?.contains(hider.id) == true, points: hider.points ?? 0)
-                }
-                Text("Hiders earn 10 points a second while the seeker can see them without finding them. If anyone stays hidden, the most points wins; the seeker wins by finding everyone.")
-                    .font(RallyStyle.font(12)).foregroundStyle(RallyStyle.muted)
-                Button { showingSpots = true } label: { ActionLabel(text: "See everyone's hiding spots") }
-                    .buttonStyle(PushButtonStyle(dark: true))
+                Text(winnerLine).font(JellyStyle.body(14))
+                Text("Play again to keep adding to these totals. Returning to the lobby starts a fresh scoreboard.")
+                    .font(JellyStyle.body(12)).foregroundStyle(JellyStyle.muted)
                 if session.isHost {
                     Button { session.playAgain() } label: { ActionLabel(text: "Play again") }
-                        .buttonStyle(PushButtonStyle())
-                    Button("Back to lobby") { onExit() }.font(RallyStyle.font(15, .semibold))
+                        .buttonStyle(JellyButtonStyle(fullWidth: true))
+                    Button("Back to lobby") { onExit() }.font(JellyStyle.body(15))
                         .frame(maxWidth: .infinity)
                 } else {
-                    Label("Waiting for the host to play again", systemImage: "clock").font(RallyStyle.font(14, .semibold))
-                    Button("Leave game") { confirmingLeave = true }.font(RallyStyle.font(15, .semibold))
+                    Label("Waiting for the host to play again", systemImage: "clock").font(JellyStyle.body(14))
+                    Button("Leave game") { confirmingLeave = true }.font(JellyStyle.body(15))
                         .frame(maxWidth: .infinity)
                 }
             }
             .padding(24).frame(maxWidth: 540).frame(maxWidth: .infinity)
         }
-        .background(RallyStyle.paper.ignoresSafeArea())
+        .background(JellyStyle.background.ignoresSafeArea())
     }
 
-    private func resultRow(_ player: Player, detail: String, won: Bool, points: Int?) -> some View {
-        HStack(spacing: 12) {
-            AvatarView(index: player.avatar, size: 44).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(player.name + (player.id == session.me.id ? " (you)" : "") + (won ? " 🏆" : ""))
-                    .font(RallyStyle.font(17, .bold))
-                Text(detail).font(RallyStyle.font(13)).foregroundStyle(RallyStyle.muted)
+    private func resultRow(_ player: Player, rank: Int, detail: String) -> some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 10))
+        return layout {
+            HStack(spacing: 10) {
+                Text("\(rank)").font(JellyStyle.body(18)).frame(minWidth: 18)
+                PlayerAvatar(name: player.name, color: player.avatar, size: 36).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(player.name + (player.id == session.me.id ? " (you)" : ""))
+                        .font(JellyStyle.body(16)).fixedSize(horizontal: false, vertical: true)
+                    Text(detail).font(JellyStyle.body(12)).foregroundStyle(JellyStyle.muted)
+                }
             }
-            Spacer()
-            if let points { Text("\(points) pts").font(.system(size: 17, weight: .bold, design: .monospaced)) }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            let scoreLayout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(HStackLayout(spacing: 12))
+                : AnyLayout(VStackLayout(alignment: .trailing, spacing: 4))
+            scoreLayout {
+                Text("\(player.totalPoints ?? player.points ?? 0)").font(JellyStyle.body(20)).monospacedDigit()
+                Text("+\(player.points ?? 0) pts").font(JellyStyle.body(13)).monospacedDigit()
+                    .foregroundStyle(JellyStyle.blue)
+            }
+            .fixedSize()
         }
-        .padding(14)
-        .background(won ? RallyStyle.lime : RallyStyle.surface, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(RallyStyle.line, lineWidth: 1))
+        .padding(12)
+        .background(JellyStyle.paper, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(JellyStyle.ink, lineWidth: 2))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Rank \(rank), \(player.name)\(player.id == session.me.id ? ", you" : "")")
+        .accessibilityValue("\(player.totalPoints ?? player.points ?? 0) total points, plus \(player.points ?? 0) this round. \(detail)")
     }
 
     private var timerTicket: some View {
         Text(timeLeft)
-            .font(.system(size: 47, weight: .semibold, design: .monospaced))
+            .font(JellyStyle.display(52)).monospacedDigit()
             .padding(.horizontal, 28).padding(.vertical, 12)
-            .background(RallyStyle.lime, in: RoundedRectangle(cornerRadius: 22))
+            .foregroundStyle(.white)
+            .background(JellyStyle.blue, in: RoundedRectangle(cornerRadius: 22))
+            .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(JellyStyle.ink, lineWidth: 2))
     }
 
-    /// Camera stays visible; the panel sits at the bottom as a Rally card, with a leave button up top.
+    /// Camera stays visible; a Jelly panel holds the round controls with a leave button up top.
     private func cameraCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         VStack {
             HStack {
                 Button { confirmingLeave = true } label: {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).frame(width: 44, height: 44)
                 }
-                .buttonStyle(.plain).rallyGlass()
+                .buttonStyle(JellyButtonStyle(kind: .ghost))
                 .accessibilityLabel(session.isHost ? "End game" : "Leave game")
                 Spacer()
             }
@@ -553,17 +656,24 @@ struct GameView: View {
             Spacer()
             VStack(alignment: .leading, spacing: 12, content: content)
                 .padding(22).frame(maxWidth: 540, alignment: .leading)
-                .background(RallyStyle.surface, in: RoundedRectangle(cornerRadius: 24))
-                .overlay(RoundedRectangle(cornerRadius: 24).stroke(RallyStyle.line, lineWidth: 1))
+                .background(JellyStyle.paper, in: RoundedRectangle(cornerRadius: 24))
+                .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(JellyStyle.ink, lineWidth: 2))
                 .padding(16)
         }
     }
 
-    private func paperCover<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(spacing: 20, content: content)
-            .padding(32)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(RallyStyle.paper.ignoresSafeArea())
+    private func paperCover<Content: View>(@ViewBuilder _ content: @escaping () -> Content) -> some View {
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 20, content: content)
+                    .font(JellyStyle.body(16))
+                    .multilineTextAlignment(.center)
+                    .padding(24)
+                    .frame(maxWidth: 540)
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+            }
+            .background(JellyStyle.background.ignoresSafeArea())
+        }
     }
 
     // MARK: Hiding
@@ -604,6 +714,10 @@ struct GameView: View {
     /// The next tap on the house picks the spot; then the white chameleon stands there in AR to
     /// pose, move and spray paint.
     private func startPlacingChameleon() {
+        guard ChameleonBody.personal != nil else {
+            captureError = "Your character isn't ready for placement. Return to the lobby and finish character setup. A generated mesh needs a humanoid rig and prepared poses before it can be placed."
+            return
+        }
         placingChameleon = true
         ar.onTapPlace = { point in
             guard let placement = ar.chameleonPlacement(at: point) else {

@@ -6,7 +6,7 @@ struct MechaSooneliansApp: App {
 
     var body: some Scene {
         WindowGroup {
-            CharacterLaunchGate { RootView() }.environmentObject(store)
+            RootView().environmentObject(store)
                 .buttonStyle(HoverButtonStyle())
                 .tint(RallyStyle.ink)
                 .preferredColorScheme(.light)
@@ -21,13 +21,17 @@ struct RootView: View {
 
     var body: some View {
         JellyExperienceView(invitationCode: $invitationCode)
+        .background { FigurePreparationWorker() }
         .foregroundStyle(RallyStyle.ink)
         .environment(\.gameConnection, store.membership.map { membership in
             GameConnection(server: membership.server, code: membership.code, memberID: membership.memberID,
                 token: membership.token, isHost: store.isHost)
         })
         .onChange(of: scenePhase, initial: true) { _, phase in
-            if phase == .active { store.reloadServerAddress() }
+            if phase == .active {
+                store.reloadServerAddress()
+                FigureLibrary.shared.restore()
+            }
         }
         .task(id: "\(scenePhase == .active)-\(store.membership?.token ?? "")") {
             guard scenePhase == .active, store.membership != nil else { return }
@@ -38,9 +42,13 @@ struct RootView: View {
         }
         .fullScreenCover(isPresented: Binding(get: { store.room?.started == true }, set: { _ in })) {
             if let membership = store.membership, let me = store.me {
-                OnlineGameScreen(connection: GameConnection(server: membership.server, code: membership.code,
-                    memberID: membership.memberID, token: membership.token, isHost: store.isHost),
-                    name: me.name, avatar: me.avatar)
+                CharacterLaunchGate(onSetupCancel: {
+                    Task { if store.isHost { await store.reset() } else { await store.leave() } }
+                }) {
+                    OnlineGameScreen(connection: GameConnection(server: membership.server, code: membership.code,
+                        memberID: membership.memberID, token: membership.token, isHost: store.isHost),
+                        name: me.name, avatar: me.avatar)
+                }
             }
         }
         .onOpenURL { url in

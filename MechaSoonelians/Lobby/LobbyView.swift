@@ -37,8 +37,10 @@ struct LobbyView: View {
                 .accessibilityLabel("Room options").accessibilityIdentifier("roomOptionsButton")
             }
             if !store.isHost && !room.started {
-                Label("Waiting for the host to start…", systemImage: "clock")
-                    .font(JellyStyle.body()).foregroundStyle(JellyStyle.success)
+                Label(store.me?.ready == true ? "You’re ready. Waiting for the host…" : "Not ready. Press Ready when you’re set.",
+                      systemImage: store.me?.ready == true ? "checkmark.circle.fill" : "clock")
+                    .font(JellyStyle.body())
+                    .foregroundStyle(store.me?.ready == true ? JellyStyle.success : JellyStyle.muted)
             }
             if store.isHost || room.started {
                 Text(room.code).font(JellyStyle.display(52)).tracking(5).lineLimit(1).minimumScaleFactor(0.5)
@@ -146,10 +148,12 @@ struct LobbyView: View {
                 .accessibilityIdentifier("startSessionButton")
             } else {
                 Button { Task { await store.setReady() } } label: {
-                    Label(store.me?.ready == true ? "Ready" : "I’m ready", systemImage: "checkmark")
+                    Label(store.me?.ready == true ? "Un-ready" : "Ready",
+                          systemImage: store.me?.ready == true ? "arrow.uturn.backward" : "checkmark")
                 }
                 .buttonStyle(JellyButtonStyle(kind: store.me?.ready == true ? .dark : .primary, fullWidth: true))
                 .disabled(store.busy || store.reconnecting).accessibilityIdentifier("readyButton")
+                .accessibilityValue(store.me?.ready == true ? "Ready" : "Not ready")
                 .accessibilityHint(store.me?.ready == true ? "Tap to undo ready" : "Tell the host you are ready")
             }
         }
@@ -167,7 +171,7 @@ struct LobbyView: View {
             } else {
                 Image(systemName: player.ready ? "checkmark.circle.fill" : "clock")
                     .foregroundStyle(player.ready ? JellyStyle.success : JellyStyle.muted)
-                    .accessibilityLabel(player.ready ? "Ready" : "Getting ready")
+                    .accessibilityLabel(player.ready ? "Ready" : "Not ready")
             }
             if store.isHost && !player.host {
                 Button { removing = player } label: {

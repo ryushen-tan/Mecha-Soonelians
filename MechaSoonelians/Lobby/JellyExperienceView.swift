@@ -11,7 +11,7 @@ struct JellyExperienceView: View {
     @State private var entry = JellyEntry.landing
 
     private var reduced: Bool { reduceMotion || ProcessInfo.processInfo.arguments.contains("-jelly-still") }
-    private var hasCard: Bool { entry != .landing || store.membership != nil }
+    private var hasCard: Bool { entry != .landing }
 
     var body: some View {
         ZStack {
@@ -25,12 +25,14 @@ struct JellyExperienceView: View {
                 GeometryReader { geometry in
                     ScrollView {
                         Group {
-                            if let room = store.room {
-                                LobbyView(room: room)
-                            } else if store.membership != nil {
-                                reconnectCard
-                            } else {
-                                HomeView(entry: $entry, invitationCode: $invitationCode)
+                            Group {
+                                if let room = store.room {
+                                    LobbyView(room: room)
+                                } else if store.membership != nil {
+                                    reconnectCard
+                                } else {
+                                    HomeView(entry: $entry, invitationCode: $invitationCode)
+                                }
                             }
                         }
                         .padding(20).frame(maxWidth: .infinity)
@@ -45,6 +47,7 @@ struct JellyExperienceView: View {
         .foregroundStyle(JellyStyle.ink).tint(JellyStyle.blue)
         .animation(reduced ? nil : .easeOut(duration: 0.25), value: hasCard)
         .environmentObject(audio)
+        .safeAreaInset(edge: .top, spacing: 0) { FigureBuildHeader() }
         .onChange(of: sceneState.filled) { _, filled in if filled { audio.startMusic() } }
         .onAppear(perform: configureScene)
         .onChange(of: phase, initial: true) { _, _ in configureScene() }
@@ -67,7 +70,7 @@ struct JellyExperienceView: View {
     private var hud: some View {
         VStack {
             HStack {
-                JellyCount(state: sceneState)
+                JellyTiltButton(state: sceneState, reduced: reduced)
                 Spacer()
                 Button { audio.toggleMute() } label: {
                     Label(audio.muted ? "Sound off" : "Sound on", systemImage: audio.muted ? "speaker.slash" : "music.note")
@@ -76,15 +79,6 @@ struct JellyExperienceView: View {
                 .accessibilityValue(audio.muted ? "Off" : "On")
             }
             Spacer()
-            HStack {
-                JellyTiltButton(state: sceneState, reduced: reduced)
-                Spacer()
-                Button {
-                    audio.restartPour(); sceneState.scene.refill()
-                    if reduced { audio.startMusic() }
-                } label: { Label("Pour again", systemImage: "arrow.clockwise") }
-                .accessibilityIdentifier("refillButton")
-            }
         }
         .buttonStyle(JellyButtonStyle(kind: .ghost))
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)

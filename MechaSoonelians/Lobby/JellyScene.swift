@@ -28,6 +28,8 @@ final class JellyScene: SKScene {
     private var nextSpawn = 0.0
     private var finishTime = 0.0
     private var lastPublished = 0.0
+    private var lastShakeTime = -Double.infinity
+    private var enteredScreen = Set<ObjectIdentifier>()
     private var count = 0
     private var target = 0
     private var reducedMotion = false
@@ -83,6 +85,7 @@ final class JellyScene: SKScene {
 
     private func stopTilt() {
         motion.stopDeviceMotionUpdates()
+        lastShakeTime = -Double.infinity
         state?.tiltEnabled = false
         physicsWorld.gravity = CGVector(dx: 0, dy: -9.4)
     }
@@ -90,6 +93,7 @@ final class JellyScene: SKScene {
     func refill() {
         stopTilt()
         figures.removeAllChildren()
+        enteredScreen.removeAll()
         play?.removeFromParent(); title?.removeFromParent()
         play = nil; title = nil
         count = 0; nextSpawn = 0; finishTime = 0
@@ -125,8 +129,15 @@ final class JellyScene: SKScene {
 
     override func update(_ currentTime: TimeInterval) {
         guard !reducedMotion, !suspended else { return }
-        if let gravity = motion.deviceMotion?.gravity {
+        if motion.isDeviceMotionActive, let sample = motion.deviceMotion {
+            let gravity = sample.gravity
             physicsWorld.gravity = CGVector(dx: gravity.x * 9.4, dy: min(-0.8, gravity.y * 9.4))
+            let acceleration = sample.userAcceleration
+            let strength = sqrt(acceleration.x * acceleration.x + acceleration.y * acceleration.y + acceleration.z * acceleration.z)
+            if strength > 1.15, sample.timestamp - lastShakeTime > 0.3 {
+                lastShakeTime = sample.timestamp
+                tossPieces(strength: strength, horizontal: acceleration.x)
+            }
         }
         if count < target, currentTime >= nextSpawn {
             _ = spawnPiece(count)
@@ -142,6 +153,50 @@ final class JellyScene: SKScene {
             publishPlayFrame()
             lastPublished = currentTime
         }
+    }
+
+    private func tossPieces(strength: Double, horizontal: Double) {
+        unblur()
+        let speed = CGFloat(min(strength, 3)) * 240 + 280
+        for node in figures.children {
+            guard enteredScreen.contains(ObjectIdentifier(node)), node !== dragging,
+                  let body = node.physicsBody, body.isDynamic else { continue }
+            // Throw against the phone's acceleration, with an upward lift even for a front/back shake.
+            body.velocity = CGVector(
+                dx: max(-850, min(850, -CGFloat(horizontal) * 220 + CGFloat.random(in: -260...260))),
+                dy: speed * CGFloat.random(in: 0.75...1.15)
+            )
+            if body.allowsRotation { body.angularVelocity = CGFloat.random(in: -8...8) }
+            body.usesPreciseCollisionDetection = true
+        }
+    }
+
+    override func didSimulatePhysics() {
+        // Allow the initial pour to enter from above, then keep the entire rotated sprite visible.
+        let nodes = figures.children + [title, play].compactMap { $0 }
+        for node in nodes {
+            let id = ObjectIdentifier(node)
+            let frame = node.frame
+            if frame.maxY <= size.height { enteredScreen.insert(id) }
+            guard enteredScreen.contains(id) else { continue }
+            var velocity = node.physicsBody?.velocity ?? .zero
+            if frame.minX < 0 {
+                node.position.x -= frame.minX
+                velocity.dx = abs(velocity.dx) * 0.6
+            } else if frame.maxX > size.width {
+                node.position.x -= frame.maxX - size.width
+                velocity.dx = -abs(velocity.dx) * 0.6
+            }
+            if frame.minY < 0 {
+                node.position.y -= frame.minY
+                velocity.dy = abs(velocity.dy) * 0.6
+            } else if frame.maxY > size.height {
+                node.position.y -= frame.maxY - size.height
+                velocity.dy = -abs(velocity.dy) * 0.6
+            }
+            node.physicsBody?.velocity = velocity
+        }
+        publishPlayFrame()
     }
 
     @discardableResult private func spawnPiece(_ index: Int) -> SKSpriteNode {
@@ -160,7 +215,7 @@ final class JellyScene: SKScene {
         let extent = pieceSize * CGFloat.random(in: 0.85...1.1)
         node.size = ratio > 1 ? CGSize(width: extent, height: extent / ratio) : CGSize(width: extent * ratio, height: extent)
         node.position = CGPoint(x: CGFloat.random(in: extent / 2...max(extent / 2, size.width - extent / 2)), y: size.height + extent)
-        node.zRotation = CGFloat.random(in: -0.8...0.8)
+        node.zRotation = index == 3 ? 0 : CGFloat.random(in: -0.8...0.8)
         node.name = "figure"
         let body = SKPhysicsBody(circleOfRadius: extent * 0.44)
         body.restitution = 0.6; body.friction = 0.4
@@ -168,7 +223,8 @@ final class JellyScene: SKScene {
         body.mass = extent * extent / 12_000
         body.categoryBitMask = 1; body.collisionBitMask = 1 | 4
         body.velocity = CGVector(dx: CGFloat.random(in: -45...45), dy: -80)
-        body.angularVelocity = CGFloat.random(in: -1.5...1.5)
+        body.allowsRotation = index != 3
+        body.angularVelocity = index == 3 ? 0 : CGFloat.random(in: -1.5...1.5)
         node.physicsBody = body
         figures.addChild(node)
         return node
@@ -275,9 +331,13 @@ final class JellyScene: SKScene {
                 ])
             }
             if title {
-                // As server/public/play: a small spaced MECCHA over a big SOONELIANS, in ink.
                 text("MECCHA", fontSize: size.width * 0.045, y: size.height * 0.15, tracking: 4)
-                text("SOONELIANS", fontSize: size.width * 0.105, y: size.height * 0.38)
+                let font = UIFont(name: "Outfit-Thin_ExtraBold", size: size.width * 0.105) ?? .boldSystemFont(ofSize: size.width * 0.105)
+                let line = NSMutableAttributedString(string: "SOONELIANS", attributes: [
+                    .font: font, .foregroundColor: UIColor(JellyStyle.ink), .paragraphStyle: style
+                ])
+                line.addAttribute(.foregroundColor, value: UIColor(JellyStyle.blue), range: NSRange(location: 0, length: 4))
+                line.draw(in: CGRect(x: 5, y: size.height * 0.38, width: size.width - 10, height: size.height))
             } else {
                 text("▸ PLAY", fontSize: size.width * 0.18, y: size.height * 0.19, tracking: 2)
             }
@@ -286,6 +346,11 @@ final class JellyScene: SKScene {
     }
 
     private static func blueTexture(_ letter: String?) -> SKTexture {
+        if letter == nil,
+           let url = Bundle.main.url(forResource: "soon-logo", withExtension: "png", subdirectory: "JellyAssets/sprites"),
+           let image = UIImage(contentsOfFile: url.path) {
+            return SKTexture(image: image)
+        }
         let image = UIGraphicsImageRenderer(size: CGSize(width: 120, height: 120)).image { context in
             let path = UIBezierPath()
             if letter == "O" { path.append(UIBezierPath(ovalIn: CGRect(x: 28, y: 22, width: 64, height: 76))) }

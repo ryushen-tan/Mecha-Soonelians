@@ -39,8 +39,14 @@ export function startAR(room, body, time, random = n => randomInt(n)) {
   }
   if (room.ar && room.ar.phase !== 'results') fail(409, 'A round is already running.');
   const seeker = room.members[random(room.members.length)];
+  // Carry the completed round forward once, inside the same persisted room transaction.
+  // Keep round points separate so winners and the blue +points label stay round-specific.
+  const previous = room.ar;
+  const scoreTotals = Object.fromEntries(room.members.map(member => [member.id,
+    previous ? totalPoints(previous, member.id) : 0]));
   room.ar = {
     phase: 'finding', phaseEnds: null,
+    scoreTotals, roundNumber: (previous?.roundNumber ?? (previous ? 1 : 0)) + 1,
     hideSeconds: bounded(body.hideSeconds, AR_LIMITS.hide, AR_LIMITS.defaultHide),
     seekSeconds: bounded(body.seekSeconds, AR_LIMITS.seek, AR_LIMITS.defaultSeek),
     seekerID: seeker.id,
@@ -145,6 +151,7 @@ export function reportSeen(room, member, ghostIDs, time) {
 }
 
 const points = (ar, id) => Math.floor((ar.exposure?.[id] ?? 0) / 1000) * POINTS_PER_SECOND;
+const totalPoints = (ar, id) => (ar.scoreTotals?.[id] ?? 0) + points(ar, id);
 
 // Decided when the round ends: the seeker if everyone was found; otherwise the hidden hider(s) with
 // the most points.
@@ -258,10 +265,11 @@ export function snapshotAR(room, member, time) {
   return {
     phase, secondsLeft: ar.phaseEnds ? Math.max(0, Math.ceil((ar.phaseEnds - time) / 1000)) : 0,
     hideSeconds: ar.hideSeconds, seekSeconds: ar.seekSeconds, seekerID: ar.seekerID, startedAt: ar.startedAt,
+    roundNumber: ar.roundNumber ?? 1,
     house: ar.house ?? { kind: 'uploaded', id: null },
     players: room.members.map(({ id, name, avatar }) => ({
       id, name, avatar, role: ar.roles[id] ?? 'hider', isReady: ar.ready[id] === true,
-      points: points(ar, id),
+      points: points(ar, id), totalPoints: totalPoints(ar, id),
       // Only a hider learns that the seeker is looking at them right now.
       seenNow: ar.phase === 'seeking' && id === member.id && time - (ar.lastSeen?.[id] ?? -Infinity) < SEEN_NOW
     })),

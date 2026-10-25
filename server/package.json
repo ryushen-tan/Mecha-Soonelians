@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
     "start:3d": "cd .. && node --env-file-if-exists=.env server/tripo.mjs",
-    "test": "node --test server.test.mjs tripo.test.mjs game.test.mjs characters.test.mjs",
+    "test": "node --test server.test.mjs tripo.test.mjs game.test.mjs ar.test.mjs characters.test.mjs",
     "test:integration": "node --test next.test.mjs",
     "test:supabase": "node --test supabase.test.mjs"
   },

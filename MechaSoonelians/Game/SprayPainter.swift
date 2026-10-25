@@ -216,10 +216,36 @@ struct BodySurface {
 /// The chameleon's paint, in its texture's layout. Starts white, like every Meccha player.
 final class PaintCanvas {
     static let size = 1024
+    private static let tileSize = 32
+    private static let tilesPerRow = size / tileSize
+    private static let colorSpace = CGColorSpaceCreateDeviceRGB()
     private(set) var pixels: [UInt8]
     private var history: [[UInt8]] = []
+    private var gutterTiles = [[SIMD2<Int32>]](repeating: [], count: tilesPerRow * tilesPerRow)
+    private var dirtyTiles = Set(0..<(tilesPerRow * tilesPerRow))
+    private var cachedImage: CGImage?
+    private var brush: (color: SIMD3<Float>, strength: Float, gradient: CGGradient)?
     /// See `BodySurface.gutter`.
-    var gutter: [SIMD2<Int32>] = []
+    var gutter: [SIMD2<Int32>] = [] {
+        didSet {
+            gutterTiles = Array(repeating: [], count: Self.tilesPerRow * Self.tilesPerRow)
+            for pair in gutter {
+                let source = Int(pair.y)
+                let tile = (source / Self.size / Self.tileSize) * Self.tilesPerRow + source % Self.size / Self.tileSize
+                gutterTiles[tile].append(pair)
+                // A brush can also touch padding without changing its source texel.
+                let destination = Int(pair.x)
+                let destinationTile = (destination / Self.size / Self.tileSize) * Self.tilesPerRow + destination % Self.size / Self.tileSize
+                if destinationTile != tile { gutterTiles[destinationTile].append(pair) }
+            }
+            invalidateAll()
+        }
+    }
+
+    private func invalidateAll() {
+        dirtyTiles = Set(0..<(Self.tilesPerRow * Self.tilesPerRow))
+        cachedImage = nil
+    }
 
     init() {
         pixels = [UInt8](repeating: 255, count: Self.size * Self.size * 4)
@@ -231,6 +257,7 @@ final class PaintCanvas {
     }
 
     func restore(_ image: CGImage) {
+        invalidateAll()
         pixels.withUnsafeMutableBytes { buffer in
             guard let context = CGContext(data: buffer.baseAddress, width: Self.size, height: Self.size,
                 bitsPerComponent: 8, bytesPerRow: Self.size * 4, space: CGColorSpaceCreateDeviceRGB(),
@@ -248,48 +275,69 @@ final class PaintCanvas {
     }
 
     func undo() {
-        if let last = history.popLast() { pixels = last }
+        if let last = history.popLast() { pixels = last; invalidateAll() }
     }
 
     /// A soft round dot. `uv` has v going up, like the texture coordinates; `radius` is in texels.
     func splat(at uv: SIMD2<Float>, radius: Float, color: SIMD3<Float>, strength: Float) {
+        guard radius.isFinite, radius > 0, strength.isFinite, strength > 0,
+              uv.x.isFinite, uv.y.isFinite else { return }
         let size = Self.size
         let cx = uv.x * Float(size), cy = (1 - uv.y) * Float(size)
         let minX = max(0, Int(cx - radius)), maxX = min(size - 1, Int(cx + radius))
         let minY = max(0, Int(cy - radius)), maxY = min(size - 1, Int(cy + radius))
         guard minX <= maxX, minY <= maxY else { return }
-        pixels.withUnsafeMutableBufferPointer { buffer in
-            for y in minY...maxY {
-                let dy = Float(y) + 0.5 - cy
-                for x in minX...maxX {
-                    let dx = Float(x) + 0.5 - cx
-                    let falloff = 1 - (dx * dx + dy * dy) / (radius * radius)
-                    guard falloff > 0 else { continue }
-                    let amount = strength * falloff
-                    let i = (y * size + x) * 4
-                    for channel in 0..<3 {
-                        let old = Float(buffer[i + channel])
-                        buffer[i + channel] = UInt8(max(0, min(255, (old + (color[channel] - old) * amount).rounded())))
-                    }
-                }
+        if brush?.color != color || brush?.strength != strength {
+            // Nine stops approximate the existing quadratic falloff, without a Swift loop per texel.
+            let locations = (0...8).map { CGFloat($0) / 8 }
+            let colors = locations.map { radius in
+                CGColor(colorSpace: Self.colorSpace, components: [
+                    CGFloat(color.x / 255), CGFloat(color.y / 255), CGFloat(color.z / 255),
+                    CGFloat(min(1, strength)) * (1 - radius * radius)
+                ])!
+            }
+            guard let gradient = CGGradient(colorsSpace: Self.colorSpace, colors: colors as CFArray, locations: locations) else { return }
+            brush = (color, strength, gradient)
+        }
+        guard let gradient = brush?.gradient else { return }
+        pixels.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(data: buffer.baseAddress, width: size, height: size,
+                bitsPerComponent: 8, bytesPerRow: size * 4, space: Self.colorSpace,
+                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return }
+            context.translateBy(x: 0, y: CGFloat(size))
+            context.scaleBy(x: 1, y: -1)
+            context.clip(to: CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1))
+            let center = CGPoint(x: CGFloat(cx), y: CGFloat(cy))
+            context.drawRadialGradient(gradient, startCenter: center, startRadius: 0,
+                endCenter: center, endRadius: CGFloat(radius), options: [])
+        }
+        for y in (minY / Self.tileSize)...(maxY / Self.tileSize) {
+            for x in (minX / Self.tileSize)...(maxX / Self.tileSize) {
+                dirtyTiles.insert(y * Self.tilesPerRow + x)
             }
         }
+        cachedImage = nil
     }
 
     func image() -> CGImage? {
+        if let cachedImage { return cachedImage }
         pixels.withUnsafeMutableBufferPointer { buffer in
-            for pair in gutter {
-                let to = Int(pair.x) * 4, from = Int(pair.y) * 4
-                buffer[to] = buffer[from]
-                buffer[to + 1] = buffer[from + 1]
-                buffer[to + 2] = buffer[from + 2]
+            for tile in dirtyTiles {
+                for pair in gutterTiles[tile] {
+                    let to = Int(pair.x) * 4, from = Int(pair.y) * 4
+                    buffer[to] = buffer[from]
+                    buffer[to + 1] = buffer[from + 1]
+                    buffer[to + 2] = buffer[from + 2]
+                }
             }
         }
         guard let provider = CGDataProvider(data: Data(pixels) as CFData),
               let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
-        return CGImage(width: Self.size, height: Self.size, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: Self.size * 4,
+        let image = CGImage(width: Self.size, height: Self.size, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: Self.size * 4,
                        space: space, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
                        provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+        if image != nil { dirtyTiles.removeAll(keepingCapacity: true); cachedImage = image }
+        return image
     }
 
     func jpeg() -> Data? {
@@ -371,14 +419,30 @@ final class SprayPainter: ObservableObject {
         guard !ar.obstacles.blocks(bodyBox(placement, pose: 0)) else { return nil }
     }
 
+    #if DEBUG
+    /// Renders the real controls without starting a camera session or changing the saved figure.
+    init(previewBody: ChameleonBody, aimingAtBody: Bool = false) {
+        ar = ARGameController()
+        body = previewBody
+        placement = GhostPlacement(origin: .zero, facing: SIMD3(0, 0, 1), onWall: false, width: 0.5, height: 1)
+        isReady = true
+        hasPickedColor = true
+        self.aimingAtBody = aimingAtBody
+    }
+    #endif
+
     var poseName: String { body.poses[pose].name }
     var poseIcon: String { body.poses[pose].icon }
     var poseID: String { body.poses[pose].id }
     func exportBody() throws -> Data { try body.exportedPose(pose) }
-    /// Every pose, eight to a page, for the pose wheel.
-    var posePages: [[CharacterPoseChoice]] {
-        let choices = body.poses.map { CharacterPoseChoice(id: $0.id, name: $0.name, icon: $0.icon) }
-        return stride(from: 0, to: choices.count, by: 8).map { Array(choices[$0..<min($0 + 8, choices.count)]) }
+    /// Keep blocked poses visible so the room never appears to remove poses.
+    var poseChoices: [CharacterPoseChoice] {
+        body.poses.map { CharacterPoseChoice(id: $0.id, name: $0.name, icon: $0.icon) }
+    }
+
+    func canSelectPose(id: String) -> Bool {
+        guard isReady, let index = body.index(of: id) else { return false }
+        return index == pose || fits(pose: index)
     }
 
     func load() {

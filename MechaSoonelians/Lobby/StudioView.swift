@@ -28,7 +28,7 @@ struct StudioView: View {
                 .buttonStyle(.plain).rallyHover(cornerRadius: 22).accessibilityIdentifier("makePlayerButton")
                 if RoomCaptureSession.isSupported {
                     NavigationLink(value: StudioRoute.scan) {
-                        studioCard(title: hasHouse ? "Scan a new house" : "Scan your house", subtitle: hasHouse ? "Replaces the house saved on this device" : "Map rooms together with RoomPlan", icon: "house", color: RallyStyle.cyan)
+                        studioCard(title: hasHouse ? "Scan a new house" : "Scan your house", subtitle: hasHouse ? "Adds a room to your saved library" : "Map rooms together with RoomPlan", icon: "house", color: RallyStyle.cyan)
                     }
                     .buttonStyle(.plain).rallyHover(cornerRadius: 22)
                 } else {

@@ -34,8 +34,14 @@ test('create, join, poll, ready, start, reset, leave and end across independent 
   assert.equal(host.room.members[0].ready, true);
   const guest = await call(`${path}/join`, 'POST', { name: 'Maya', avatar: 1 });
   assert.equal(guest.status, 201);
+  assert.equal(guest.room.members.find(member => !member.host).ready, false);
   assert.notEqual(guest.token, host.token);
   assert.equal((await call(path, 'GET', undefined, host.token)).room.members.length, 2);
+  assert.equal((await call(path, 'PATCH', { status: 'started' }, host.token)).status, 409);
+  assert.equal((await call(`${path}/me`, 'PATCH', { ready: true }, guest.token)).status, 200);
+  assert.equal((await call(path, 'GET', undefined, host.token)).room.members.find(member => !member.host).ready, true);
+  assert.equal((await call(`${path}/me`, 'PATCH', { ready: false }, guest.token)).status, 200);
+  assert.equal((await call(path, 'GET', undefined, host.token)).room.members.find(member => !member.host).ready, false);
   assert.equal((await call(path, 'PATCH', { status: 'started' }, host.token)).status, 409);
   assert.equal((await call(`${path}/me`, 'PATCH', { ready: true }, guest.token)).status, 200);
   const started = await call(path, 'PATCH', { status: 'started' }, host.token);

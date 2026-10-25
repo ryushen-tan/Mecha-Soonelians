@@ -11,7 +11,6 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     @Published private(set) var trackingMessage = "Loading house map…"
 
     let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
-    var onTapGhost: ((UUID) -> Void)?
 
     // Until relocalized, world coordinates don't match the house yet, so nothing is shown.
     private let houseAnchor = AnchorEntity(world: .zero)
@@ -21,6 +20,13 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     private var modelGhosts: Set<UUID> = []
     private var loadingModels: Set<UUID> = []
     private var shownGhosts: Set<UUID> = []
+    private struct PaintTarget {
+        let model: ModelEntity
+        let surface: BodySurface
+        let original: TextureResource?
+    }
+    private var paintTargets: [UUID: PaintTarget] = [:]
+    private var lastShot: TimeInterval = 0
     private var floorY: Float?
     private var isRunning = false
     /// What the session was started with, so the camera can be brought back without losing the house.
@@ -260,9 +266,8 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     // MARK: Ghosts
 
     /// Makes the scene show exactly these ghosts: the 3D model once it has arrived, else the flat cutout.
-    /// `burstWhenFound`: a ghost found right now bursts into colour and disappears (during seeking);
-    /// otherwise found ghosts stay, marked in green (the results).
-    func show(_ ghosts: [Ghost], images: [UUID: Data], models: [UUID: URL], burstWhenFound: Bool = false) {
+    /// Found figures stay visible with their original skin and a green marker.
+    func show(_ ghosts: [Ghost], images: [UUID: Data], models: [UUID: URL]) {
         let ids = Set(ghosts.map(\.id))
         shownGhosts = ids
         for (id, entity) in ghostEntities where !ids.contains(id) {
@@ -270,6 +275,7 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
             ghostEntities[id] = nil
             foundGhosts.remove(id)
             modelGhosts.remove(id)
+            paintTargets[id] = nil
         }
         for ghost in ghosts {
             if ghost.hasModel, !modelGhosts.contains(ghost.id), !loadingModels.contains(ghost.id), let url = models[ghost.id] {
@@ -294,10 +300,7 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
             }
             if ghost.foundBy != nil, !foundGhosts.contains(ghost.id), let entity = ghostEntities[ghost.id] {
                 foundGhosts.insert(ghost.id)
-                if burstWhenFound { burst(entity) } else { markFound(entity, height: ghost.height) }
-            } else if ghost.foundBy != nil, !burstWhenFound, let entity = ghostEntities[ghost.id], !entity.isEnabled {
-                // Burst during seeking; back on show (marked found) for the results.
-                entity.isEnabled = true
+                revealPaint(for: ghost.id)
                 markFound(entity, height: ghost.height)
             }
         }
@@ -307,6 +310,8 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         ghostEntities[id]?.removeFromParent()
         houseAnchor.addChild(entity)
         ghostEntities[id] = entity
+        // A late model replacing a cutout must receive the confirmed reveal too.
+        foundGhosts.remove(id)
     }
 
     /// Swaps the flat cutout for the 3D model, standing where the hider put it.
@@ -321,8 +326,12 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
             // The ghost may have left the scene (retaken photo, new round) while this loaded.
             guard shownGhosts.contains(ghost.id) else { return }
             modelGhosts.insert(ghost.id)
+            let wasFound = foundGhosts.contains(ghost.id)
             place(container, for: ghost.id)
-            if foundGhosts.contains(ghost.id) { markFound(container, height: ghost.height) }
+            if wasFound {
+                foundGhosts.insert(ghost.id)
+                markFound(container, height: ghost.height)
+            }
         }
     }
 
@@ -334,6 +343,8 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
               let model = try? body.entity(pose, paint: texture) else { return nil }
         let container = Self.stand(model, floor: floor, height: ghost.height, flushBack: ghost.flushBack)
         container.name = ghost.id.uuidString
+        let original = body.initialTexture.flatMap { try? TextureResource(image: $0, options: .init(semantic: .color)) }
+        paintTargets[ghost.id] = PaintTarget(model: model, surface: BodySurface(body.mesh(pose), textureSize: PaintCanvas.size), original: original)
         return container
     }
 
@@ -392,39 +403,18 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         return ghostEntity
     }
 
-    /// The found ghost explodes into a shower of bright pieces and disappears.
-    private func burst(_ entity: Entity) {
-        let center = entity.visualBounds(relativeTo: houseAnchor).center
-        entity.isEnabled = false
-        let shower = Entity()
-        shower.position = center
-        houseAnchor.addChild(shower)
-        for _ in 0..<70 {
-            let color = UIColor(hue: .random(in: 0...1), saturation: 0.85, brightness: 1, alpha: 1)
-            let size = Float.random(in: 0.025...0.07)
-            let piece = ModelEntity(mesh: .generateBox(size: size, cornerRadius: size * 0.25), materials: [UnlitMaterial(color: color)])
-            piece.orientation = simd_quatf(angle: Float.random(in: 0...(2 * .pi)), axis: simd_normalize(SIMD3<Float>(Float.random(in: -1...1), 1, Float.random(in: -1...1))))
-            shower.addChild(piece)
-            let direction = simd_normalize(SIMD3<Float>(.random(in: -1...1), .random(in: -0.3...1.3), .random(in: -1...1)))
-            let landing = Transform(scale: SIMD3(repeating: 0.15),
-                                    rotation: simd_quatf(angle: Float.random(in: 2...8), axis: simd_normalize(SIMD3<Float>(1, Float.random(in: -1...1), 0.5))),
-                                    translation: direction * Float.random(in: 0.5...1.5) - SIMD3<Float>(0, Float.random(in: 0...0.4), 0))
-            piece.move(to: landing, relativeTo: shower, duration: .random(in: 0.9...1.5), timingFunction: .easeOut)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) { shower.removeFromParent() }
+    private func revealPaint(for id: UUID) {
+        guard let target = paintTargets[id] else { return }
+        var material = UnlitMaterial()
+        material.color = .init(tint: .white, texture: target.original.map { .init($0) })
+        target.model.model?.materials = [material]
     }
 
-    /// Tints a found cutout green; a found 3D ghost gets a green marker over its head instead.
+    /// Marks the find without tinting or hiding the player's original appearance.
     private func markFound(_ entity: Entity, height: Float) {
-        var tinted = false
-        for case let model as ModelEntity in entity.children {
-            guard var material = model.model?.materials.first as? UnlitMaterial else { continue }
-            material.color.tint = UIColor(red: 0.5, green: 1, blue: 0.5, alpha: 1)
-            model.model?.materials = [material]
-            tinted = true
-        }
-        guard !tinted else { return }
+        guard entity.findEntity(named: "found-marker") == nil else { return }
         let marker = ModelEntity(mesh: .generateSphere(radius: 0.07), materials: [UnlitMaterial(color: .systemGreen)])
+        marker.name = "found-marker"
         marker.position = [0, height + 0.15, 0]
         entity.addChild(marker)
     }
@@ -434,15 +424,64 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
             onTapPlace(gesture.location(in: arView))
             return
         }
-        var entity = arView.entity(at: gesture.location(in: arView))
-        while let current = entity {
-            if let id = UUID(uuidString: current.name), ghostEntities[id] != nil {
-                guard !foundGhosts.contains(id) else { return }
-                onTapGhost?(id)
-                return
-            }
-            entity = current.parent
+    }
+
+    /// Fires through the screen center. Painted bodies use their real mesh, not their bounding box.
+    func shoot() -> UUID? {
+        let now = CACurrentMediaTime()
+        guard isRelocalized, now - lastShot >= 0.25,
+              let ray = arView.ray(through: CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)) else { return nil }
+        lastShot = now
+        let direction = simd_normalize(ray.direction)
+        var distance: Float = 12
+        // Real-world reconstructed surfaces also stop a shot before a hidden body.
+        if let surface = arView.raycast(from: CGPoint(x: arView.bounds.midX, y: arView.bounds.midY), allowing: .existingPlaneGeometry, alignment: .any).first {
+            distance = min(distance, simd_distance(ray.origin, simd_make_float3(surface.worldTransform.columns.3)))
         }
+        let hit = shotTarget(from: ray.origin, direction: direction, limit: distance)
+        let end = ray.origin + direction * hit.distance
+        let ammo = ModelEntity(mesh: .generateSphere(radius: 0.025), materials: [UnlitMaterial(color: .systemGreen)])
+        houseAnchor.addChild(ammo)
+        let camera = arView.cameraTransform.matrix
+        ammo.position = ray.origin + direction * 0.2 + simd_make_float3(camera.columns.0) * 0.08 - simd_make_float3(camera.columns.1) * 0.08
+        ammo.move(to: Transform(translation: end), relativeTo: houseAnchor, duration: 0.18, timingFunction: .linear)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { ammo.scale = SIMD3(repeating: 2) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { ammo.removeFromParent() }
+        return hit.id
+    }
+
+    /// Shared by live firing and geometry tests; `direction` is a normalized world-space ray.
+    func shotTarget(from origin: SIMD3<Float>, direction: SIMD3<Float>, limit: Float = 12) -> (id: UUID?, distance: Float) {
+        var distance = min(limit, obstacles.shotDistance(from: origin, direction: direction, limit: limit) ?? limit)
+        var targetID: UUID?
+        for (id, target) in paintTargets {
+            guard target.model.isEnabled, ghostEntities[id]?.isEnabled == true else { continue }
+            let transform = target.model.transformMatrix(relativeTo: nil)
+            let localOrigin = simd_make_float3(transform.inverse * SIMD4(origin, 1))
+            let localDirection = simd_normalize(simd_make_float3(transform.inverse * SIMD4(direction, 0)))
+            guard let hit = target.surface.hit(origin: localOrigin, direction: localDirection) else { continue }
+            let point = simd_make_float3(transform * SIMD4(localOrigin + localDirection * hit.distance, 1))
+            let depth = simd_distance(origin, point)
+            if depth < distance {
+                distance = depth
+                targetID = foundGhosts.contains(id) ? nil : id
+            }
+        }
+        // Older USDZ/cutout ghosts retain their existing collision targeting.
+        for hit in arView.scene.raycast(origin: origin, direction: direction, length: distance, query: .all) {
+            var entity: Entity? = hit.entity
+            while let current = entity {
+                if let id = UUID(uuidString: current.name), ghostEntities[id] != nil {
+                    if paintTargets[id] == nil, hit.distance < distance {
+                        distance = hit.distance
+                        targetID = foundGhosts.contains(id) ? nil : id
+                    }
+                    break
+                }
+                entity = current.parent
+            }
+        }
+        return (targetID, distance)
     }
 
     // MARK: Walls

@@ -26,7 +26,38 @@ struct RoomObstacles {
     private(set) var walls: [Wall] = []
     private(set) var furniture: [Box] = []
 
-    init() {}
+    init(walls: [Wall] = [], furniture: [Box] = []) {
+        self.walls = walls
+        self.furniture = furniture
+    }
+
+    /// First solid scanned surface along a shot. Doorways stay open, as they do for movement.
+    func shotDistance(from origin: SIMD3<Float>, direction: SIMD3<Float>, limit: Float = 12) -> Float? {
+        func hit(_ box: Box) -> (distance: Float, local: SIMD3<Float>)? {
+            let inverse = box.transform.inverse
+            let start = simd_make_float3(inverse * SIMD4(origin, 1))
+            let ray = simd_make_float3(inverse * SIMD4(direction, 0))
+            var near: Float = 0, far = limit
+            for axis in 0..<3 {
+                if abs(ray[axis]) < 1e-6 {
+                    if abs(start[axis]) > box.halfSize[axis] { return nil }
+                } else {
+                    let a = (-box.halfSize[axis] - start[axis]) / ray[axis]
+                    let b = (box.halfSize[axis] - start[axis]) / ray[axis]
+                    near = max(near, min(a, b))
+                    far = min(far, max(a, b))
+                    if near > far { return nil }
+                }
+            }
+            return (near, start + ray * near)
+        }
+        var distances = furniture.compactMap { hit($0)?.distance }
+        for wall in walls {
+            guard let point = hit(wall.box), !wall.gaps.contains(where: { $0.contains(point.local.x) }) else { continue }
+            distances.append(point.distance)
+        }
+        return distances.min()
+    }
 
     init(_ structure: CapturedStructure) {
         let openings = structure.doors + structure.openings

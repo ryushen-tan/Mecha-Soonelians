@@ -1,24 +1,31 @@
 import XCTest
 
 final class MechaSooneliansUITests: XCTestCase {
-    @MainActor func testFirstLaunchCharacterSetupDoesNotSpendCreditsBeforeCapture() throws {
+    @MainActor func testFigureSetupFollowsAvatarAndBlocksEntryUntilReady() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-ui-testing", "--test-character-setup", "-personalCharacterID", "missing-test-character"]
+        app.launchArguments = ["-ui-testing", "-jelly-still", "-personalCharacterID", "missing-test-character"]
         app.launch()
-        if app.buttons["scanCharacterSetupButton"].waitForExistence(timeout: 8) {
-            XCTAssertTrue(app.buttons["importCharacterSetupButton"].exists)
-            XCTAssertFalse(app.buttons["studioTab"].exists)
-            XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'API credits'")).firstMatch.exists)
-            // The 3D server is always the hosted service; there is nothing to configure.
-            XCTAssertFalse(app.buttons["3D server"].exists)
-            XCTAssertFalse(app.textFields["3D server address"].exists)
-            let attachment = XCTAttachment(screenshot: app.screenshot())
-            attachment.name = "One-time scan and auto-rig setup"
-            attachment.lifetime = .keepAlways
-            add(attachment)
-        } else {
-            XCTAssertTrue(app.buttons["studioTab"].waitForExistence(timeout: 40), "An existing rigged character should be prepared and reused without asking for a new paid scan.")
-        }
+        XCTAssertTrue(app.buttons["playButton"].waitForExistence(timeout: 8))
+        app.buttons["playButton"].tap()
+        XCTAssertFalse(app.staticTexts["characterSetupTitle"].exists)
+        app.buttons["createTab"].tap()
+        let nickname = app.textFields["nicknameInput"]
+        nickname.tap(); nickname.typeText("Kai\n")
+        XCTAssertTrue(nickname.exists, "Keyboard submission cannot bypass the figure requirement.")
+        for _ in 0..<3 where !app.buttons["figureGalleryButton"].isHittable { app.swipeUp() }
+        XCTAssertFalse(app.buttons["confirmEntryButton"].isEnabled)
+        let identity = XCTAttachment(screenshot: app.screenshot())
+        identity.name = "Avatar and required figure"; identity.lifetime = .keepAlways; add(identity)
+        app.buttons["figureGalleryButton"].tap()
+        XCTAssertTrue(app.buttons["addFigureButton"].waitForExistence(timeout: 5))
+        let gallery = XCTAttachment(screenshot: app.screenshot())
+        gallery.name = "3D figure gallery"; gallery.lifetime = .keepAlways; add(gallery)
+        app.buttons["addFigureButton"].tap()
+        XCTAssertTrue(app.buttons["scanCharacterSetupButton"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["importCharacterSetupButton"].exists)
+        XCTAssertFalse(app.otherElements["figureGenerationHeader"].exists)
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "New 3D figure"; capture.lifetime = .keepAlways; add(capture)
     }
 
     @MainActor func testGeneratedHumanWheelPaintingAndSave() throws {
@@ -230,7 +237,15 @@ final class MechaSooneliansUITests: XCTestCase {
         app.textFields["nicknameInput"].typeText("UI Guest")
         app.buttons["confirmEntryButton"].tap()
         XCTAssertTrue(app.buttons["readyButton"].waitForExistence(timeout: 10))
-        let ready = NSPredicate(format: "label == 'Ready'")
+        XCTAssertEqual(app.buttons["readyButton"].label, "Ready")
+        XCTAssertEqual(app.buttons["readyButton"].value as? String, "Not ready")
+        app.buttons["readyButton"].tap()
+        let ready = NSPredicate(format: "label == 'Un-ready'")
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: ready, object: app.buttons["readyButton"])], timeout: 10)
+        app.buttons["readyButton"].tap()
+        let notReady = NSPredicate(format: "label == 'Ready'")
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: notReady, object: app.buttons["readyButton"])], timeout: 10)
+        app.buttons["readyButton"].tap()
         await fulfillment(of: [XCTNSPredicateExpectation(predicate: ready, object: app.buttons["readyButton"])], timeout: 10)
         capture(app, "Jelly guest waiting room")
         _ = try await request("rooms/\(code)", method: "PATCH", token: token, body: ["status": "started"])

@@ -32,6 +32,64 @@ private final class CharacterSetupMockProtocol: URLProtocol {
 }
 
 final class Character3DTests: XCTestCase {
+    @MainActor func testUnriggedFigureStopsProgressWithoutBecomingSelected() async throws {
+        let library = FigureLibrary()
+        let selectedID = library.selected?.id
+        let asset = CharacterAsset(id: UUID().uuidString, createdAt: Date(), server: "https://no-network.invalid")
+        try asset.save()
+        let model = Character3DModel(asset: asset)
+        model.modelData = Data("unrigged mesh fixture".utf8)
+        model.warning = "This scan could not be rigged."
+        defer {
+            library.finish(model)
+            try? FileManager.default.removeItem(at: asset.directory)
+        }
+        library.track(model)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: FigurePreparationWorker(figures: library))
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        for _ in 0..<20 where library.active != nil { try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertNil(library.active)
+        XCTAssertEqual(library.failure, model.warning)
+        XCTAssertFalse(library.select(asset))
+        XCTAssertEqual(library.selected?.id, selectedID)
+    }
+
+    @MainActor func testGalleryBuildFinishesOutsideGalleryAndOnlySelectsPlayableFigure() async throws {
+        let previous = UserDefaults.standard.string(forKey: CharacterProfile.preferenceKey)
+        let library = FigureLibrary()
+        let source = try XCTUnwrap(Bundle.main.url(forResource: "chameleon-base", withExtension: "glb", subdirectory: "CharacterViewer"))
+        let asset = CharacterAsset(id: UUID().uuidString, createdAt: Date(), server: "https://no-network.invalid", rigged: true)
+        try asset.save()
+        try FileManager.default.copyItem(at: source, to: asset.directory.appendingPathComponent("source.glb"))
+        let model = Character3DModel(asset: asset)
+        defer {
+            library.finish(model)
+            UserDefaults.standard.set(previous, forKey: CharacterProfile.preferenceKey)
+            try? FileManager.default.removeItem(at: asset.directory)
+            library.refresh()
+        }
+        XCTAssertFalse(library.select(asset), "A mesh without baked poses must not unlock room entry.")
+        library.track(model)
+        XCTAssertNotNil(library.active)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIHostingController(rootView: FigurePreparationWorker(figures: library))
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        for _ in 0..<300 where library.active != nil {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertNil(library.active, "Completion must remove the progress header.")
+        XCTAssertNil(library.failure)
+        XCTAssertTrue(CharacterProfile.isReady(asset))
+        XCTAssertEqual(library.selected?.id, asset.id)
+        XCTAssertTrue(library.select(asset))
+        XCTAssertNil(UserDefaults.standard.string(forKey: "pendingPersonalFigureID"))
+    }
+
     @MainActor func testPersonalCaptureAutomaticallyRequestsRiggingAndPersistsForRelaunch() async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [CharacterSetupMockProtocol.self]

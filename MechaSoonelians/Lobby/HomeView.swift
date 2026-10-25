@@ -11,6 +11,8 @@ struct HomeView: View {
     @Binding var invitationCode: String?
     @State private var code = ""
     @State private var settings = false
+    @ObservedObject private var figures = FigureLibrary.shared
+    @State private var showsFigures = false
     @FocusState private var focused: Field?
     private enum Field { case code, name }
 
@@ -31,6 +33,8 @@ struct HomeView: View {
         }
         .foregroundStyle(JellyStyle.ink)
         .sheet(isPresented: $settings) { ServerSettingsView() }
+        .sheet(isPresented: $showsFigures) { FigureGalleryView() }
+        .onAppear { figures.refresh() }
         .onChange(of: invitationCode, initial: true) { _, value in
             guard let value else { return }
             code = value; entry = .code; invitationCode = nil
@@ -95,11 +99,21 @@ struct HomeView: View {
             if ProfilePhotos.avatarImage(for: store.nickname) != nil {
                 ProfileAvatarButton(name: store.nickname, color: store.avatar)
             }
-            Text("PICK A COLOR").font(JellyStyle.body(12)).tracking(1).foregroundStyle(JellyStyle.muted)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 2) { colorChoices }
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 8) { colorChoices }
+            Button { focused = nil; showsFigures = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: figures.selected == nil ? "person.crop.rectangle.badge.plus" : "checkmark.circle.fill")
+                        .foregroundStyle(JellyStyle.blue)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Your 3D figure").font(JellyStyle.display(20))
+                        Text(figures.selected == nil ? "Choose a ready figure to continue" : "Ready to play · Tap to change")
+                            .font(JellyStyle.body(12)).foregroundStyle(JellyStyle.muted)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                }
             }
+            .buttonStyle(JellyButtonStyle(kind: .ghost, fullWidth: true))
+            .accessibilityIdentifier("figureGalleryButton")
             Button { enter(roomCode) } label: {
                 HStack {
                     Text(creating ? "Create room" : "Join room")
@@ -107,7 +121,7 @@ struct HomeView: View {
                 }
             }
             .buttonStyle(JellyButtonStyle(fullWidth: true))
-            .disabled(store.busy || !store.validName).accessibilityIdentifier("confirmEntryButton")
+            .disabled(store.busy || !store.validName || figures.selected == nil).accessibilityIdentifier("confirmEntryButton")
             HStack {
                 Button("Back") { entry = .code }.accessibilityIdentifier("backToCodeButton")
                 Spacer()
@@ -119,33 +133,11 @@ struct HomeView: View {
         .disabled(store.busy)
     }
 
-    private var colorChoices: some View {
-        ForEach(0..<6) { index in
-            Button { store.avatar = index; audio.key(.click) } label: {
-                Circle().fill(JellyStyle.colors[index])
-                    .frame(width: 36, height: 36)
-                    .overlay(Circle().strokeBorder(store.avatar == index ? JellyStyle.ink : .clear, lineWidth: 3))
-                    .overlay {
-                        if store.avatar == index {
-                            Image(systemName: "checkmark").font(.system(size: 13, weight: .heavy))
-                                .foregroundStyle(index == 1 ? .white : JellyStyle.ink)
-                        }
-                    }
-                    .frame(width: 44, height: 44).frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.plain).hoverEffect(.highlight)
-            .accessibilityLabel(JellyStyle.colorNames[index] + " avatar")
-            .accessibilityAddTraits(store.avatar == index ? .isSelected : [])
-        }
-    }
-
     private func enter(_ code: String?) {
+        figures.refresh()
+        guard !store.busy, store.validName, figures.selected != nil else { return }
         focused = nil; audio.key(.enter)
-        Task {
-            if await store.enter(code: code), code != nil, store.me?.ready == false {
-                await store.setReady()
-            }
-        }
+        Task { await store.enter(code: code) }
     }
 }
 

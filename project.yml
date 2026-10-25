@@ -44,7 +44,7 @@ targets:
     info:
       path: MechaSoonelians/Info.plist
       properties:
-        CFBundleDisplayName: Mecha Soonelians
+        CFBundleDisplayName: MecchaSoonelians
         UIAppFonts: ["JellyAssets/fonts/Outfit[wght].ttf", "JellyAssets/fonts/Nunito[wght].ttf"]
         NSMotionUsageDescription: Tilt your phone to move the figurines on the landing screen.
         CFBundleURLTypes:
