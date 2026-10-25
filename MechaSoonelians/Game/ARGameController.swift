@@ -151,6 +151,44 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
         return try? AudioFileResource.load(contentsOf: url, inputMode: .spatial, loadingStrategy: .preload, shouldLoop: false)
     }
 
+    // MARK: What the seeker can see
+
+    private var wallBoxes: [(transform: simd_float4x4, size: SIMD2<Float>)] = []
+
+    /// The ghosts on screen right now: in front of the camera, inside the frame, within 12 m, and not
+    /// behind a scanned wall. Found ghosts don't count.
+    func ghostsInView(_ ghosts: [Ghost]) -> [UUID] {
+        guard isRelocalized, let frame = currentFrame else { return [] }
+        let camera = simd_make_float3(frame.camera.transform.columns.3)
+        let forward = -simd_make_float3(frame.camera.transform.columns.2)
+        let bounds = arView.bounds
+        return ghosts.compactMap { ghost in
+            guard ghost.foundBy == nil, ghostEntities[ghost.id] != nil,
+                  let floor = simd_float4x4(floats: ghost.floorTransform) else { return nil }
+            let center = simd_make_float3(floor.columns.3) + SIMD3(0, ghost.height * 0.5, 0)
+            let offset = center - camera
+            let distance = simd_length(offset)
+            guard distance > 0.2, distance < 12, simd_dot(offset / distance, forward) > 0.2,
+                  let point = arView.project(center), bounds.contains(point) else { return nil }
+            return blockedByWall(from: camera, to: center) ? nil : ghost.id
+        }
+    }
+
+    /// Whether a scanned wall stands between two points (ignoring a wall the ghost has its back to).
+    private func blockedByWall(from start: SIMD3<Float>, to end: SIMD3<Float>) -> Bool {
+        for wall in wallBoxes {
+            let inverse = wall.transform.inverse
+            let a = simd_make_float3(inverse * SIMD4(start, 1)), b = simd_make_float3(inverse * SIMD4(end, 1))
+            guard (a.z > 0) != (b.z > 0) else { continue }
+            let t = a.z / (a.z - b.z)
+            // Right at the ghost means the wall behind it, not one in the way.
+            guard t < 0.97, simd_length(end - start) * (1 - t) > 0.15 else { continue }
+            let hit = a + (b - a) * t
+            if abs(hit.x) < wall.size.x / 2, abs(hit.y) < wall.size.y / 2 { return true }
+        }
+        return false
+    }
+
     /// How many ghosts are in the scene right now.
     var shownGhostCount: Int { ghostEntities.count }
 
@@ -368,6 +406,7 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
             )
             box.transform = Transform(matrix: wall.transform)
             houseAnchor.addChild(box)
+            wallBoxes.append((wall.transform, SIMD2(wall.dimensions.x, wall.dimensions.y)))
         }
         walls = structure.walls.map { GhostCapture.Wall(transform: $0.transform, width: $0.dimensions.x) }
         obstacles = RoomObstacles(structure)

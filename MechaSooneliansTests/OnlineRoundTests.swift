@@ -111,8 +111,14 @@ final class OnlineRoundTests: XCTestCase {
         try await eventually("the seeker can't chirp") { seeker.error != nil }
         seeker.error = nil
 
+        // Points: the seeker reports seeing the hider for ~3 s, and the hider gains points (10/s).
+        for _ in 0..<4 { seeker.reportSeen([id]); try await Task.sleep(for: .seconds(1)) }
+        try await eventually("the hider earns points for being seen") { (hider.state.player(hider.me.id)?.points ?? 0) >= 20 }
+        XCTAssertEqual(hider.state.player(hider.me.id)?.seenNow, true)
+
         seeker.tag(id)
         try await eventually("the ghost is found and the round ends") { seeker.state.phase == .results && seeker.state.ghosts.first?.foundBy == seeker.me.id }
+        XCTAssertEqual(seeker.state.winnerIDs, [seeker.me.id], "Finding everyone wins it for the seeker")
     }
 }
 

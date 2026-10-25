@@ -118,6 +118,15 @@ struct GameView: View {
         .onChange(of: session.hasMap) { startARIfReady() }
         .onChange(of: ar.isRelocalized) { session.setReady(ar.isRelocalized) }
         .onChange(of: state) { syncGhosts(); playChirps() }
+        .task(id: state.phase == .seeking && session.myRole == .seeker) {
+            // The seeker tells the server which hiders are on screen, once a second.
+            guard state.phase == .seeking, session.myRole == .seeker else { return }
+            while !Task.isCancelled {
+                let seen = ar.ghostsInView(state.ghosts)
+                if !seen.isEmpty { session.reportSeen(seen) }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
         .onChange(of: session.ghostImages) { syncGhosts() }
         .onChange(of: session.ghostModels) { syncGhosts() }
         .onChange(of: state.phase) {
@@ -131,6 +140,15 @@ struct GameView: View {
                 ar.onTapPlace = nil
             }
         }
+    }
+
+    /// Who won: the seeker if everyone was found, else the hidden hider(s) with the most points.
+    private var winnerLine: String {
+        let winners = (state.winnerIDs ?? []).compactMap { state.player($0) }
+        guard !winners.isEmpty else { return "Round over" }
+        if winners.count == 1, winners[0].id == state.seekerID { return "\(winners[0].name) found everyone and wins! 🔍" }
+        let names = winners.map(\.name).joined(separator: " & ")
+        return winners.count == 1 ? "\(names) wins with \(winners[0].points ?? 0) points! 🏆" : "\(names) tie with \(winners[0].points ?? 0) points! 🏆"
     }
 
     /// Hider: makes the ghost chirp from its hiding spot. Braver hiders give the seeker a clue.
@@ -248,6 +266,13 @@ struct GameView: View {
                         .foregroundStyle(RallyStyle.muted).multilineTextAlignment(.center)
                     timerTicket
                     if let ghost = session.myGhost, ghost.foundBy == nil {
+                        let me = state.player(session.me.id)
+                        Text(me?.seenNow == true ? "👀 The seeker can see you! +10 a second" : "Points: \(me?.points ?? 0)")
+                            .font(RallyStyle.font(17, .bold))
+                            .foregroundStyle(me?.seenNow == true ? RallyStyle.coral : RallyStyle.ink)
+                        if me?.seenNow == true {
+                            Text("Points: \(me?.points ?? 0)").font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
+                        }
                         chirpButton
                     }
                 }
@@ -399,17 +424,21 @@ struct GameView: View {
     private var resultsPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             Eyebrow(text: "RESULTS")
+            Text(winnerLine).font(RallyStyle.font(22, .heavy))
             Text("Everyone's hiding spot is showing. Look around!")
                 .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
             ForEach(state.ghosts) { ghost in
                 let owner = state.player(ghost.ownerID)
+                let won = state.winnerIDs?.contains(ghost.ownerID) == true
                 HStack(spacing: 10) {
                     AvatarView(index: owner?.avatar ?? 0, size: 32).accessibilityHidden(true)
                     if let finder = state.player(ghost.foundBy)?.name {
                         Text("\(owner?.name ?? "Someone") was found by \(finder)").font(RallyStyle.font(15, .semibold))
                     } else {
-                        Text("\(owner?.name ?? "Someone") was never found 🏆").font(RallyStyle.font(15, .bold))
+                        Text("\(owner?.name ?? "Someone") stayed hidden\(won ? " 🏆" : "")").font(RallyStyle.font(15, .bold))
                     }
+                    Spacer()
+                    Text("\(owner?.points ?? 0) pts").font(.system(size: 14, weight: .semibold, design: .monospaced))
                 }
             }
             if state.ghosts.isEmpty {

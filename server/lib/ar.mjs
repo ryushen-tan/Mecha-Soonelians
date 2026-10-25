@@ -82,6 +82,7 @@ export function advanceAR(room, time) {
   }
   if (ar.phase === 'seeking' && (time >= ar.phaseEnds || (ar.ghosts.length && ar.ghosts.every(ghost => ghost.foundBy)))) {
     ar.phase = 'results';
+    decideWinner(room);
   }
 }
 
@@ -117,6 +118,47 @@ export function chirp(room, member, time) {
   ar.chirps.push({ id: randomUUID(), ownerID: member.id, ghostID: ghost.id, at: time });
 }
 
+// Points: a hider scores while the seeker's camera has their (unfound) ghost in view: bold hiding
+// pays. The seeker's phone reports which ghosts are on screen and not behind a wall about once a
+// second; each report counts the time since the last one, capped so a dropped report can't be
+// claimed later. If anyone is still hidden at the end, the hider with the most points wins.
+export const POINTS_PER_SECOND = 10;
+const SEEN_CAP = 1_500;
+const SEEN_NOW = 2_500;
+
+export function reportSeen(room, member, ghostIDs, time) {
+  const ar = requireAR(room);
+  advanceAR(room, time);
+  if (ar.phase !== 'seeking') return;
+  if (ar.roles[member.id] !== 'seeker') fail(403, 'Only the seeker reports what they see.');
+  if (!Array.isArray(ghostIDs) || ghostIDs.length > 50) fail(400, 'Send the ghosts you can see.');
+  const elapsed = Math.max(0, Math.min(SEEN_CAP, time - (ar.lastSeenReport ?? time)));
+  ar.lastSeenReport = time;
+  ar.exposure ??= {};
+  ar.lastSeen ??= {};
+  const ids = new Set(ghostIDs.map(id => String(id).toLowerCase()));
+  for (const ghost of ar.ghosts) {
+    if (!ids.has(ghost.id) || ghost.foundBy) continue;
+    ar.exposure[ghost.ownerID] = (ar.exposure[ghost.ownerID] ?? 0) + elapsed;
+    ar.lastSeen[ghost.ownerID] = time;
+  }
+}
+
+const points = (ar, id) => Math.floor((ar.exposure?.[id] ?? 0) / 1000) * POINTS_PER_SECOND;
+
+// Decided when the round ends: the seeker if everyone was found; otherwise the hidden hider(s) with
+// the most points.
+function decideWinner(room) {
+  const ar = room.ar;
+  const hidden = ar.ghosts.filter(ghost => !ghost.foundBy).map(ghost => ghost.ownerID);
+  if (!ar.ghosts.length) ar.winnerIDs = [];
+  else if (!hidden.length) ar.winnerIDs = [ar.seekerID];
+  else {
+    const best = Math.max(...hidden.map(id => points(ar, id)));
+    ar.winnerIDs = hidden.filter(id => points(ar, id) === best);
+  }
+}
+
 // The host moves the round on early: hiding -> seeking, seeking -> results.
 export function skipPhase(room, member, time) {
   const ar = requireAR(room);
@@ -128,6 +170,7 @@ export function skipPhase(room, member, time) {
     ar.phaseEnds = time + ar.seekSeconds * 1000;
   } else if (ar.phase === 'seeking') {
     ar.phase = 'results';
+    decideWinner(room);
   } else fail(409, 'There is nothing to skip right now.');
 }
 
@@ -215,8 +258,12 @@ export function snapshotAR(room, member, time) {
     hideSeconds: ar.hideSeconds, seekSeconds: ar.seekSeconds, seekerID: ar.seekerID, startedAt: ar.startedAt,
     house: ar.house ?? { kind: 'uploaded', id: null },
     players: room.members.map(({ id, name, avatar }) => ({
-      id, name, avatar, role: ar.roles[id] ?? 'hider', isReady: ar.ready[id] === true
+      id, name, avatar, role: ar.roles[id] ?? 'hider', isReady: ar.ready[id] === true,
+      points: points(ar, id),
+      // Only a hider learns that the seeker is looking at them right now.
+      seenNow: ar.phase === 'seeking' && id === member.id && time - (ar.lastSeen?.[id] ?? -Infinity) < SEEN_NOW
     })),
+    winnerIDs: ar.phase === 'results' ? ar.winnerIDs ?? [] : [],
     ghosts: visibleGhosts(ar, member).map(ghost => ({ ...ghost })),
     // The seeker hears every recent chirp; a hider sees only their own, for its cooldown.
     chirps: (ar.chirps ?? [])

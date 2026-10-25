@@ -102,6 +102,11 @@ final class GameSession: ObservableObject {
     // MARK: Player actions
 
     func setReady(_ ready: Bool) { act(["action": "ready", "ready": ready]) }
+    /// Seeker: which ghosts are on my screen right now, for the hiders' points.
+    func reportSeen(_ ghostIDs: [UUID]) {
+        act(["action": "seen", "ghostIDs": ghostIDs.map { $0.uuidString.lowercased() }], quiet: true)
+    }
+
     /// Hider: make my ghost chirp so the seeker can hear where it is.
     func chirp() { act(["action": "chirp"]) }
     /// When my last chirp went out (for the cooldown on the button).
@@ -118,12 +123,13 @@ final class GameSession: ObservableObject {
         act(body)
     }
 
-    private func act(_ body: [String: Any]) {
+    /// `quiet`: background reports that shouldn't interrupt the player with an alert if one is lost.
+    private func act(_ body: [String: Any], quiet: Bool = false) {
         Task {
             do {
                 let reply: RoundReply = try await call("ar", method: "POST", body: body)
                 if let next = reply.ar { state = next }
-            } catch { self.error = Self.describe(error) }
+            } catch { if !quiet { self.error = Self.describe(error) } }
         }
     }
 

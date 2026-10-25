@@ -17,6 +17,10 @@ struct Player: Codable, Identifiable, Equatable {
     var role: Role
     /// Has the house map and has recognized the house.
     var isReady: Bool
+    /// Points from being in the seeker's view without being found.
+    var points: Int?
+    /// This player is a hider the seeker is looking at right now (only told to that hider).
+    var seenNow: Bool?
 }
 
 /// A painted cutout of a hider, pinned in house coordinates. The image and any 3D model are
@@ -67,6 +71,8 @@ struct GameState: Codable, Equatable {
     /// Which house the round is in: the one inside the app, or one the host uploaded.
     var house: HouseRef?
     var chirps: [Chirp]?
+    /// Who won, once the round is over: the seeker, or the hidden hider(s) with the most points.
+    var winnerIDs: [UUID]?
 
     func player(_ id: UUID?) -> Player? {
         players.first { $0.id == id }
