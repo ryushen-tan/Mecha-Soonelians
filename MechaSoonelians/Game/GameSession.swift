@@ -102,6 +102,10 @@ final class GameSession: ObservableObject {
     // MARK: Player actions
 
     func setReady(_ ready: Bool) { act(["action": "ready", "ready": ready]) }
+    /// Hider: make my ghost chirp so the seeker can hear where it is.
+    func chirp() { act(["action": "chirp"]) }
+    /// When my last chirp went out (for the cooldown on the button).
+    var myLastChirpAge: Double? { state.chirps?.filter { $0.ownerID == me.id }.map(\.age).min() }
     func tag(_ ghostID: UUID) { act(["action": "tag", "ghostID": ghostID.uuidString.lowercased()]) }
     /// Host: start hiding without waiting for everyone to find the house.
     func startRound() { act(["action": "begin"]) }

@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 
 // The online AR hide-and-seek round. One seeker is picked at random; everyone else hides a
 // ghost in the scanned house. Phases: finding (everyone relocalizes in the house) -> hiding ->
@@ -95,6 +95,26 @@ export function beginRound(room, member, time) {
   if (!member.host) fail(403, 'Only the host can start the round.');
   if (ar.phase !== 'finding') fail(409, 'The round has already started.');
   beginHiding(ar, time);
+}
+
+// Chirps: a hider makes their ghost chirp so the seeker can follow the sound. Only while seeking,
+// only an unfound hider, at most once per CHIRP_COOLDOWN. The seeker's phone plays each chirp once,
+// from the ghost's spot in the house.
+export const CHIRP_COOLDOWN = 8_000;
+const CHIRP_VISIBLE = 10_000;
+
+export function chirp(room, member, time) {
+  const ar = requireAR(room);
+  advanceAR(room, time);
+  if (ar.phase !== 'seeking') fail(409, 'You can only chirp while the seeker is looking.');
+  if (ar.roles[member.id] === 'seeker') fail(403, 'Only hiders can chirp.');
+  const ghost = ar.ghosts.find(item => item.ownerID === member.id);
+  if (!ghost) fail(409, 'Hide your ghost first.');
+  if (ghost.foundBy) fail(409, 'You have already been found.');
+  ar.chirps = (ar.chirps ?? []).filter(item => time - item.at < CHIRP_VISIBLE);
+  const last = ar.chirps.findLast(item => item.ownerID === member.id);
+  if (last && time - last.at < CHIRP_COOLDOWN) fail(429, 'Wait a moment before chirping again.');
+  ar.chirps.push({ id: randomUUID(), ownerID: member.id, ghostID: ghost.id, at: time });
 }
 
 // The host moves the round on early: hiding -> seeking, seeking -> results.
@@ -197,7 +217,12 @@ export function snapshotAR(room, member, time) {
     players: room.members.map(({ id, name, avatar }) => ({
       id, name, avatar, role: ar.roles[id] ?? 'hider', isReady: ar.ready[id] === true
     })),
-    ghosts: visibleGhosts(ar, member).map(ghost => ({ ...ghost }))
+    ghosts: visibleGhosts(ar, member).map(ghost => ({ ...ghost })),
+    // The seeker hears every recent chirp; a hider sees only their own, for its cooldown.
+    chirps: (ar.chirps ?? [])
+      .filter(item => time - item.at < CHIRP_VISIBLE && ar.phase === 'seeking' &&
+        (ar.roles[member.id] === 'seeker' || item.ownerID === member.id))
+      .map(({ id, ghostID, ownerID, at }) => ({ id, ghostID, ownerID, age: time - at }))
   };
 }
 

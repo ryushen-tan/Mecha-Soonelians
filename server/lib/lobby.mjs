@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { acceptDisguise, snapshotGame, visibleOwners, startGame, shoot, taunt, recordView, emergencyEject } from './game.mjs';
 import { createMemoryRoomStore } from './room-store.mjs';
-import { arPaths, HOUSE_FILES, startAR, beginRound, skipPhase, beginUpload, setReady, placeGhost, tagGhost, snapshotAR, canSeeGhost, clearAR, validateGhost, advanceAR } from './ar.mjs';
+import { arPaths, HOUSE_FILES, startAR, beginRound, skipPhase, beginUpload, chirp, setReady, placeGhost, tagGhost, snapshotAR, canSeeGhost, clearAR, validateGhost, advanceAR } from './ar.mjs';
 
 const LIMIT = 4096;
 const UPLOAD = 20 * 1024 * 1024;
@@ -120,6 +120,7 @@ export function createLobbyHandler({ now = Date.now, idleTTL = 2 * 60 * 60 * 100
           break;
         case 'begin': beginRound(room, member, time); break;
         case 'skip': skipPhase(room, member, time); break;
+        case 'chirp': chirp(room, member, time); break;
         case 'ready': setReady(room, member, body.ready); break;
         case 'place':
           if (!verified) fail(409, 'Upload the ghost files first.');

@@ -47,6 +47,14 @@ struct HouseRef: Codable, Equatable {
     let id: String?
 }
 
+/// A hider made their ghost chirp. `age` is how long ago, in milliseconds, when the server answered.
+struct Chirp: Codable, Equatable, Identifiable {
+    let id: String
+    let ghostID: UUID
+    let ownerID: UUID
+    let age: Double
+}
+
 struct GameState: Codable, Equatable {
     var phase = Phase.lobby
     var players: [Player] = []
@@ -58,6 +66,7 @@ struct GameState: Codable, Equatable {
     var seekerID: UUID?
     /// Which house the round is in: the one inside the app, or one the host uploaded.
     var house: HouseRef?
+    var chirps: [Chirp]?
 
     func player(_ id: UUID?) -> Player? {
         players.first { $0.id == id }

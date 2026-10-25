@@ -99,6 +99,18 @@ final class OnlineRoundTests: XCTestCase {
         ar.show(seeker.state.ghosts, images: seeker.ghostImages, models: seeker.ghostModels)
         XCTAssertEqual(ar.shownGhostCount, 1, "The seeker's AR scene should contain the hider's chameleon")
 
+        // Chirps: the hider chirps, the seeker hears it from that ghost, and spamming is refused.
+        XCTAssertNotNil(ARGameController.makeChirpSound(), "The chirp sound should load")
+        hider.chirp()
+        try await eventually("the seeker receives the chirp") { seeker.state.chirps?.contains { $0.ghostID == id } == true }
+        XCTAssertNil(hider.error)
+        hider.chirp()
+        try await eventually("a second chirp straight away is refused") { hider.error != nil }
+        hider.error = nil
+        seeker.chirp()
+        try await eventually("the seeker can't chirp") { seeker.error != nil }
+        seeker.error = nil
+
         seeker.tag(id)
         try await eventually("the ghost is found and the round ends") { seeker.state.phase == .results && seeker.state.ghosts.first?.foundBy == seeker.me.id }
     }

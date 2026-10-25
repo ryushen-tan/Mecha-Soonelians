@@ -1,4 +1,5 @@
 import ARKit
+import AVFoundation
 import RealityKit
 import RoomPlan
 import SwiftUI
@@ -98,6 +99,57 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     }
 
     var currentFrame: ARFrame? { arView.session.currentFrame }
+
+    // MARK: Chirps
+
+    private var heardChirps: Set<String> = []
+    private lazy var chirpSound: AudioFileResource? = Self.makeChirpSound()
+
+    /// Plays a chirp from where this ghost hides, as 3D sound: it gets louder as you get closer and comes
+    /// from its direction, so the seeker can turn toward it. Each chirp plays once.
+    func play(_ chirp: Chirp, ghost: Ghost) {
+        guard !heardChirps.contains(chirp.id), chirp.age < 6_000 else { return }
+        heardChirps.insert(chirp.id)
+        guard let sound = chirpSound, let floor = simd_float4x4(floats: ghost.floorTransform) else { return }
+        let source = Entity()
+        source.transform = Transform(matrix: floor)
+        source.position.y += ghost.height * 0.8
+        source.components.set(SpatialAudioComponent(gain: 6, directLevel: 0, reverbLevel: -6))
+        houseAnchor.addChild(source)
+        source.playAudio(sound)
+        // A second, louder call a moment later makes the direction easier to place.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { source.playAudio(sound) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { source.removeFromParent() }
+    }
+
+    /// A short bird-like double chirp, made in code so no sound file has to ship.
+    static func makeChirpSound() -> AudioFileResource? {
+        let rate = 44_100.0
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("chirp.caf")
+        if !FileManager.default.fileExists(atPath: url.path) {
+            guard let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1) else { return nil }
+            let length = AVAudioFrameCount(rate * 0.42)
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: length),
+                  let samples = buffer.floatChannelData?[0] else { return nil }
+            buffer.frameLength = length
+            var phase = 0.0
+            for i in 0..<Int(length) {
+                let t = Double(i) / rate
+                // Two quick upward sweeps, 2.2 kHz to 4.4 kHz, each 0.16 s with a soft envelope.
+                let note = t < 0.18 ? t : t - 0.24
+                let inNote = note >= 0 && note < 0.16
+                let frequency = 2_200 + 2_200 * min(1, max(0, note / 0.16))
+                phase += 2 * .pi * frequency / rate
+                let envelope = inNote ? sin(.pi * note / 0.16) : 0
+                samples[i] = Float(sin(phase) * envelope * 0.9)
+            }
+            do {
+                let file = try AVAudioFile(forWriting: url, settings: format.settings)
+                try file.write(from: buffer)
+            } catch { return nil }
+        }
+        return try? AudioFileResource.load(contentsOf: url, inputMode: .spatial, loadingStrategy: .preload, shouldLoop: false)
+    }
 
     /// How many ghosts are in the scene right now.
     var shownGhostCount: Int { ghostEntities.count }

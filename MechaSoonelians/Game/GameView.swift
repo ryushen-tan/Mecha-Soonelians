@@ -21,6 +21,8 @@ struct GameView: View {
     @State private var captureError: String?
     @State private var confirmingLeave = false
     @State private var confirmingSkip = false
+    @State private var chirpSentAt: Date?
+    @State private var chirpNotice: Date?
     /// A few seconds of "who's the seeker / go hide" when a phase starts.
     @State private var splash: Splash?
 
@@ -115,7 +117,7 @@ struct GameView: View {
         }
         .onChange(of: session.hasMap) { startARIfReady() }
         .onChange(of: ar.isRelocalized) { session.setReady(ar.isRelocalized) }
-        .onChange(of: state) { syncGhosts() }
+        .onChange(of: state) { syncGhosts(); playChirps() }
         .onChange(of: session.ghostImages) { syncGhosts() }
         .onChange(of: session.ghostModels) { syncGhosts() }
         .onChange(of: state.phase) {
@@ -127,6 +129,36 @@ struct GameView: View {
                 stopChameleon()
                 placingChameleon = false
                 ar.onTapPlace = nil
+            }
+        }
+    }
+
+    /// Hider: makes the ghost chirp from its hiding spot. Braver hiders give the seeker a clue.
+    private var chirpButton: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+            let cooling = chirpSentAt.map { Date().timeIntervalSince($0) < 8 } ?? false
+            Button {
+                chirpSentAt = Date()
+                session.chirp()
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            } label: {
+                ActionLabel(text: cooling ? "Chirped! 🐦" : "Chirp 🐦")
+            }
+            .buttonStyle(PushButtonStyle())
+            .disabled(cooling)
+            .accessibilityHint("Your ghost makes a sound the seeker can follow.")
+        }
+        .frame(maxWidth: 320)
+    }
+
+    /// Plays every new chirp on the seeker's phone, from where that hider's ghost is.
+    private func playChirps() {
+        guard state.phase == .seeking, session.myRole == .seeker else { return }
+        for chirp in state.chirps ?? [] {
+            guard let ghost = state.ghosts.first(where: { $0.id == chirp.ghostID }) else { continue }
+            if ar.isRelocalized {
+                ar.play(chirp, ghost: ghost)
+                if chirp.age < 3_000 { chirpNotice = Date() }
             }
         }
     }
@@ -215,6 +247,9 @@ struct GameView: View {
                                                          : "You've been found!")
                         .foregroundStyle(RallyStyle.muted).multilineTextAlignment(.center)
                     timerTicket
+                    if let ghost = session.myGhost, ghost.foundBy == nil {
+                        chirpButton
+                    }
                 }
             }
         case .results:
@@ -341,6 +376,10 @@ struct GameView: View {
         let found = state.ghosts.filter { $0.foundBy != nil }.count
         return VStack(alignment: .leading, spacing: 10) {
             Eyebrow(text: "SEEK · \(timeLeft)")
+            if let chirpNotice, Date().timeIntervalSince(chirpNotice) < 4 {
+                Label("A hider chirped. Listen and turn toward it!", systemImage: "speaker.wave.3.fill")
+                    .font(RallyStyle.font(14, .bold)).foregroundStyle(RallyStyle.coral)
+            }
             Text("Found \(found) of \(state.ghosts.count)").font(RallyStyle.font(23, .bold))
             Text(ar.isRelocalized ? "Tap a hider when you spot them." : ar.trackingMessage)
                 .font(RallyStyle.font(14)).foregroundStyle(RallyStyle.muted)
