@@ -179,7 +179,7 @@ struct GameView: View {
         .frame(maxWidth: 320)
     }
 
-    /// For a few seconds after a chirp, a big arrow shows the seeker which way it came from, turning as
+    /// For a second after a chirp, a big arrow shows the seeker which way it came from, turning as
     /// they turn. It gives the direction and a rough distance, not the exact spot.
     private var chirpCompass: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 20)) { context in

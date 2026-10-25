@@ -106,10 +106,10 @@ final class ARGameController: NSObject, ObservableObject, ARSessionDelegate {
     /// Where the latest chirp came from (house coordinates) and when, for the on-screen arrow.
     @Published private(set) var lastChirp: (position: SIMD3<Float>, at: Date)?
 
-    /// Which way to turn toward the latest chirp, for about 6 s after it: `angle` in radians, 0 straight
+    /// Which way to turn toward the latest chirp, for 1 s after it: `angle` in radians, 0 straight
     /// ahead and positive to the left (on the floor plane), and how far away it is in metres.
     func chirpDirection(now: Date = Date()) -> (angle: Double, distance: Float)? {
-        guard let chirp = lastChirp, now.timeIntervalSince(chirp.at) < 6, let frame = currentFrame else { return nil }
+        guard let chirp = lastChirp, now.timeIntervalSince(chirp.at) < 1, let frame = currentFrame else { return nil }
         let camera = frame.camera.transform
         var forward = -simd_make_float3(camera.columns.2)
         var toward = chirp.position - simd_make_float3(camera.columns.3)
